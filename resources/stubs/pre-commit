@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+#
+# quality-checker pre-commit hook (bash / Unix).
+#
+# INSTALLATION:
+#   Copy this file into your project's Git hooks directory and make it executable:
+#     cp vendor/vietvang/quality-checker/resources/stubs/pre-commit .git/hooks/pre-commit
+#     chmod +x .git/hooks/pre-commit
+#
+# What it does:
+#   Runs the quality checker for the phpcs + phpstan checkers only, failing the
+#   commit (exit 1) when any error-level issue is found. Writes a machine-
+#   readable JSON report to reports/quality-checker/.
+#
+# NOTE: `--fail-on=error` means the commit is aborted whenever issues at or above
+#       "error" severity are present. Adjust to `--fail-on=critical` if desired.
+
+set -euo pipefail
+
+REPORT_DIR="reports/quality-checker"
+mkdir -p "$REPORT_DIR"
+
+OUTPUT=$(php artisan quality:check \
+    --only=phpcs,phpstan \
+    --fail-on=error \
+    --format=json \
+    --output="$REPORT_DIR" 2>&1)
+
+EXIT_CODE=$?
+
+echo "$OUTPUT" > "$REPORT_DIR/quality-report.json"
+
+if [ $EXIT_CODE -eq 0 ]; then
+    printf '\033[1;32m[quality-checker] PASS\033[0m — no error-level issues.\n'
+    exit 0
+fi
+
+printf '\033[1;31m[quality-checker] FAIL\033[0m — error-level issues detected; commit aborted.\n'
+printf 'See %s/quality-report.json for details.\n' "$REPORT_DIR"
+exit 1

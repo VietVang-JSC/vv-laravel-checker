@@ -1,0 +1,16 @@
+/vendor/
+/reports/
+/\.phpunit\.result\.cache
+/.idea/
+/.vscode/
+*.log
+/build/
+
+# Baseline: keep this if each developer maintains their own baseline.
+# To share a team baseline, remove the line below and commit baseline.json.
+/baseline.json
+
+# Composer.lock is intentionally ignored. As a library, the lock file is not
+# committed — consumers resolve their own dependency graph via composer.json.
+# To track exact dev-time versions, comment out the line below.
+/composer.lock

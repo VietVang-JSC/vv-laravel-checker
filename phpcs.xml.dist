@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<ruleset name="vietvang/quality-checker">
+    <description>Coding standard for the quality-checker package itself.</description>
+
+    <rule ref="PSR12"/>
+
+    <!-- The package intentionally keeps some long lines (messages, tables);
+         line length is a style preference, not a correctness issue. -->
+    <rule ref="Generic.Files.LineLength">
+        <severity>0</severity>
+    </rule>
+
+    <arg name="extensions" value="php"/>
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+</ruleset>

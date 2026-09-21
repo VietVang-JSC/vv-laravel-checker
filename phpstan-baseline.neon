@@ -1,0 +1,1091 @@
+parameters:
+	ignoreErrors:
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\AbstractAnalyzer\\:\\:makeIssue\\(\\) has parameter \\$metadata with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/AbstractAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\AbstractAnalyzer\\:\\:parse\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/AbstractAnalyzer.php
+
+		-
+			message: "#^Else branch is unreachable because ternary operator condition is always true\\.$#"
+			count: 2
+			path: src/Analyzers/Convention/DeadCodeAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\DeadCodeAnalyzer\\:\\:analyze\\(\\) has parameter \\$files with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/DeadCodeAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\DeadCodeAnalyzer\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/DeadCodeAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\DeadCodeAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/DeadCodeAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\DeadCodeAnalyzer\\:\\:parse\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/DeadCodeAnalyzer.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between non\\-empty\\-string and '' will always evaluate to false\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/DeadCodeAnalyzer.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between non\\-empty\\-string and null will always evaluate to false\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/DeadCodeAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\LaravelPitfallAnalyzer\\:\\:analyze\\(\\) has parameter \\$files with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/LaravelPitfallAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\LaravelPitfallAnalyzer\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/LaravelPitfallAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\LaravelPitfallAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/LaravelPitfallAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\LaravelPitfallAnalyzer\\:\\:parse\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/LaravelPitfallAnalyzer.php
+
+		-
+			message: "#^Else branch is unreachable because ternary operator condition is always true\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/NamingConventionAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\NamingConventionAnalyzer\\:\\:analyze\\(\\) has parameter \\$files with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/NamingConventionAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\NamingConventionAnalyzer\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/NamingConventionAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\NamingConventionAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/NamingConventionAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\NamingConventionAnalyzer\\:\\:parse\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/NamingConventionAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\TodoFixmeAnalyzer\\:\\:analyze\\(\\) has parameter \\$files with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/TodoFixmeAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\TodoFixmeAnalyzer\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/TodoFixmeAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Convention\\\\TodoFixmeAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Convention/TodoFixmeAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Laravel\\\\MigrationAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Laravel/MigrationAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Laravel\\\\RouteValidationAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Laravel/RouteValidationAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Owasp\\\\OwaspAccessControlAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Owasp/OwaspAccessControlAnalyzer.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between non\\-empty\\-string and '' will always evaluate to false\\.$#"
+			count: 1
+			path: src/Analyzers/Owasp/OwaspAccessControlAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Owasp\\\\OwaspCommandInjectionAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Owasp/OwaspCommandInjectionAnalyzer.php
+
+		-
+			message: "#^Constant VietVang\\\\QualityChecker\\\\Analyzers\\\\Owasp\\\\OwaspMisconfigurationAnalyzer\\:\\:CONFIG_FILES is unused\\.$#"
+			count: 1
+			path: src/Analyzers/Owasp/OwaspMisconfigurationAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Owasp\\\\OwaspMisconfigurationAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Owasp/OwaspMisconfigurationAnalyzer.php
+
+		-
+			message: "#^Access to an undefined property PhpParser\\\\Node\\:\\:\\$args\\.$#"
+			count: 1
+			path: src/Analyzers/Owasp/OwaspSsrfAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Owasp\\\\OwaspSsrfAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Owasp/OwaspSsrfAnalyzer.php
+
+		-
+			message: "#^Constant VietVang\\\\QualityChecker\\\\Analyzers\\\\Owasp\\\\OwaspSstiAnalyzer\\:\\:STATIC_SINKS is unused\\.$#"
+			count: 1
+			path: src/Analyzers/Owasp/OwaspSstiAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Owasp\\\\OwaspSstiAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Owasp/OwaspSstiAnalyzer.php
+
+		-
+			message: "#^Constant VietVang\\\\QualityChecker\\\\Analyzers\\\\Owasp\\\\OwaspXxeAnalyzer\\:\\:FUNC_SINKS is unused\\.$#"
+			count: 1
+			path: src/Analyzers/Owasp/OwaspXxeAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Owasp\\\\OwaspXxeAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Owasp/OwaspXxeAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Owasp\\\\OwaspXxeAnalyzer\\:\\:hasGuard\\(\\) has parameter \\$ast with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Owasp/OwaspXxeAnalyzer.php
+
+		-
+			message: "#^Offset 1 on array\\{'SimpleXMLElement', 'XMLReader'\\} on left side of \\?\\? always exists and is not nullable\\.$#"
+			count: 1
+			path: src/Analyzers/Owasp/OwaspXxeAnalyzer.php
+
+		-
+			message: "#^Else branch is unreachable because ternary operator condition is always true\\.$#"
+			count: 1
+			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\DisabledCsrfAnalyzer\\:\\:analyze\\(\\) has parameter \\$files with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\DisabledCsrfAnalyzer\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\DisabledCsrfAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\DisabledCsrfAnalyzer\\:\\:parse\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
+
+		-
+			message: "#^Result of \\|\\| is always false\\.$#"
+			count: 1
+			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between PhpParser\\\\Node\\\\ArrayItem and null will always evaluate to false\\.$#"
+			count: 1
+			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between PhpParser\\\\Node\\\\Expr and null will always evaluate to false\\.$#"
+			count: 1
+			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\HardcodedSecretAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/HardcodedSecretAnalyzer.php
+
+		-
+			message: "#^Access to an undefined property PhpParser\\\\Node\\:\\:\\$name\\.$#"
+			count: 1
+			path: src/Analyzers/Security/InsecureHashAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\InsecureHashAnalyzer\\:\\:analyze\\(\\) has parameter \\$files with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/InsecureHashAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\InsecureHashAnalyzer\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/InsecureHashAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\InsecureHashAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/InsecureHashAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\InsecureHashAnalyzer\\:\\:isCredentialContext\\(\\) has parameter \\$ast with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/InsecureHashAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\InsecureHashAnalyzer\\:\\:parse\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/InsecureHashAnalyzer.php
+
+		-
+			message: "#^Parameter \\#1 \\$call of method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\InsecureHashAnalyzer\\:\\:isCredentialContext\\(\\) expects PhpParser\\\\Node\\\\Expr\\\\FuncCall, PhpParser\\\\Node given\\.$#"
+			count: 1
+			path: src/Analyzers/Security/InsecureHashAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\LaravelTaintAnalyzer\\:\\:analyze\\(\\) has parameter \\$files with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/LaravelTaintAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\LaravelTaintAnalyzer\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/LaravelTaintAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\LaravelTaintAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/LaravelTaintAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\LaravelTaintAnalyzer\\:\\:parse\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/LaravelTaintAnalyzer.php
+
+		-
+			message: "#^Access to an undefined property PhpParser\\\\Node\\:\\:\\$name\\.$#"
+			count: 1
+			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\MassAssignmentAnalyzer\\:\\:analyze\\(\\) has parameter \\$files with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\MassAssignmentAnalyzer\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\MassAssignmentAnalyzer\\:\\:analyzeFile\\(\\) has parameter \\$modelClassFiles with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\MassAssignmentAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\MassAssignmentAnalyzer\\:\\:findIssues\\(\\) has parameter \\$ast with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\MassAssignmentAnalyzer\\:\\:findIssues\\(\\) has parameter \\$modelClassFiles with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\MassAssignmentAnalyzer\\:\\:findIssues\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\MassAssignmentAnalyzer\\:\\:modelDefinesMassAssignmentGuard\\(\\) has parameter \\$modelClassFiles with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\MassAssignmentAnalyzer\\:\\:modelExists\\(\\) has parameter \\$modelClassFiles with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\MassAssignmentAnalyzer\\:\\:parse\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\MassAssignmentAnalyzer\\:\\:resolveClassName\\(\\) should return array\\{string, string\\|null\\} but returns array\\{null, null\\}\\.$#"
+			count: 3
+			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between string and null will always evaluate to false\\.$#"
+			count: 1
+			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
+
+		-
+			message: "#^Access to an undefined property PhpParser\\\\Node\\:\\:\\$args\\.$#"
+			count: 1
+			path: src/Analyzers/Security/SqlInjectionAnalyzer.php
+
+		-
+			message: "#^Access to an undefined property PhpParser\\\\Node\\:\\:\\$name\\.$#"
+			count: 1
+			path: src/Analyzers/Security/SqlInjectionAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\SqlInjectionAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/SqlInjectionAnalyzer.php
+
+		-
+			message: "#^Access to an undefined property PhpParser\\\\Node\\\\FunctionLike\\:\\:\\$params\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Access to property \\$expr on an unknown class PhpParser\\\\Node\\\\Expr\\\\Return_\\.$#"
+			count: 2
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Class PhpParser\\\\Node\\\\Expr\\\\Return_ not found\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Constant VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:MAX_FUNCTIONS is unused\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:analyzeCalleeBody\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:analyzeFile\\(\\) has parameter \\$index with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:handleAssignment\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:handleCall\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:handleConcat\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:handleInterpolated\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:handleReturn\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:isExpressionSource\\(\\) has parameter \\$expr with no type specified\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:isExpressionSource\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:isExpressionTainted\\(\\) has parameter \\$expr with no type specified\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:isExpressionTainted\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:isSourceCall\\(\\) has parameter \\$args with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:isStringInterpolatedTainted\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:isStringInterpolatedTainted\\(\\) is unused\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:markAssignmentSource\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:propagateArgs\\(\\) has parameter \\$args with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:propagateArgs\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:reportSink\\(\\) has parameter \\$args with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:reportSink\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:resolveCall\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:resolveCallee\\(\\) never returns PhpParser\\\\Node\\\\FunctionLike so it can be removed from the return type\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:resolveCallee\\(\\) should return PhpParser\\\\Node\\\\FunctionLike\\|null but returns array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:walkCallable\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:__construct\\(\\) has parameter \\$functions with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:__construct\\(\\) has parameter \\$methods with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:__construct\\(\\) has parameter \\$order with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Method class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:290\\:\\:__construct\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Parameter \\$ret of method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:handleReturn\\(\\) has invalid type PhpParser\\\\Node\\\\Expr\\\\Return_\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Property VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:\\$fileIndex type has no value type specified in iterable type array\\.$#"
+			count: 2
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Property VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:\\$returnedTainted is never read, only written\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Property VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:\\$returnedTainted type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:\\$functions is never read, only written\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:\\$functions type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:\\$methods is never read, only written\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:\\$methods type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:\\$order is never read, only written\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:\\$order type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:290\\:\\:\\$tainted type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintEngine.php
+
+		-
+			message: "#^Property VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintSourceResolver\\:\\:\\$facades type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/Taint/TaintSourceResolver.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\UnsafeDeserializationAnalyzer\\:\\:analyze\\(\\) has parameter \\$files with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/UnsafeDeserializationAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\UnsafeDeserializationAnalyzer\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/UnsafeDeserializationAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\UnsafeDeserializationAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/UnsafeDeserializationAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\UnsafeDeserializationAnalyzer\\:\\:parse\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/UnsafeDeserializationAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\UnsafeEvalAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/Security/UnsafeEvalAnalyzer.php
+
+		-
+			message: "#^Else branch is unreachable because ternary operator condition is always true\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\ControllerTestAnalyzer\\:\\:analyze\\(\\) has parameter \\$files with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\ControllerTestAnalyzer\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\ControllerTestAnalyzer\\:\\:analyzeControllerFile\\(\\) has parameter \\$featureTests with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\ControllerTestAnalyzer\\:\\:analyzeControllerFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\ControllerTestAnalyzer\\:\\:collectFeatureTestBodies\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\ControllerTestAnalyzer\\:\\:findControllerTestFiles\\(\\) has parameter \\$featureTests with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\ControllerTestAnalyzer\\:\\:findControllerTestFiles\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\ControllerTestAnalyzer\\:\\:listPhpFiles\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\ControllerTestAnalyzer\\:\\:methodIsTested\\(\\) has parameter \\$testFiles with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\ControllerTestAnalyzer\\:\\:parse\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between non\\-empty\\-string and null will always evaluate to false\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\FeatureTestAnalyzer\\:\\:analyze\\(\\) has parameter \\$files with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/FeatureTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\FeatureTestAnalyzer\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/FeatureTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\FeatureTestAnalyzer\\:\\:collectFeatureTestBodies\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/FeatureTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\FeatureTestAnalyzer\\:\\:collectRoutes\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/FeatureTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\FeatureTestAnalyzer\\:\\:listPhpFiles\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/FeatureTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\FeatureTestAnalyzer\\:\\:parseRoutesFromSource\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/FeatureTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\FeatureTestAnalyzer\\:\\:routeIsCovered\\(\\) has parameter \\$featureTests with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/FeatureTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\FeatureTestAnalyzer\\:\\:routeIsCovered\\(\\) has parameter \\$route with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/FeatureTestAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\TestCoverageAnalyzer\\:\\:classIdentity\\(\\) has parameter \\$ast with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/TestCoverageAnalyzer.php
+
+		-
+			message: "#^Constant VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\TestWithoutAssertAnalyzer\\:\\:ASSERT_RE is unused\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/TestWithoutAssertAnalyzer.php
+
+		-
+			message: "#^Else branch is unreachable because ternary operator condition is always true\\.$#"
+			count: 2
+			path: src/Analyzers/TestCoverage/TestWithoutAssertAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\TestWithoutAssertAnalyzer\\:\\:analyze\\(\\) has parameter \\$files with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/TestWithoutAssertAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\TestWithoutAssertAnalyzer\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/TestWithoutAssertAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\TestWithoutAssertAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/TestWithoutAssertAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\TestWithoutAssertAnalyzer\\:\\:hasAssertion\\(\\) has parameter \\$body with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/TestWithoutAssertAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\TestCoverage\\\\TestWithoutAssertAnalyzer\\:\\:parse\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Analyzers/TestCoverage/TestWithoutAssertAnalyzer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Baseline\\\\BaselineFilter\\:\\:filter\\(\\) has parameter \\$results with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Baseline/BaselineFilter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Baseline\\\\BaselineFilter\\:\\:filter\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Baseline/BaselineFilter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Baseline\\\\BaselineFilter\\:\\:issueList\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Baseline/BaselineFilter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Baseline\\\\BaselineFilter\\:\\:setIssues\\(\\) has parameter \\$issues with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Baseline/BaselineFilter.php
+
+		-
+			message: "#^Constant VietVang\\\\QualityChecker\\\\Baseline\\\\BaselineManager\\:\\:DEFAULT_FILENAME is unused\\.$#"
+			count: 1
+			path: src/Baseline/BaselineManager.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Baseline\\\\BaselineManager\\:\\:isBaselined\\(\\) has parameter \\$issue with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Baseline/BaselineManager.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Baseline\\\\BaselineManager\\:\\:signature\\(\\) has parameter \\$issue with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Baseline/BaselineManager.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Baseline\\\\BaselineManager\\:\\:update\\(\\) has parameter \\$results with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Baseline/BaselineManager.php
+
+		-
+			message: "#^Property VietVang\\\\QualityChecker\\\\Baseline\\\\BaselineManager\\:\\:\\$signatures \\(array\\<string, true\\>\\) does not accept array\\<non\\-empty\\-string, non\\-empty\\-string\\>\\.$#"
+			count: 1
+			path: src/Baseline/BaselineManager.php
+
+		-
+			message: "#^Property VietVang\\\\QualityChecker\\\\Baseline\\\\BaselineManager\\:\\:\\$signatures \\(array\\<string, true\\>\\) does not accept array\\<string, string\\>\\.$#"
+			count: 1
+			path: src/Baseline/BaselineManager.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\AbstractProcessChecker\\:\\:result\\(\\) has parameter \\$issues with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/AbstractProcessChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\CheckerInterface\\:\\:config\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/CheckerInterface.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\ComposerAuditChecker\\:\\:config\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/ComposerAuditChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\ComposerAuditChecker\\:\\:parseOutput\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/ComposerAuditChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\CustomAnalyzerChecker\\:\\:config\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/CustomAnalyzerChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\CustomAnalyzerChecker\\:\\:entry\\(\\) has parameter \\$analyzers with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/CustomAnalyzerChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\PhpcsChecker\\:\\:config\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/PhpcsChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\PhpcsChecker\\:\\:parseOutput\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/PhpcsChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\PhpstanChecker\\:\\:config\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/PhpstanChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\PhpstanChecker\\:\\:parseOutput\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/PhpstanChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\PhpunitChecker\\:\\:config\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/PhpunitChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\PhpunitChecker\\:\\:parseJunit\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/PhpunitChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\TrivyChecker\\:\\:config\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/TrivyChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\TrivyChecker\\:\\:makeIssue\\(\\) has parameter \\$metadata with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/TrivyChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\TrivyChecker\\:\\:parseOutput\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/TrivyChecker.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Checkers\\\\TrivyChecker\\:\\:result\\(\\) has parameter \\$issues with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Checkers/TrivyChecker.php
+
+		-
+			message: "#^Constant VietVang\\\\QualityChecker\\\\Fixer\\\\PhpcsFixer\\:\\:EXIT_FIXABLE_REMAIN is unused\\.$#"
+			count: 1
+			path: src/Fixer/PhpcsFixer.php
+
+		-
+			message: "#^Constant VietVang\\\\QualityChecker\\\\Fixer\\\\PhpcsFixer\\:\\:EXIT_NO_ISSUES is unused\\.$#"
+			count: 1
+			path: src/Fixer/PhpcsFixer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Fixer\\\\PhpcsFixer\\:\\:buildCommand\\(\\) has parameter \\$paths with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Fixer/PhpcsFixer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Fixer\\\\PhpcsFixer\\:\\:firstExisting\\(\\) has parameter \\$candidates with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Fixer/PhpcsFixer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Fixer\\\\PhpcsFixer\\:\\:run\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Fixer/PhpcsFixer.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\ConsoleReporter\\:\\:buildSummary\\(\\) has parameter \\$results with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/ConsoleReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\ConsoleReporter\\:\\:buildSummary\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/ConsoleReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\ConsoleReporter\\:\\:printIssues\\(\\) has parameter \\$results with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/ConsoleReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\ConsoleReporter\\:\\:printOwaspFindings\\(\\) has parameter \\$results with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/ConsoleReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\ConsoleReporter\\:\\:renderSummaryLine\\(\\) has parameter \\$results with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/ConsoleReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\JsonReporter\\:\\:buildCheckers\\(\\) has parameter \\$results with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/JsonReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\JsonReporter\\:\\:buildCheckers\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/JsonReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\JsonReporter\\:\\:buildOwasp\\(\\) has parameter \\$results with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/JsonReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\JsonReporter\\:\\:buildOwasp\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/JsonReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\JsonReporter\\:\\:buildSummary\\(\\) has parameter \\$results with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/JsonReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\JsonReporter\\:\\:buildSummary\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/JsonReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\MarkdownReporter\\:\\:badgeColor\\(\\) has parameter \\$summary with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/MarkdownReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\MarkdownReporter\\:\\:badgeLine\\(\\) has parameter \\$summary with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/MarkdownReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\MarkdownReporter\\:\\:buildSummary\\(\\) has parameter \\$results with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/MarkdownReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\MarkdownReporter\\:\\:buildSummary\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/MarkdownReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\MarkdownReporter\\:\\:groupByFile\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/MarkdownReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\MarkdownReporter\\:\\:overallStatus\\(\\) has parameter \\$results with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/MarkdownReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\MarkdownReporter\\:\\:overallStatusForBadge\\(\\) has parameter \\$summary with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/MarkdownReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Reporters\\\\MarkdownReporter\\:\\:owaspCounts\\(\\) has parameter \\$results with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Reporters/MarkdownReporter.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Result\\\\CheckResult\\:\\:fromArray\\(\\) has parameter \\$data with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Result/CheckResult.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Result\\\\CheckResult\\:\\:toArray\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Result/CheckResult.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Result\\\\Issue\\:\\:__construct\\(\\) has parameter \\$metadata with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Result/Issue.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Result\\\\Issue\\:\\:fromArray\\(\\) has parameter \\$data with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Result/Issue.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Result\\\\Issue\\:\\:toArray\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Result/Issue.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Runner\\\\CheckContext\\:\\:configFor\\(\\) has parameter \\$default with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Runner/CheckContext.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Runner\\\\CheckContext\\:\\:configFor\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Runner/CheckContext.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Runner\\\\ResultCache\\:\\:get\\(\\) return type has no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Runner/ResultCache.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Runner\\\\ResultCache\\:\\:key\\(\\) has parameter \\$configHash with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Runner/ResultCache.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Runner\\\\ResultCache\\:\\:key\\(\\) has parameter \\$paths with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Runner/ResultCache.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Runner\\\\ResultCache\\:\\:put\\(\\) has parameter \\$data with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: src/Runner/ResultCache.php
+
+		-
+			message: "#^Call to static method create\\(\\) on an unknown class App\\\\Models\\\\Product\\.$#"
+			count: 1
+			path: tests/Feature/fixtures/app/Http/Controllers/VulnController.php
+
+		-
+			message: "#^Method App\\\\Http\\\\Controllers\\\\VulnController\\:\\:run\\(\\) has no return type specified\\.$#"
+			count: 1
+			path: tests/Feature/fixtures/app/Http/Controllers/VulnController.php
+
+		-
+			message: "#^Method App\\\\Http\\\\Controllers\\\\VulnController\\:\\:search\\(\\) has no return type specified\\.$#"
+			count: 1
+			path: tests/Feature/fixtures/app/Http/Controllers/VulnController.php
+
+		-
+			message: "#^Method App\\\\Http\\\\Controllers\\\\VulnController\\:\\:store\\(\\) has no return type specified\\.$#"
+			count: 1
+			path: tests/Feature/fixtures/app/Http/Controllers/VulnController.php
+
+		-
+			message: "#^Call to function is_null\\(\\) with string will always evaluate to false\\.$#"
+			count: 1
+			path: tests/Feature/fixtures/app/Services/UntestedService.php
+
+		-
+			message: "#^Method App\\\\Services\\\\WarningService\\:\\:debug\\(\\) has no return type specified\\.$#"
+			count: 1
+			path: tests/Feature/fixtures/app/Services/WarningService.php
+
+		-
+			message: "#^Method App\\\\Services\\\\WarningService\\:\\:search\\(\\) has no return type specified\\.$#"
+			count: 1
+			path: tests/Feature/fixtures/app/Services/WarningService.php
+
+		-
+			message: "#^Method VietVang\\\\QualityChecker\\\\Tests\\\\Unit\\\\ToolInstallerTest\\:\\:context\\(\\) has parameter \\$config with no value type specified in iterable type array\\.$#"
+			count: 1
+			path: tests/Unit/ToolInstallerTest.php

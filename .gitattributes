@@ -1,0 +1,6 @@
+* text=auto
+/.gitattributes export-ignore
+/tests export-ignore
+/docs export-ignore
+/SPEC.md export-ignore
+/.gitignore export-ignore
