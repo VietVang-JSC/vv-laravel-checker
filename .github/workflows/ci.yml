@@ -14,8 +14,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Testbench 9/10 require PHP 8.2+. Testbench 8 on PHP 8.1 resolves to
+        # Laravel 10 versions blocked by Composer's security audit policy.
         php:
-          - '8.1'
           - '8.2'
           - '8.3'
         os:

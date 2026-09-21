@@ -7,3 +7,5 @@ parameters:
         - src
     tmpDir: build/phpstan
     phpVersion: 80200
+    parallel:
+        maximumNumberOfProcesses: 1

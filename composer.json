@@ -14,14 +14,14 @@
     },
     "require-dev": {
         "orchestra/testbench": "^8.0|^9.0|^10.0",
-        "phpstan/phpstan": "1.11",
+        "phpstan/phpstan": "^1.12",
         "phpunit/phpunit": "^10.5|^11.0",
         "squizlabs/php_codesniffer": "^3.13"
     },
     "scripts": {
         "test": "phpunit",
         "lint": "phpcs src tests",
-        "analyse": "phpstan analyse src tests --level=6 --no-progress",
+        "analyse": "phpstan analyse src tests --level=6 --memory-limit=1G --no-progress",
         "check": [
             "@lint",
             "@analyse",
