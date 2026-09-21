@@ -77,6 +77,42 @@ php artisan vendor:publish --tag=quality-checker-config
 
 This creates `config/quality-checker.php`.
 
+### Using a local clone during development
+
+When developing the checker itself, clone it next to the Laravel application:
+
+```bash
+git clone https://github.com/VietVang-JSC/vv-laravel-checker.git
+cd vv-laravel-checker
+composer install
+```
+
+From the Laravel application's directory, register the local checkout and
+install the package from that path:
+
+```bash
+composer config repositories.quality-checker path ../vv-laravel-checker
+composer require vietvang/quality-checker:@dev
+php artisan vendor:publish --tag=quality-checker-config
+php artisan quality:check --tier=security --only=custom,composer_audit
+```
+
+The relative path must point from the Laravel application's directory to the
+cloned checker directory. Composer creates a symlink/junction where supported,
+so source changes in the clone are immediately used by the application. After
+pulling package changes, run:
+
+```bash
+composer update vietvang/quality-checker --with-dependencies
+```
+
+For a normal application installation, omit the path repository and use the
+stable package version instead:
+
+```bash
+composer require vietvang/quality-checker
+```
+
 ---
 
 ## Quick Start (5 minutes) / Bắt đầu nhanh
