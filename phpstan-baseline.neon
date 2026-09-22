@@ -366,21 +366,6 @@ parameters:
 			path: src/Analyzers/Security/Taint/TaintEngine.php
 
 		-
-			message: "#^Access to property \\$expr on an unknown class PhpParser\\\\Node\\\\Expr\\\\Return_\\.$#"
-			count: 2
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Class PhpParser\\\\Node\\\\Expr\\\\Return_ not found\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Constant VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:MAX_FUNCTIONS is unused\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
 			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
 			count: 1
 			path: src/Analyzers/Security/Taint/TaintEngine.php
@@ -501,78 +486,8 @@ parameters:
 			path: src/Analyzers/Security/Taint/TaintEngine.php
 
 		-
-			message: "#^Method class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:__construct\\(\\) has parameter \\$functions with no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Method class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:__construct\\(\\) has parameter \\$methods with no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Method class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:__construct\\(\\) has parameter \\$order with no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Method class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:290\\:\\:__construct\\(\\) has parameter \\$tainted with no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Parameter \\$ret of method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:handleReturn\\(\\) has invalid type PhpParser\\\\Node\\\\Expr\\\\Return_\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
 			message: "#^Property VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:\\$fileIndex type has no value type specified in iterable type array\\.$#"
 			count: 2
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Property VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:\\$returnedTainted is never read, only written\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Property VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\Taint\\\\TaintEngine\\:\\:\\$returnedTainted type has no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:\\$functions is never read, only written\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:\\$functions type has no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:\\$methods is never read, only written\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:\\$methods type has no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:\\$order is never read, only written\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:211\\:\\:\\$order type has no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Analyzers/Security/Taint/TaintEngine.php
-
-		-
-			message: "#^Property class@anonymous/src/Analyzers/Security/Taint/TaintEngine\\.php\\:290\\:\\:\\$tainted type has no value type specified in iterable type array\\.$#"
-			count: 1
 			path: src/Analyzers/Security/Taint/TaintEngine.php
 
 		-
@@ -1049,43 +964,3 @@ parameters:
 			message: "#^Method VietVang\\\\QualityChecker\\\\Runner\\\\ResultCache\\:\\:put\\(\\) has parameter \\$data with no value type specified in iterable type array\\.$#"
 			count: 1
 			path: src/Runner/ResultCache.php
-
-		-
-			message: "#^Call to static method create\\(\\) on an unknown class App\\\\Models\\\\Product\\.$#"
-			count: 1
-			path: tests/Feature/fixtures/app/Http/Controllers/VulnController.php
-
-		-
-			message: "#^Method App\\\\Http\\\\Controllers\\\\VulnController\\:\\:run\\(\\) has no return type specified\\.$#"
-			count: 1
-			path: tests/Feature/fixtures/app/Http/Controllers/VulnController.php
-
-		-
-			message: "#^Method App\\\\Http\\\\Controllers\\\\VulnController\\:\\:search\\(\\) has no return type specified\\.$#"
-			count: 1
-			path: tests/Feature/fixtures/app/Http/Controllers/VulnController.php
-
-		-
-			message: "#^Method App\\\\Http\\\\Controllers\\\\VulnController\\:\\:store\\(\\) has no return type specified\\.$#"
-			count: 1
-			path: tests/Feature/fixtures/app/Http/Controllers/VulnController.php
-
-		-
-			message: "#^Call to function is_null\\(\\) with string will always evaluate to false\\.$#"
-			count: 1
-			path: tests/Feature/fixtures/app/Services/UntestedService.php
-
-		-
-			message: "#^Method App\\\\Services\\\\WarningService\\:\\:debug\\(\\) has no return type specified\\.$#"
-			count: 1
-			path: tests/Feature/fixtures/app/Services/WarningService.php
-
-		-
-			message: "#^Method App\\\\Services\\\\WarningService\\:\\:search\\(\\) has no return type specified\\.$#"
-			count: 1
-			path: tests/Feature/fixtures/app/Services/WarningService.php
-
-		-
-			message: "#^Method VietVang\\\\QualityChecker\\\\Tests\\\\Unit\\\\ToolInstallerTest\\:\\:context\\(\\) has parameter \\$config with no value type specified in iterable type array\\.$#"
-			count: 1
-			path: tests/Unit/ToolInstallerTest.php

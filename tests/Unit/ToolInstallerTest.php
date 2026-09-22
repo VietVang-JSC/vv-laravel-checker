@@ -10,6 +10,9 @@ use VietVang\QualityChecker\Tools\ToolInstaller;
 
 final class ToolInstallerTest extends TestCase
 {
+    /**
+     * @param array<string, mixed> $config
+     */
     private function context(bool $noAutoInstall = false, array $config = []): CheckContext
     {
         return new CheckContext(

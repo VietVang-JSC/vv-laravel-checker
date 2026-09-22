@@ -5,6 +5,10 @@ parameters:
     level: 6
     paths:
         - src
+        - tests
+    excludePaths:
+        - tests/*/fixtures/*
+        - tests/**/fixtures/*
     tmpDir: build/phpstan
     phpVersion: 80200
     parallel:

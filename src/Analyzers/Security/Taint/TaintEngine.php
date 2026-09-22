@@ -19,9 +19,7 @@ use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Function_;
-use PhpParser\NodeTraverser;
-use PhpParser\NodeVisitorAbstract;
-use PhpParser\NodeVisitor\ParentConnectingVisitor;
+use PhpParser\Node\Stmt\Return_;
 use PhpParser\Parser;
 use PhpParser\ParserFactory;
 
@@ -65,7 +63,6 @@ use PhpParser\ParserFactory;
 final class TaintEngine
 {
     private const MAX_FILES = 500;
-    private const MAX_FUNCTIONS = 2000;
     private const MAX_STATEMENTS_PER_FILE = 4000;
 
     private const RULE_SQL = 'TAINT_SQL_INJECTION';
@@ -206,53 +203,52 @@ final class TaintEngine
         $methods = [];
         $order = [];
 
-        $traverser = new NodeTraverser();
-        $traverser->addVisitor(new ParentConnectingVisitor());
-        $traverser->addVisitor(new class ($functions, $methods, $order) extends NodeVisitorAbstract {
-            private array $functions;
-            private array $methods;
-            private array $order;
-
-            public function __construct(array &$functions, array &$methods, array &$order)
-            {
-                $this->functions = &$functions;
-                $this->methods = &$methods;
-                $this->order = &$order;
-            }
-
-            public function enterNode(Node $node)
-            {
-                if ($node instanceof Function_) {
-                    $name = $node->name->toString();
-                    $this->functions[$name] = $node;
-                    $this->order[] = 'fn:' . $name;
-                } elseif ($node instanceof ClassMethod) {
-                    $class = $this->currentClassName($node);
-                    if ($class !== null) {
-                        $key = $class . '::' . $node->name->toString();
-                        $this->methods[$key] = $node;
-                        $this->order[] = 'm:' . $key;
-                    }
-                }
-                return null;
-            }
-
-            private function currentClassName(Node $node): ?string
-            {
-                $c = $node;
-                while ($c = $c->getAttribute('parent')) {
-                    if ($c instanceof Class_) {
-                        return $c->name ? $c->name->toString() : null;
-                    }
-                }
-                return null;
-            }
-        });
-
-        $traverser->traverse($ast);
+        $this->collectCallables($ast, null, $functions, $methods, $order);
 
         $this->fileIndex[$file] = ['functions' => $functions, 'methods' => $methods, 'order' => $order];
         $this->functionsSeen += count($functions) + count($methods);
+    }
+
+    /**
+     * @param list<Node> $nodes
+     * @param array<string, FunctionLike> $functions
+     * @param array<string, FunctionLike> $methods
+     * @param list<string> $order
+     */
+    private function collectCallables(array $nodes, ?string $class, array &$functions, array &$methods, array &$order): void
+    {
+        foreach ($nodes as $node) {
+            if ($node instanceof Function_) {
+                $name = $node->name->toString();
+                $functions[$name] = $node;
+                $order[] = 'fn:' . $name;
+            } elseif ($node instanceof Class_) {
+                $className = $node->name ? $node->name->toString() : $class;
+                foreach ($node->stmts as $stmt) {
+                    if ($stmt instanceof ClassMethod) {
+                        if ($className !== null) {
+                            $key = $className . '::' . $stmt->name->toString();
+                            $methods[$key] = $stmt;
+                            $order[] = 'm:' . $key;
+                        }
+                    }
+                }
+            }
+
+            foreach ($node->getSubNodeNames() as $sub) {
+                $value = $node->{$sub};
+                if ($value instanceof Node) {
+                    $nestedClass = $value instanceof Class_ && $value->name ? $value->name->toString() : $class;
+                    $this->collectCallables([$value], $nestedClass, $functions, $methods, $order);
+                } elseif (is_array($value)) {
+                    /** @var list<Node> $childNodes */
+                    $childNodes = array_values(array_filter($value, static fn ($v): bool => $v instanceof Node));
+                    if ($childNodes !== []) {
+                        $this->collectCallables($childNodes, $class, $functions, $methods, $order);
+                    }
+                }
+            }
+        }
     }
 
     private function analyzeFile(string $file, array $index): void
@@ -286,72 +282,85 @@ final class TaintEngine
     private function walkCallable(string $file, Node $callable, array &$tainted): void
     {
         $budget = self::MAX_STATEMENTS_PER_FILE;
-        $traverser = new NodeTraverser();
-        $traverser->addVisitor(new class ($file, $tainted, $this, $budget) extends NodeVisitorAbstract {
-            private string $file;
-            private array $tainted;
-            private TaintEngine $engine;
-            private int $budget;
+        $this->walkNodes([$callable], $file, $tainted, $budget);
+    }
 
-            public function __construct(string $file, array &$tainted, TaintEngine $engine, int $budget)
-            {
-                $this->file = $file;
-                $this->tainted = &$tainted;
-                $this->engine = $engine;
-                $this->budget = $budget;
+    /**
+     * @param list<Node> $nodes
+     * @param array<string, bool> $tainted
+     */
+    private function walkNodes(array $nodes, string $file, array &$tainted, int &$budget): void
+    {
+        foreach ($nodes as $node) {
+            if ($budget-- <= 0) {
+                return;
             }
 
-            public function enterNode(Node $node)
-            {
-                if ($this->budget-- <= 0) {
-                    return NodeTraverser::STOP_TRAVERSAL;
+            if ($node instanceof Assign) {
+                $this->handleAssignment($file, $node, $tainted);
+            } elseif ($node instanceof Return_) {
+                $this->handleReturn($file, $node, $tainted);
+            } elseif ($node instanceof FuncCall) {
+                $this->handleCall($file, $node, $tainted, null);
+            } elseif ($node instanceof StaticCall) {
+                $this->handleCall($file, $node, $tainted, null);
+            } elseif ($node instanceof MethodCall) {
+                $this->handleCall($file, $node, $tainted, null);
+            } elseif ($node instanceof Expr\AssignOp\Concat || $node instanceof Expr\BinaryOp\Concat) {
+                $this->handleConcat($file, $node, $tainted);
+            } elseif ($node instanceof InterpolatedString) {
+                $this->handleInterpolated($file, $node, $tainted);
+            }
+
+            $children = [];
+            foreach ($node->getSubNodeNames() as $sub) {
+                $value = $node->{$sub};
+                if ($value instanceof Node) {
+                    $children[] = $value;
+                } elseif (is_array($value)) {
+                    foreach ($value as $v) {
+                        if ($v instanceof Node) {
+                            $children[] = $v;
+                        }
+                    }
                 }
-
-                if ($node instanceof Assign) {
-                    $this->engine->handleAssignment($this->file, $node, $this->tainted);
-                } elseif ($node instanceof Expr\Return_) {
-                    $this->engine->handleReturn($this->file, $node, $this->tainted);
-                } elseif ($node instanceof FuncCall) {
-                    $this->engine->handleCall($this->file, $node, $this->tainted, null);
-                } elseif ($node instanceof StaticCall) {
-                    $this->engine->handleCall($this->file, $node, $this->tainted, null);
-                } elseif ($node instanceof MethodCall) {
-                    $this->engine->handleCall($this->file, $node, $this->tainted, null);
-                } elseif ($node instanceof Expr\AssignOp\Concat || $node instanceof Expr\BinaryOp\Concat) {
-                    $this->engine->handleConcat($this->file, $node, $this->tainted);
-                } elseif ($node instanceof InterpolatedString) {
-                    $this->engine->handleInterpolated($this->file, $node, $this->tainted);
+            }
+            if ($children !== []) {
+                $this->walkNodes($children, $file, $tainted, $budget);
+                if ($budget <= 0) {
+                    return;
                 }
-                return null;
             }
-
-            public function leaveNode(Node $node)
-            {
-                return null;
-            }
-        });
-
-        $traverser->traverse([$callable]);
+        }
     }
 
     private function countStatements(Node $node): int
     {
         $count = 0;
-        $traverser = new NodeTraverser();
-        $traverser->addVisitor(new class ($count) extends NodeVisitorAbstract {
-            private int $count;
-            public function __construct(int &$count)
-            {
-                $this->count = &$count;
-            }
-            public function enterNode(Node $node)
-            {
-                $this->count++;
-                return null;
-            }
-        });
-        $traverser->traverse([$node]);
+        $this->countNodes([$node], $count);
         return $count;
+    }
+
+    /**
+     * @param list<Node> $nodes
+     */
+    private function countNodes(array $nodes, int &$count): void
+    {
+        foreach ($nodes as $node) {
+            $count++;
+            foreach ($node->getSubNodeNames() as $sub) {
+                $value = $node->{$sub};
+                if ($value instanceof Node) {
+                    $this->countNodes([$value], $count);
+                } elseif (is_array($value)) {
+                    foreach ($value as $v) {
+                        if ($v instanceof Node) {
+                            $this->countNodes([$v], $count);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     public function handleAssignment(string $file, Assign $assign, array &$tainted): void
@@ -381,12 +390,12 @@ final class TaintEngine
         }
     }
 
-    public function handleReturn(string $file, Expr\Return_ $ret, array &$tainted): void
+    public function handleReturn(string $file, Return_ $ret, array &$tainted): void
     {
-        // Mark function as a propagator by recording its returned-tainted status.
-        // Propagation through the call graph happens in handleCall via callee body.
-        if ($ret->expr !== null && $this->isExpressionTainted($ret->expr, $tainted)) {
-            $this->returnedTainted[$file] = true;
+        // Return-taint is resolved on demand via callee-body walk in handleCall;
+        // nothing to record here beyond keeping the hook for future extensions.
+        if ($ret->expr !== null) {
+            $this->isExpressionTainted($ret->expr, $tainted);
         }
     }
 
@@ -811,6 +820,4 @@ final class TaintEngine
         $this->addSink(self::RULE_EVAL, 'assert');
         $this->addSink(self::RULE_UNSERIALIZE, 'unserialize');
     }
-
-    private array $returnedTainted = [];
 }

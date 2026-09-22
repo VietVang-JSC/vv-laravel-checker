@@ -20,8 +20,8 @@
     },
     "scripts": {
         "test": "phpunit",
-        "lint": "phpcs src tests",
-        "analyse": "phpstan analyse src tests --level=6 --memory-limit=1G --no-progress",
+        "lint": "phpcs --standard=phpcs.xml.dist src tests",
+        "analyse": "phpstan analyse --memory-limit=1G --no-progress",
         "check": [
             "@lint",
             "@analyse",
