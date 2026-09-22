@@ -371,6 +371,7 @@ php artisan quality:check --only=custom,composer_audit --no-auto-install
 Custom analyzers are static heuristics and do not replace a manual security
 review. Check the file and line in the report, then use a reviewed baseline or
 adjust the analyzer configuration rather than suppressing all security rules.
+See [`docs/false-positives.md`](docs/false-positives.md) for a per-rule guide.
 
 ---
 
