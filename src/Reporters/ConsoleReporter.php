@@ -14,6 +14,8 @@ use VietVang\QualityChecker\Runner\CheckContext;
 
 final class ConsoleReporter implements ReporterInterface
 {
+    private const MAX_ISSUES_PER_CHECKER = 50;
+
     private OutputInterface $output;
 
     public function __construct(OutputInterface $output)
@@ -32,6 +34,12 @@ final class ConsoleReporter implements ReporterInterface
         $this->output->writeln('');
         $this->output->writeln('<fg=cyan>Laravel Quality Checker</> <options=bold>v' . $ctx->packageVersion . '</>');
         $this->output->writeln('Generated: ' . (new \DateTimeImmutable())->format('Y-m-d H:i:s'));
+        $this->output->writeln(sprintf(
+            'Tier: %s | Fail-on: %s | Min-confidence: %s',
+            $ctx->tier,
+            $ctx->failOn,
+            $ctx->minConfidence
+        ));
         $this->output->writeln('');
 
         $table = new Table($this->output);
@@ -80,6 +88,7 @@ final class ConsoleReporter implements ReporterInterface
             $this->output->writeln('<fg=green>✔ All checks passed.</>');
         } else {
             $this->output->writeln('<fg=red>✘ Quality gate not met. Exit code: ' . $ctx->exitCode . '</>');
+            $this->output->writeln('<fg=gray>Tip: re-run with --format=json for machine-readable details, or --fail-on=none to review without failing.</>');
         }
 
         $this->printOwaspFindings($results);
@@ -116,24 +125,56 @@ final class ConsoleReporter implements ReporterInterface
             $this->output->writeln('');
             $this->output->writeln('<fg=yellow>Issues — ' . $result->name . ':</>');
 
-            foreach ($result->issues as $issue) {
-                if (!$issue instanceof Issue) {
-                    continue;
+            $shown = 0;
+            foreach ($this->groupByFile($result) as $file => $issues) {
+                $this->output->writeln('  <options=bold>' . $file . '</>');
+
+                foreach ($issues as $issue) {
+                    if ($shown >= self::MAX_ISSUES_PER_CHECKER) {
+                        break 2;
+                    }
+                    ++$shown;
+
+                    $location = $issue->line !== null ? ':' . $issue->line : '';
+
+                    $this->output->writeln(sprintf(
+                        '    %s [%s] %s%s — %s (%s)',
+                        $this->severityTag($issue->severity),
+                        $issue->rule,
+                        $file,
+                        $location,
+                        $issue->message,
+                        $issue->confidence->value
+                    ));
                 }
+            }
 
-                $location = $issue->file !== null ? $issue->file : '(project)';
-                $location .= $issue->line !== null ? ':' . $issue->line : '';
-
+            $remaining = count($result->issues) - $shown;
+            if ($remaining > 0) {
                 $this->output->writeln(sprintf(
-                    '  [%s] %s — %s (%s) (%s)',
-                    $this->severityTag($issue->severity),
-                    $issue->rule,
-                    $location,
-                    $issue->message,
-                    $issue->confidence->value
+                    '  … and %d more issue(s) — see the JSON report for the full list.',
+                    $remaining
                 ));
             }
         }
+    }
+
+    /**
+     * @return array<string, Issue[]>
+     */
+    private function groupByFile(CheckResult $result): array
+    {
+        $groups = [];
+        foreach ($result->issues as $issue) {
+            if (!$issue instanceof Issue) {
+                continue;
+            }
+            $groups[$issue->file ?? '(project)'][] = $issue;
+        }
+
+        ksort($groups);
+
+        return $groups;
     }
 
     /**

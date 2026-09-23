@@ -21,9 +21,25 @@ final class MarkdownReporter implements ReporterInterface
         $lines[] = '';
         $lines[] = 'Generated: ' . $generatedAt . ' | Package: v' . $version;
         $lines[] = '';
-        $lines[] = '**Status:** ' . $this->overallStatus($results);
+        $lines[] = '**Status:** ' . $this->overallStatus($results)
+            . ' | **Tier:** ' . $this->esc($ctx->tier)
+            . ' | **Fail on:** ' . $this->esc($ctx->failOn)
+            . ' | **Exit code:** ' . $ctx->exitCode;
         $lines[] = '';
         $lines[] = $this->badgeLine($summary);
+        $lines[] = '';
+        $lines[] = '## Contents';
+        $lines[] = '';
+        $lines[] = '- [Summary](#summary)';
+        $lines[] = '- [Top Rules](#top-rules)';
+        $lines[] = '- [OWASP](#owasp)';
+        $lines[] = '- [Per-Checker](#per-checker)';
+        $lines[] = '- [Issues](#issues)';
+        foreach ($results as $result) {
+            if ($result instanceof CheckResult) {
+                $lines[] = '  - [' . $this->esc($result->name) . '](#' . $this->slug($result->name) . ')';
+            }
+        }
         $lines[] = '';
         $lines[] = '## Summary';
         $lines[] = '';
@@ -35,6 +51,9 @@ final class MarkdownReporter implements ReporterInterface
         $lines[] = '| Skipped | ' . $summary['skipped'] . ' |';
         $lines[] = '| Total Issues | ' . $summary['total_issues'] . ' |';
         $lines[] = '| Critical | ' . $summary['critical'] . ' |';
+        $lines[] = '| Error | ' . $summary['error'] . ' |';
+        $lines[] = '| Warning | ' . $summary['warning'] . ' |';
+        $lines[] = '| Info | ' . $summary['info'] . ' |';
         $lines[] = '';
 
         $rules = IssueGrouper::byRule($results);
@@ -43,7 +62,7 @@ final class MarkdownReporter implements ReporterInterface
             $lines[] = '';
             $lines[] = '| Rule | Source | Critical | Error | Warning | Info | Total |';
             $lines[] = '|---|---|---|---|---|---|---|';
-            foreach ($rules as $r) {
+            foreach (array_slice($rules, 0, 50) as $r) {
                 $lines[] = sprintf(
                     '| %s | %s | %d | %d | %d | %d | %d |',
                     $this->esc($r['rule']),
@@ -54,6 +73,10 @@ final class MarkdownReporter implements ReporterInterface
                     $r['info'],
                     $r['count']
                 );
+            }
+            if (count($rules) > 50) {
+                $lines[] = '';
+                $lines[] = '_Showing top 50 of ' . count($rules) . ' rules. See the JSON report for the full list._';
             }
             $lines[] = '';
         }
@@ -93,20 +116,24 @@ final class MarkdownReporter implements ReporterInterface
 
         $lines[] = '';
 
+        $lines[] = '## Issues';
+        $lines[] = '';
+
         foreach ($results as $result) {
             if (!$result instanceof CheckResult) {
                 continue;
             }
+            $issueCount = count($result->issues);
             $lines[] = '## ' . $this->esc($result->name);
             $lines[] = '';
-            $lines[] = 'Status: **' . $this->esc($result->status) . '**';
+            $lines[] = 'Status: **' . $this->esc($result->status) . '** — ' . $issueCount . ' issue(s)';
 
             if ($result->summary !== null && $result->summary !== '') {
                 $lines[] = '';
                 $lines[] = $this->esc($result->summary);
             }
 
-            if (count($result->issues) === 0) {
+            if ($issueCount === 0) {
                 $lines[] = '';
                 $lines[] = 'No issues found.';
                 $lines[] = '';
@@ -114,23 +141,31 @@ final class MarkdownReporter implements ReporterInterface
             }
 
             $lines[] = '';
-            $lines[] = '| Rule | Severity | Confidence | Location | Message |';
-            $lines[] = '|---|---|---|---|---|';
+            $lines[] = '<details>';
+            $lines[] = '<summary>Show issues for <strong>' . $this->esc($result->name) . '</strong> (' . $issueCount . ')</summary>';
+            $lines[] = '';
 
             foreach ($this->groupByFile($result) as $file => $issues) {
+                $lines[] = '### `' . $this->esc($file) . '`';
+                $lines[] = '';
+                $lines[] = '| Rule | Severity | Confidence | Line | Message |';
+                $lines[] = '|---|---|---|---|---|';
+
                 foreach ($issues as $issue) {
-                    $location = $issue['file'] . ':' . ($issue['line'] ?? '-');
                     $lines[] = sprintf(
-                        '| %s | %s | %s | `%s` | %s |',
+                        '| %s | %s | %s | %s | %s |',
                         $this->esc($issue['rule']),
                         $this->esc($issue['severity']),
                         $this->esc($issue['confidence']),
-                        $this->esc($location),
+                        $this->esc($issue['line'] !== null ? (string) $issue['line'] : '-'),
                         $this->esc($issue['message'])
                     );
                 }
+
+                $lines[] = '';
             }
 
+            $lines[] = '</details>';
             $lines[] = '';
         }
 
@@ -310,5 +345,17 @@ final class MarkdownReporter implements ReporterInterface
     private function esc(string $value): string
     {
         return str_replace(['|', "\n"], ['\\|', ' '], $value);
+    }
+
+    /**
+     * GitHub-compatible heading anchor: lowercase, spaces to hyphens,
+     * keep letters/digits/underscores/hyphens.
+     */
+    private function slug(string $value): string
+    {
+        $slug = strtolower($value);
+        $slug = str_replace(' ', '-', $slug);
+
+        return (string) preg_replace('/[^a-z0-9_-]+/', '', $slug);
     }
 }

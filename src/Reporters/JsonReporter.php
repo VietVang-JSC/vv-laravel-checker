@@ -14,10 +14,15 @@ final class JsonReporter implements ReporterInterface
     public function render(array $results, CheckContext $ctx): void
     {
         $payload = [
+            'schema_version' => 1,
             'generated_at' => (new \DateTimeImmutable())->format('Y-m-d\TH:i:sP'),
             'package_version' => $ctx->packageVersion,
             'exit_code' => $ctx->exitCode,
+            'overall_status' => $this->overallStatus($results),
             'tier' => $ctx->tier,
+            'fail_on' => $ctx->failOn,
+            'min_confidence' => $ctx->minConfidence,
+            'duration_total' => $this->totalDuration($results),
             'summary' => $this->buildSummary($results),
             'rules' => IssueGrouper::byRule($results),
             'owasp' => $this->buildOwasp($results),
@@ -30,7 +35,7 @@ final class JsonReporter implements ReporterInterface
 
         file_put_contents(
             $ctx->outputDir . DIRECTORY_SEPARATOR . 'quality-report.json',
-            json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL
+            json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . PHP_EOL
         );
     }
 
@@ -86,6 +91,51 @@ final class JsonReporter implements ReporterInterface
         }
 
         return ['categories' => $categories, 'total' => array_sum($categories)];
+    }
+
+    /**
+     * @param CheckResult[] $results
+     */
+    private function overallStatus(array $results): string
+    {
+        $failed = false;
+        $hasIssues = false;
+
+        foreach ($results as $result) {
+            if (!$result instanceof CheckResult) {
+                continue;
+            }
+            if ($result->status === 'failed' || $result->status === 'error') {
+                $failed = true;
+            }
+            if (count($result->issues) > 0) {
+                $hasIssues = true;
+            }
+        }
+
+        if ($failed) {
+            return 'failed';
+        }
+        if ($hasIssues) {
+            return 'warning';
+        }
+
+        return 'passed';
+    }
+
+    /**
+     * @param CheckResult[] $results
+     */
+    private function totalDuration(array $results): float
+    {
+        $total = 0.0;
+        foreach ($results as $result) {
+            if ($result instanceof CheckResult) {
+                $total += $result->duration;
+            }
+        }
+
+        return round($total, 3);
     }
 
     private function buildSummary(array $results): array
