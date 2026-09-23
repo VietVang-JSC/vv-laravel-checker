@@ -98,7 +98,171 @@ final class HtmlReporter implements ReporterInterface
     .issue-group-title { font-weight: 600; font-size: 14px; margin: 18px 0 8px; }
     .skipped-hint { color: var(--muted); font-style: italic; }
     .empty { color: var(--muted); }
+    /* Layout with sticky sidebar TOC */
+    .layout { display: flex; gap: 24px; align-items: flex-start; }
+    .sidebar {
+        position: sticky;
+        top: 24px;
+        flex: 0 0 240px;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        font-size: 13px;
+    }
+    .sidebar h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+    .sidebar nav ul { list-style: none; margin: 0 0 16px; padding: 0; }
+    .sidebar nav li { margin: 0; padding: 0; }
+    .sidebar nav a {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 6px;
+        color: #374151;
+        text-decoration: none;
+    }
+    .sidebar nav a:hover { background: #f3f4f6; }
+    .sidebar nav a.active { background: #e0e7ff; color: #1e40af; font-weight: 600; }
+    .sidebar .count {
+        background: #f3f4f6;
+        border-radius: 9999px;
+        padding: 0 8px;
+        font-size: 11px;
+        color: var(--muted);
+    }
+    .sidebar a.active .count { background: #c7d2fe; color: #1e40af; }
+    .main { flex: 1 1 auto; min-width: 0; }
+    .main .container { max-width: none; margin: 0; }
+    /* Sticky on-page search + severity filter toolbar */
+    .toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        background: #f9fafb;
+        padding: 12px 0;
+        margin-bottom: 8px;
+    }
+    .toolbar input[type="search"] {
+        flex: 1 1 220px;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 14px;
+        background: var(--bg);
+    }
+    .chip {
+        border: 1px solid var(--border);
+        background: var(--bg);
+        border-radius: 9999px;
+        padding: 4px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .chip[aria-pressed="true"] { background: #111827; color: #fff; border-color: #111827; }
+    .chip[data-sev="critical"][aria-pressed="true"] { background: var(--critical); border-color: var(--critical); }
+    .chip[data-sev="error"][aria-pressed="true"] { background: var(--error); border-color: var(--error); }
+    .chip[data-sev="warning"][aria-pressed="true"] { background: var(--warning); border-color: var(--warning); }
+    .chip[data-sev="info"][aria-pressed="true"] { background: var(--info); border-color: var(--info); }
+    .match-count { font-size: 12px; color: var(--muted); }
+    tr[hidden], .issue-group[hidden], .checker-section[hidden] { display: none; }
+    .no-match { padding: 16px; text-align: center; }
+    html { scroll-behavior: smooth; }
+    section[id], div[id] { scroll-margin-top: 70px; }
+    @media (max-width: 860px) {
+        .layout { flex-direction: column; }
+        .sidebar { position: static; flex: none; width: 100%; max-height: none; }
+    }
     CSS;
+
+    private const JS = <<<'JS'
+    (function () {
+        var search = document.getElementById('report-search');
+        var matchCount = document.getElementById('match-count');
+        var chips = Array.prototype.slice.call(document.querySelectorAll('.chip[data-sev]'));
+        var rows = Array.prototype.slice.call(document.querySelectorAll('tr[data-search]'));
+        var activeSevs = { critical: true, error: true, warning: true, info: true };
+
+        function applyFilters() {
+            var q = search ? search.value.trim().toLowerCase() : '';
+            var visible = 0;
+            rows.forEach(function (row) {
+                var sevOk = !!activeSevs[row.getAttribute('data-severity')];
+                var textOk = q === '' || row.getAttribute('data-search').indexOf(q) !== -1;
+                var show = sevOk && textOk;
+                row.hidden = !show;
+                if (show) {
+                    visible++;
+                }
+            });
+            document.querySelectorAll('.issue-group').forEach(function (group) {
+                var anyVisible = Array.prototype.some.call(
+                    group.querySelectorAll('tr[data-search]'),
+                    function (r) { return !r.hidden; }
+                );
+                group.hidden = !anyVisible;
+            });
+            document.querySelectorAll('.checker-section').forEach(function (section) {
+                var groups = section.querySelectorAll('.issue-group');
+                if (groups.length === 0) {
+                    return;
+                }
+                var anyVisible = Array.prototype.some.call(groups, function (g) { return !g.hidden; });
+                section.hidden = !anyVisible;
+                var note = section.querySelector('.no-match');
+                if (note) {
+                    note.hidden = anyVisible;
+                }
+            });
+            if (matchCount) {
+                matchCount.textContent = visible + ' / ' + rows.length + ' issues';
+            }
+        }
+
+        if (search) {
+            search.addEventListener('input', applyFilters);
+        }
+        chips.forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                var sev = chip.getAttribute('data-sev');
+                activeSevs[sev] = !activeSevs[sev];
+                chip.setAttribute('aria-pressed', activeSevs[sev] ? 'true' : 'false');
+                applyFilters();
+            });
+        });
+
+        var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a[href^="#"]'));
+        if ('IntersectionObserver' in window && links.length > 0) {
+            var byId = {};
+            links.forEach(function (a) {
+                byId[a.getAttribute('href').slice(1)] = a;
+            });
+            var observer = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (entry.isIntersecting && byId[entry.target.id]) {
+                        links.forEach(function (a) { a.classList.remove('active'); });
+                        byId[entry.target.id].classList.add('active');
+                    }
+                });
+            }, { rootMargin: '-30% 0px -60% 0px' });
+            Object.keys(byId).forEach(function (id) {
+                var el = document.getElementById(id);
+                if (el) {
+                    observer.observe(el);
+                }
+            });
+        }
+        applyFilters();
+    })();
+    JS;
 
     /**
      * @param CheckResult[] $results
@@ -127,14 +291,21 @@ final class HtmlReporter implements ReporterInterface
             . '<html lang="en">' . "\n"
             . $this->buildHead()
             . '<body>' . "\n"
-            . '<div class="container">' . "\n"
+            . '<div class="layout">' . "\n"
+            . $this->buildSidebar($checkers)
+            . '<div class="main"><div class="container">' . "\n"
             . $this->buildHeader($ctx, $this->overallStatus($results))
+            . $this->buildToolbar()
             . $this->buildSummaryGrid($summary)
             . $this->buildRulesTable($results)
             . $this->buildOwaspTable($results)
             . $this->buildCheckerTable($checkers)
             . $this->buildIssueSections($checkers)
+            . '</div></div>' . "\n"
             . '</div>' . "\n"
+            . '<script>' . "\n"
+            . self::JS . "\n"
+            . '</script>' . "\n"
             . '</body>' . "\n"
             . '</html>' . "\n";
     }
@@ -169,11 +340,59 @@ final class HtmlReporter implements ReporterInterface
     }
 
     /**
+     * @param array<int, array{name: string, status: string, duration: float, summary: string|null, counts: array{critical: int, error: int, warning: int, info: int}}> $checkers
+     */
+    private function buildSidebar(array $checkers): string
+    {
+        $html = '<aside class="sidebar" id="sidebar">' . "\n"
+            . '<h3>Contents / Mục lục</h3>' . "\n"
+            . '<nav aria-label="Report sections"><ul>' . "\n"
+            . '<li><a href="#summary">Summary</a></li>' . "\n"
+            . '<li><a href="#top-rules">Top Rules</a></li>' . "\n"
+            . '<li><a href="#owasp">OWASP</a></li>' . "\n"
+            . '<li><a href="#checkers">Per-Checker</a></li>' . "\n"
+            . '</ul></nav>' . "\n"
+            . '<h3>Issues by checker</h3>' . "\n"
+            . '<nav aria-label="Issues by checker"><ul>' . "\n";
+
+        foreach ($checkers as $result) {
+            $slug = $this->slug($result['name']);
+            $total = $result['counts']['critical'] + $result['counts']['error']
+                + $result['counts']['warning'] + $result['counts']['info'];
+            $html .= '<li><a href="#checker-' . $this->escape($slug) . '">'
+                . '<span>' . $this->escape($result['name']) . '</span>'
+                . '<span class="count">' . (string) $total . '</span>'
+                . '</a></li>' . "\n";
+        }
+
+        return $html . '</ul></nav>' . "\n" . '</aside>' . "\n";
+    }
+
+    private function buildToolbar(): string
+    {
+        return '<div class="toolbar" role="search">' . "\n"
+            . '<input type="search" id="report-search" placeholder="Search rule, file, message… / Tìm rule, file…" aria-label="Search issues">' . "\n"
+            . '<button type="button" class="chip" data-sev="critical" aria-pressed="true">Critical</button>' . "\n"
+            . '<button type="button" class="chip" data-sev="error" aria-pressed="true">Error</button>' . "\n"
+            . '<button type="button" class="chip" data-sev="warning" aria-pressed="true">Warning</button>' . "\n"
+            . '<button type="button" class="chip" data-sev="info" aria-pressed="true">Info</button>' . "\n"
+            . '<span class="match-count" id="match-count" aria-live="polite"></span>' . "\n"
+            . '</div>' . "\n";
+    }
+
+    private function slug(string $name): string
+    {
+        $slug = strtolower($name);
+        $slug = (string) preg_replace('/[^a-z0-9]+/', '-', $slug);
+
+        return trim($slug, '-');
+    }
+    /**
      * @param array<string, int> $summary
      */
     private function buildSummaryGrid(array $summary): string
     {
-        return '<div class="card">' . "\n"
+        return '<div class="card" id="summary">' . "\n"
             . '<h2>Summary</h2>' . "\n"
             . '<div class="summary-grid">' . "\n"
             . $this->stat('Checkers', (int) ($summary['checkers'] ?? 0))
@@ -221,7 +440,7 @@ final class HtmlReporter implements ReporterInterface
         }
         $rows .= '</tbody>';
 
-        return '<div class="card">' . "\n"
+        return '<div class="card" id="top-rules">' . "\n"
             . '<h2>Top Rules / Nhóm lỗi theo rule</h2>' . "\n"
             . '<table>' . $rows . '</table>' . "\n"
             . '</div>' . "\n";
@@ -234,7 +453,7 @@ final class HtmlReporter implements ReporterInterface
     {
         $counts = $this->owaspCounts($results);
 
-        $html = '<div class="card">' . "\n"
+        $html = '<div class="card" id="owasp">' . "\n"
             . '<h2>OWASP</h2>' . "\n";
 
         if ($counts === []) {
@@ -260,7 +479,7 @@ final class HtmlReporter implements ReporterInterface
      */
     private function buildCheckerTable(array $checkers): string
     {
-        $html = '<div class="card">' . "\n"
+        $html = '<div class="card" id="checkers">' . "\n"
             . '<h2>Per-Checker</h2>' . "\n"
             . '<table>' . "\n"
             . '<thead>' . "\n"
@@ -293,11 +512,12 @@ final class HtmlReporter implements ReporterInterface
         $html = '';
 
         foreach ($checkers as $result) {
-            $html .= '<div class="card checker-section">' . "\n"
+            $html .= '<div class="card checker-section" id="checker-' . $this->escape($this->slug($result['name'])) . '">' . "\n"
                 . '<div class="checker-head">' . "\n"
                 . '<h2>' . $this->escape($result['name']) . '</h2>' . "\n"
                 . '<span class="status ' . $this->escape($result['status']) . '">' . $this->escape($result['status']) . '</span>' . "\n"
-                . '</div>' . "\n";
+                . '</div>' . "\n"
+                . '<p class="empty no-match" hidden>No issues match the current search / filter.</p>' . "\n";
 
             if ($result['summary'] !== null && $result['summary'] !== '') {
                 $html .= '<p>' . $this->escape($result['summary']) . '</p>' . "\n";
@@ -322,7 +542,7 @@ final class HtmlReporter implements ReporterInterface
      */
     private function buildIssueTable(string $file, array $issues): string
     {
-        $html = '<div class="issue-group">' . "\n"
+        $html = '<div class="issue-group" data-file="' . $this->escape($file) . '">' . "\n"
             . '<div class="issue-group-title">' . $this->escape($file) . '</div>' . "\n"
             . '<table>' . "\n"
             . '<thead>' . "\n"
@@ -331,7 +551,11 @@ final class HtmlReporter implements ReporterInterface
             . '<tbody>' . "\n";
 
         foreach ($issues as $issue) {
-            $html .= '<tr>'
+            $searchHaystack = strtolower($issue['rule'] . ' ' . $file . ' '
+                . ($issue['line'] !== null ? (string) $issue['line'] : '') . ' '
+                . $issue['message'] . ' ' . $issue['severity'] . ' ' . $issue['confidence']);
+            $html .= '<tr data-severity="' . $this->escape($issue['severity']) . '"'
+                . ' data-search="' . $this->escape($searchHaystack) . '">'
                 . '<td class="rule">' . $this->escape($issue['rule']) . '</td>'
                 . '<td class="severity ' . $this->escape($issue['severity']) . '">' . $this->escape($issue['severity']) . '</td>'
                 . '<td>' . $this->escape($issue['confidence']) . '</td>'
