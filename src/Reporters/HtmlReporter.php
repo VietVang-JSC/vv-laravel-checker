@@ -249,6 +249,27 @@ final class HtmlReporter implements ReporterInterface
     html[data-theme="dark"] .sidebar .count-warning { background: #451a0a; }
     html[data-theme="dark"] .sidebar .count-info { background: #172554; }
     .sidebar .rule-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .sidebar .sub {
+        list-style: none;
+        margin: 2px 0 6px;
+        padding: 0 0 0 12px;
+        border-left: 1px solid var(--border);
+        margin-left: 10px;
+    }
+    .sidebar .sub a { padding: 3px 8px; font-size: 12px; color: var(--muted); }
+    .sidebar .sub a:hover { color: var(--text); }
+    .sidebar .sub a.on { color: var(--text); font-weight: 600; }
+    .issue-group .rule-name {
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 13px;
+        font-weight: 600;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .issue-group td a.file-link { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sidebar nav a[data-side-rule], .sidebar nav a[data-side-file], .sidebar nav a[data-side-sev] { cursor: pointer; }
     .main { flex: 1 1 auto; min-width: 0; }
     .main .container { max-width: none; margin: 0; }
@@ -446,6 +467,11 @@ final class HtmlReporter implements ReporterInterface
                 return;
             }
             search.value = token;
+            chips.forEach(function (chip) {
+                activeSevs[chip.getAttribute('data-sev')] = true;
+                chip.setAttribute('aria-pressed', 'true');
+            });
+            syncSidebarSev();
             applyFilters();
             var target = document.getElementById('checker-custom') || document.getElementById('top-rules');
             if (target) {
@@ -742,7 +768,7 @@ final class HtmlReporter implements ReporterInterface
      * Dashboard-style sticky sidebar: section TOC + interactive severity
      * filters, top rules and hot files (click = prefill search + jump).
      *
-     * @param array<int, array{name: string, status: string, duration: float, summary: string|null, counts: array{critical: int, error: int, warning: int, info: int}}> $checkers
+     * @param array<int, array{name: string, status: string, duration: float, summary: string|null, counts: array{critical: int, error: int, warning: int, info: int}, rules: list<array{rule: string, count: int}>}> $checkers
      * @param array<string, int> $summary
      * @param list<array{rule: string, source: string, count: int, critical: int, error: int, warning: int, info: int}> $rules
      * @param list<array{file: string, count: int}> $hotFiles
@@ -804,10 +830,30 @@ final class HtmlReporter implements ReporterInterface
             $slug = $this->slug($result['name']);
             $total = $result['counts']['critical'] + $result['counts']['error']
                 + $result['counts']['warning'] + $result['counts']['info'];
-            $html .= '<li><a href="#checker-' . $this->escape($slug) . '">'
+            $checkerHref = '#checker-' . $slug;
+            $html .= '<li><a href="' . $this->escape($checkerHref) . '">'
                 . '<span>' . $this->escape($result['name']) . '</span>'
                 . '<span class="count">' . (string) $total . '</span>'
-                . '</a></li>' . "\n";
+                . '</a>';
+
+            if ($result['rules'] !== []) {
+                $html .= '<ul class="sub">' . "\n";
+                foreach (array_slice($result['rules'], 0, 20) as $r) {
+                    $html .= '<li><a href="' . $this->escape($checkerHref) . '" data-side-rule="'
+                        . $this->escape(strtolower($r['rule'])) . '" role="button" title="Filter: '
+                        . $this->escape($r['rule']) . '">'
+                        . '<span class="rule-label">' . $this->escape($r['rule']) . '</span>'
+                        . '<span class="count">' . (string) $r['count'] . '</span>'
+                        . '</a></li>' . "\n";
+                }
+                if (count($result['rules']) > 20) {
+                    $html .= '<li><span class="rule-label empty">… '
+                        . (string) (count($result['rules']) - 20) . ' more rules</span></li>' . "\n";
+                }
+                $html .= '</ul>' . "\n";
+            }
+
+            $html .= '</li>' . "\n";
         }
 
         return $html . '</ul></nav>' . "\n"
@@ -1092,8 +1138,8 @@ final class HtmlReporter implements ReporterInterface
             if ($result['files'] === []) {
                 $html .= '<p class="empty">No issues found.</p>' . "\n";
             } else {
-                foreach ($result['files'] as $file => $issues) {
-                    $html .= $this->buildIssueGroup($file, $issues, $ctx, $issueSeq);
+                foreach ($this->groupByRule($result['files']) as $rule => $issues) {
+                    $html .= $this->buildRuleGroup($rule, $issues, $ctx, $issueSeq);
                 }
             }
 
@@ -1104,12 +1150,38 @@ final class HtmlReporter implements ReporterInterface
     }
 
     /**
-     * Collapsible file group: <details> with a clickable file link summary,
-     * per-severity pills, sortable issue table and inline code snippets.
+     * Flatten the per-file map into rule => issues (each issue carries its
+     * file), ordered by count descending — the checker section groups by
+     * rule so a 1,200-issue checker stays navigable (12 groups, not 500+).
      *
-     * @param list<array{rule: string, severity: string, confidence: string, line: int|null, message: string}> $issues
+     * @param array<string, list<array{rule: string, severity: string, confidence: string, line: int|null, message: string}>> $files
+     * @return array<string, list<array{rule: string, severity: string, confidence: string, line: int|null, message: string, file: string}>>
      */
-    private function buildIssueGroup(string $file, array $issues, CheckContext $ctx, int &$issueSeq): string
+    private function groupByRule(array $files): array
+    {
+        $byRule = [];
+        foreach ($files as $file => $issues) {
+            foreach ($issues as $issue) {
+                $issue['file'] = $file;
+                $byRule[$issue['rule']][] = $issue;
+            }
+        }
+
+        uksort($byRule, static function (string $a, string $b) use ($byRule): int {
+            return count($byRule[$b]) <=> count($byRule[$a]);
+        });
+
+        return $byRule;
+    }
+
+    /**
+     * Collapsible rule group: <details> with severity pills, a sortable
+     * issue table (file / severity / confidence / line / message) and
+     * inline code snippets.
+     *
+     * @param list<array{rule: string, severity: string, confidence: string, line: int|null, message: string, file: string}> $issues
+     */
+    private function buildRuleGroup(string $rule, array $issues, CheckContext $ctx, int &$issueSeq): string
     {
         $sevCounts = ['critical' => 0, 'error' => 0, 'warning' => 0, 'info' => 0];
         foreach ($issues as $issue) {
@@ -1123,18 +1195,15 @@ final class HtmlReporter implements ReporterInterface
             }
         }
 
-        $href = $this->fileLink($file, null, $ctx);
-
-        $html = '<details class="issue-group" data-file="' . $this->escape($file) . '">' . "\n"
+        $html = '<details class="issue-group" data-rule="' . $this->escape($rule) . '">' . "\n"
             . '<summary>'
             . '<span class="chev">&#9656;</span>'
-            . '<a class="file-link" href="' . $this->escape($href) . '" title="Open file">'
-            . $this->escape($file) . '</a>'
+            . '<span class="rule-name">' . $this->escape($rule) . '</span>'
             . '<span class="pill">' . (string) count($issues) . '</span>' . $pills
             . '</summary>' . "\n"
             . '<table>' . "\n"
             . '<thead>' . "\n"
-            . '<tr><th data-sortable data-type="str">Rule</th>'
+            . '<tr><th data-sortable data-type="str">File</th>'
             . '<th data-sortable data-type="sev">Severity</th>'
             . '<th data-sortable data-type="str">Confidence</th>'
             . '<th data-sortable data-type="num">Line</th>'
@@ -1145,15 +1214,18 @@ final class HtmlReporter implements ReporterInterface
         foreach ($issues as $issue) {
             ++$issueSeq;
             $id = 'iss-' . $issueSeq;
+            $file = $issue['file'];
             $searchHaystack = strtolower($issue['rule'] . ' ' . $file . ' '
                 . ($issue['line'] !== null ? (string) $issue['line'] : '') . ' '
                 . $issue['message'] . ' ' . $issue['severity'] . ' ' . $issue['confidence']);
 
             $snippet = $this->snippetHtml($ctx, $file, $issue['line']);
+            $href = $this->fileLink($file, $issue['line'], $ctx);
 
             $html .= '<tr id="' . $id . '" data-severity="' . $this->escape($issue['severity']) . '"'
                 . ' data-search="' . $this->escape($searchHaystack) . '">'
-                . '<td class="rule">' . $this->escape($issue['rule']) . '</td>'
+                . '<td><a class="file-link" href="' . $this->escape($href) . '" title="'
+                . $this->escape($file) . '">' . $this->escape($this->shortPath($file)) . '</a></td>'
                 . '<td class="severity ' . $this->escape($issue['severity']) . '">' . $this->escape($issue['severity']) . '</td>'
                 . '<td>' . $this->escape($issue['confidence']) . '</td>'
                 . '<td>' . $this->escape($issue['line'] !== null ? (string) $issue['line'] : '-') . '</td>'
@@ -1298,7 +1370,7 @@ final class HtmlReporter implements ReporterInterface
 
     /**
      * @param CheckResult[] $results
-     * @return array<int, array{name: string, status: string, duration: float, summary: string|null, counts: array{critical: int, error: int, warning: int, info: int}, files: array<string, list<array{rule: string, severity: string, confidence: string, line: int|null, message: string}>>}>
+     * @return array<int, array{name: string, status: string, duration: float, summary: string|null, counts: array{critical: int, error: int, warning: int, info: int}, files: array<string, list<array{rule: string, severity: string, confidence: string, line: int|null, message: string}>>, rules: list<array{rule: string, count: int}>}>
      */
     private function buildCheckers(array $results): array
     {
@@ -1320,10 +1392,32 @@ final class HtmlReporter implements ReporterInterface
                     'info' => $this->countBySeverity($result, Severity::Info),
                 ],
                 'files' => $this->groupByFile($result),
+                'rules' => $this->ruleCounts($result),
             ];
         }
 
         return $checkers;
+    }
+
+    /**
+     * Rule counts for one checker, descending — powers the sidebar sub-menu.
+     *
+     * @return list<array{rule: string, count: int}>
+     */
+    private function ruleCounts(CheckResult $result): array
+    {
+        $counts = [];
+        foreach ($result->issues as $issue) {
+            $counts[$issue->rule] = ($counts[$issue->rule] ?? 0) + 1;
+        }
+        arsort($counts);
+
+        $out = [];
+        foreach ($counts as $rule => $count) {
+            $out[] = ['rule' => $rule, 'count' => $count];
+        }
+
+        return $out;
     }
 
     private function countBySeverity(CheckResult $result, Severity $severity): int

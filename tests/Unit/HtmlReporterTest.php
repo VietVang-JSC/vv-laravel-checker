@@ -196,13 +196,27 @@ final class HtmlReporterTest extends TestCase
         $html = $this->renderHtml();
 
         self::assertStringContainsString('<details class="issue-group"', $html);
-        self::assertStringContainsString('data-file="app/Http/Controllers/UserController.php"', $html);
+        // Issues are grouped by rule (compact), each row keeps a file link.
+        self::assertStringContainsString('data-rule="SQL_INJECTION"', $html);
+        self::assertStringContainsString('data-rule="TODO_FIXME"', $html);
+        self::assertStringContainsString('class="rule-name"', $html);
         self::assertStringContainsString('id="expand-all"', $html);
         self::assertStringContainsString('id="collapse-all"', $html);
         self::assertStringContainsString('details.issue-group', $html);
         // Deep-linking to a checker section reveals its collapsed groups.
         self::assertStringContainsString('function revealSection', $html);
         self::assertStringContainsString("'hashchange'", $html);
+    }
+
+    public function testSidebarHasNestedRuleSubMenuPerChecker(): void
+    {
+        $html = $this->renderHtml();
+
+        self::assertStringContainsString('<ul class="sub">', $html);
+        self::assertStringContainsString('data-side-rule="sql_injection"', $html);
+        self::assertStringContainsString('data-side-rule="todo_fixme"', $html);
+        // Sub-menu entries jump to their checker section.
+        self::assertStringContainsString('href="#checker-custom" data-side-rule="sql_injection"', $html);
     }
 
     public function testFileLinksDefaultToVscodeDeepLinks(): void
