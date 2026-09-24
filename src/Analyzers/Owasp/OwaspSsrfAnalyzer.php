@@ -44,6 +44,12 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
      */
     private const LOCAL_PATH_METHODS = ['getrealpath', 'getpathname'];
 
+    /**
+     * Deploy-time configuration lookups — server environment, never request
+     * user input (e.g. Fortrabbit `file_get_contents(env('APP_SECRETS'))`).
+     */
+    private const CONFIG_FUNCS = ['env', 'config'];
+
     private const REMOTE_NAME_HINTS = [
         'url', 'uri', 'endpoint', 'host', 'domain', 'link', 'href', 'remote', 'webhook', 'feed',
     ];
@@ -198,6 +204,14 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
     private function isPotentialUserInput(Node\Expr $expr): bool
     {
         if ($this->isLiteralString($expr)) {
+            return false;
+        }
+
+        if (
+            $expr instanceof Node\Expr\FuncCall
+            && $expr->name instanceof Node\Name
+            && in_array(strtolower($expr->name->toString()), self::CONFIG_FUNCS, true)
+        ) {
             return false;
         }
 

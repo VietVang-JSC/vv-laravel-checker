@@ -8,6 +8,8 @@ final class ResultCache
 {
     private string $cacheDir;
 
+    private static ?string $codeVersion = null;
+
     public function __construct(CheckContext $ctx)
     {
         $this->cacheDir = rtrim($ctx->outputDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '.cache';
@@ -71,7 +73,47 @@ final class ResultCache
 
     public function key(string $checkerName, array $paths, array $configHash): string
     {
-        return md5($checkerName . '|' . implode(',', $paths) . '|' . md5(serialize($configHash)));
+        return md5(
+            $checkerName . '|' . implode(',', $paths) . '|' . md5(serialize($configHash))
+            . '|' . self::codeVersion()
+        );
+    }
+
+    /**
+     * Version of the analyzer/checker code, baked into every cache key so a
+     * package upgrade can never serve results computed by older analyzers.
+     */
+    public static function codeVersion(): string
+    {
+        if (self::$codeVersion !== null) {
+            return self::$codeVersion;
+        }
+
+        $root = dirname(__DIR__, 2);
+        $hashes = [];
+        foreach (['src/Analyzers', 'src/Checkers', 'src/Runner'] as $dir) {
+            $abs = $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $dir);
+            if (!is_dir($abs)) {
+                continue;
+            }
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($abs, \FilesystemIterator::SKIP_DOTS)
+            );
+            foreach ($iterator as $file) {
+                if (!$file instanceof \SplFileInfo || !$file->isFile()) {
+                    continue;
+                }
+                if (strtolower($file->getExtension()) !== 'php') {
+                    continue;
+                }
+                $hashes[$file->getPathname()] = md5((string) file_get_contents($file->getPathname()));
+            }
+        }
+        ksort($hashes);
+
+        self::$codeVersion = md5(implode('|', $hashes));
+
+        return self::$codeVersion;
     }
 
     private function pathFor(string $key): string

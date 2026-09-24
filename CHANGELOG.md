@@ -64,6 +64,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Checker exit-code detection not honouring `fail_on` TIER levels.
 - `TrivyChecker` reading its own defaults instead of the `trivy.*` config from the context, so `trivy.enabled` was ignored.
 - Trivy release asset naming (`windows-64bit`) and default version (`0.74.0`).
+- **False-positive wave 1 (route-middleware BAC):** `OWASP_BROKEN_ACCESS_CONTROL`
+  now resolves route middleware (`Route::middleware`, `->middleware()` chains,
+  `Route::group([...])` incl. nesting and direct static calls,
+  `Route::controller()` groups with bare-string actions, `resource/apiResource`,
+  cross-file `require` inside group closures), legacy `['uses' => 'FQCN@method']`
+  array syntax, and FQCN action keys via `use`-import resolution
+  (config `analyzers.owasp.route_middleware`, default on). Bagisto 453 → 150,
+  SiroHRM 45 → 1.
+- **False-positive wave 2 (SSRF/command/SSTI/hash/migration):** SSRF skips test
+  paths, `fopen()` write modes, local-path names/helpers, `->getRealPath()` /
+  `->getPathname()`, `env()`/`config()` lookups, and no longer treats the
+  `new GuzzleHttp\Client([...])` constructor as a URL sink; command injection
+  skips `escapeshellarg()`/`escapeshellcmd()`, array-form `new Process()` and
+  deploy-time-safe concatenations (`PHP_BINARY`, path helpers, same-function
+  safe variables); SSTI skips literal-assigned variables and non-public helpers
+  with literal-only call sites; `INSECURE_HASH` skips HIBP k-anonymity clients;
+  `MIGRATION_DESTRUCTIVE_UP` skips down()-restored drops and index/constraint
+  drops. Validated on 8 pilots (SiroHRM, Bagisto, SiroLingo, Aimeos,
+  quanlyinan3m, BookStack, Monica, Cachet).
+- **Stale cache:** `ResultCache` keys now include a hash of the analyzer/checker
+  source, so package upgrades can never serve results computed by older code.
+- Labeled precision/recall corpus (`tests/Unit/AnalyzerMetricsTest.php`, 26
+  cases, currently 1.000 / 1.000) guards the FP reductions against regression.
 
 ## [0.1.0] - 2026-09-20
 

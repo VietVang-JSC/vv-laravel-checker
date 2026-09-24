@@ -325,32 +325,33 @@ The **tier** controls what the gate fails on:
 
 ## Pilot benchmark (real-world)
 
-Measured on **Bagisto / LienHoaEc** (Laravel 11 e-commerce monolith):
-3,283 PHP files across `app`, `routes`, `config`, `database` and all
-`packages/Webkul` modules, custom analyzers only (phpcs/phpstan/phpunit
-excluded), `tier=security`, `fail-on=none`:
+Custom analyzers only (phpcs/phpstan/phpunit excluded), `tier=security`,
+`fail-on=none`, cold runs without cache. Quality is pinned by a labeled
+corpus (`tests/Unit/AnalyzerMetricsTest.php`): **precision 1.000 / recall 1.000**
+across 26 true/false-positive cases, so the reductions below cannot regress
+silently.
 
-| Metric | Result (route-middleware aware) | Before |
-|---|---|---|
-| Duration | **~92 s** (cold, no cache) | ~170 s |
-| Findings | 939 (6 critical / 160 error / 773 warning) | 1,246 (7 / 466 / 773) |
-| Distinct rules | 12 | 12 |
-| SARIF output | valid 2.1.0, 939 results, 12 rules | valid 2.1.0 |
+| Pilot | Stack | Files | Before | After | Signal left |
+|---|---|---|---|---|---|
+| Bagisto / LienHoaEc | Laravel 11 e-commerce | 3,283 | 1,246 (7 / 466 / 773) | **939** (6 / 160 / 773) | public-by-design routes + OpenAPI `Docs` sample code |
+| SiroHRM | Laravel 12 HRM | 526 | 191 (5 / 55 / 131) | **131** (1 / 1 / 129) | 1 BAC (2FA verify, public) + test fixture secret |
+| SiroLingo | Laravel 12 LMS | ~600 | 176 (0 / 2 / 174) | **174** (0 / 0 / 174) | coverage heuristics + CORS wildcard |
+| quanlyinan3m | Laravel (internal) | ~500 | 62 (0 / 1 / 61) | **61** (0 / 0 / 61) | coverage heuristics |
+| BookStack | Laravel docs wiki | ~1,400 | 186 (2 / 30 / 154) | **179** (2 / 25 / 152) | API auth-in-controller + real drops |
+| Monica | Laravel PRM (DDD) | ~1,800 | 387 (3 / 7 / 377) | **384** (2 / 7 / 375) | 1 true `exec()` on param + validation debt |
+| Aimeos | Laravel e-commerce pkg | ~200 | — | **2** (0 / 1 / 1) | JSON:API auth-in-core + coverage |
+| Cachet | Laravel status page | ~100 | — | **3** (0 / 0 / 3) | CORS wildcard + coverage |
 
-Top rules: `MISSING_CONTROLLER_TEST` (309), `ROUTE_MISSING_VALIDATION` (250),
-`OWASP_BROKEN_ACCESS_CONTROL` (**150**, down from 453 — actions protected by
-route middleware, `Route::controller()` groups and cross-file `require` are now
-resolved; the remainder are public-by-design routes — storefront, auth,
-payment callbacks — plus OpenAPI `Docs` sample code, see
-[docs/false-positives.md](docs/false-positives.md)).
+*(severity split: critical / error / warning)*
 
-Second pilot — **SiroHRM** (Laravel 12 HRM, 526 files): **191 → 131 findings**
-(−31%): `OWASP_BROKEN_ACCESS_CONTROL` 45 → 1, `OWASP_SSRF` 9 → 0,
-`OWASP_COMMAND_INJECTION` 4 → 0, `OWASP_XXE` / `INSECURE_HASH` /
-`MIGRATION_DESTRUCTIVE_UP` → 0; critical 5 → 1 (test fixture), error 55 → 1.
+Biggest single win: `OWASP_BROKEN_ACCESS_CONTROL` on Bagisto **453 → 150** —
+actions protected by route middleware, `Route::controller()` groups and
+cross-file `require` are now resolved; FQCN keys keep same-named Admin/Shop
+controllers apart (see [docs/false-positives.md](docs/false-positives.md)).
 
-Repeat runs are near-instant via the result cache (1 h TTL, keyed by
-file-set hash + tool config).
+Repeat runs are near-instant via the result cache (1 h TTL, keyed by file-set
+hash + tool config **+ analyzer code version**, so package upgrades never
+serve stale results).
 
 ---
 

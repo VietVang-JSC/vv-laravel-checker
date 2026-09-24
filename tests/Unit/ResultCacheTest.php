@@ -93,6 +93,15 @@ final class ResultCacheTest extends TestCase
         );
     }
 
+    public function testCodeVersionIsStableHexAndNonEmpty(): void
+    {
+        $v1 = ResultCache::codeVersion();
+        $v2 = ResultCache::codeVersion();
+
+        self::assertSame($v1, $v2);
+        self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $v1);
+    }
+
     private function removeDir(string $dir): void
     {
         if (!is_dir($dir)) {
