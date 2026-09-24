@@ -69,6 +69,13 @@ php artisan quality:check --tier=all --fail-on=none
   controller — analyzer chỉ nhìn trong thân method nên không thấy.
 - **Xử lý**: nếu phân quyền nằm ngoài method, review một lần rồi baseline
   finding đó (đừng tắt cả rule).
+- **Case pilot (Bagisto/LienHoaEc)**: rule báo **453 lần** trên admin
+  controllers. Bagisto kiểm quyền qua route middleware (`bouncer::permission`,
+  policy registration trong `RouteServiceProvider`) chứ không gọi
+  `authorize()` trong method — classic false positive đã mô tả ở trên.
+  Kỳ vọng với framework dùng middleware-based auth: số lượng finding lớn
+  là bình thường; review theo mẫu (1 file) rồi baseline cả nhóm thay vì
+  tắt rule.
 
 ### `OWASP_SSRF` / `OWASP_COMMAND_INJECTION` / `OWASP_SSTI`
 - Engine chỉ báo khi URL/template/lệnh **không phải literal** và có dấu vết

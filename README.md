@@ -320,6 +320,29 @@ The **tier** controls what the gate fails on:
 
 ---
 
+## Pilot benchmark (real-world)
+
+Measured on **Bagisto / LienHoaEc** (Laravel 11 e-commerce monolith):
+3,283 PHP files across `app`, `routes`, `config`, `database` and all
+`packages/Webkul` modules, custom analyzers only (phpcs/phpstan/phpunit
+excluded), `tier=security`, `fail-on=none`:
+
+| Metric | Result |
+|---|---|
+| Duration | **~170 s** (cold, no cache) |
+| Findings | 1,246 (7 critical / 466 error / 773 warning) |
+| Distinct rules | 12 |
+| SARIF output | valid 2.1.0, 1,246 results, 12 rules |
+
+Top rules: `OWASP_BROKEN_ACCESS_CONTROL` (453 — mostly middleware-based-auth
+false positives, see [docs/false-positives.md](docs/false-positives.md)),
+`MISSING_CONTROLLER_TEST` (309), `ROUTE_MISSING_VALIDATION` (250).
+
+Repeat runs are near-instant via the result cache (1 h TTL, keyed by
+file-set hash + tool config).
+
+---
+
 ## Auto-provisioning missing tools / Tự cài tool thiếu
 
 By default the checker **self-provisions** missing tools instead of just skipping

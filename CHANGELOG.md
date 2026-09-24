@@ -16,7 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PHPUnit coverage threshold enforcement.
 - Dogfooding tools: the package now checks its own codebase (phpcs + phpstan + phpunit).
 - GitHub Actions CI and dogfooding workflows for `8.1` / `8.2` / `8.3`.
-- Console, JSON, Markdown and HTML reporters.
+- Console, JSON, Markdown, HTML and **SARIF** reporters. `--format=sarif` emits
+  `quality-report.sarif` (SARIF 2.1.0) for GitHub code-scanning upload: severity
+  maps `critical/error → error`, `warning → warning`, `info → note`; rules are
+  registered once with highest observed severity; file URIs are relative with
+  forward slashes.
+- JSON report hardening: `schema_version: 1`, `overall_status`, `fail_on`,
+  `min_confidence`, `duration_total`; UTF-8 unescaped.
+- Markdown report: table of contents, metadata line, full severity summary,
+  top-50 rules, per-file `<details>` issue groups.
+- Console report: tier/fail-on/min-confidence header, issues grouped by file,
+  50-issue cap per checker with a "… N more" tip, fail remediation tip.
+- HTML report: sticky sidebar TOC with scroll-spy, on-page search, severity
+  chip filters.
+- Pilot benchmark on Bagisto/LienHoaEc (3,283 files): 1,246 findings / 170 s,
+  valid SARIF (12 rules) — recorded in README.
 - Auto-provisioning of missing tools: composer-based tools (phpcs/phpstan/phpunit) installed via `composer require --dev` in the target project, and the Trivy binary auto-downloaded into a per-user cache. Disable with `--no-auto-install` / `auto_install_tools => false`.
 - Checkers fall back to the package's own `vendor/bin` when a tool is missing but bundled.
 - Unified test-coverage detector (`test_coverage.unified`, on by default) that flags source classes
