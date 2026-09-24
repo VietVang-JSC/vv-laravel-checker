@@ -160,6 +160,31 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testSstiSkipsLiteralAssignedVariable(): void
+    {
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nclass ExerciseController extends Controller {\n" .
+            "    public function edit() {\n        \$viewName = 'backend.exercise.edit_catalog';\n        return view(\$viewName);\n    }\n}\n",
+            'app/Http/Controllers/ExerciseController.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSstiStillFlagsInputAssignedVariable(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$viewName = \$request->input('template');\nreturn view(\$viewName);\n",
+            'app/Http/Controllers/PageController.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_SSTI', $this->rules($issues)[0] ?? null);
+    }
+
     public function testMisconfigFlagsDebugEnabledInConfigApp(): void
     {
         $file = $this->temp(

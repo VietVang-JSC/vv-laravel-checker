@@ -15,6 +15,9 @@ use VietVang\QualityChecker\Result\Severity;
  * Assumes: SSTI is reported when a Blade/view rendering call receives a template argument that is not
  * a plain string literal, i.e. a variable, method call, concatenation, or interpolation that could
  * contain user input. Safe dynamic rendering with a whitelisted template key is not tracked.
+ *
+ * Deliberately not flagged: variables assigned a plain string literal in the same
+ * function (`$view = 'backend.page'; view($view)`), which carry no user input.
  */
 final class OwaspSstiAnalyzer extends AbstractAnalyzer
 {
@@ -53,8 +56,16 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
             return [];
         }
 
+        $nodes = [];
+        foreach ($ast as $node) {
+            if ($node instanceof Node) {
+                $nodes[] = $node;
+            }
+        }
+        $scopes = $this->literalVarScopes($nodes);
+
         $issues = [];
-        $calls = $this->finder()->find($ast, function (Node $node): bool {
+        $calls = $this->finder()->find($nodes, function (Node $node): bool {
             return $node instanceof Node\Expr\StaticCall
                 || $node instanceof Node\Expr\MethodCall
                 || $node instanceof Node\Expr\FuncCall;
@@ -68,6 +79,9 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
 
             $arg = $this->templateArg($call);
             if ($arg === null || $this->isLiteralString($arg)) {
+                continue;
+            }
+            if ($arg instanceof Node\Expr\Variable && $this->isLiteralVariable($arg, $call, $scopes)) {
                 continue;
             }
 
@@ -173,5 +187,102 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
         }
 
         return false;
+    }
+
+    /**
+     * @param list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}> $scopes
+     */
+    private function isLiteralVariable(Node\Expr\Variable $var, Node $call, array $scopes): bool
+    {
+        if (!is_string($var->name)) {
+            return false;
+        }
+
+        $callId = spl_object_id($call);
+        $inFunc = false;
+        foreach ($scopes as $scope) {
+            if ($scope['func'] === null) {
+                continue;
+            }
+            if (!isset($scope['calls'][$callId])) {
+                continue;
+            }
+            $inFunc = true;
+            if (isset($scope['vars'][$var->name])) {
+                return true;
+            }
+        }
+
+        if ($inFunc) {
+            return false;
+        }
+
+        foreach ($scopes as $scope) {
+            if ($scope['func'] === null && isset($scope['vars'][$var->name])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Scopes mapping call expressions to the string-literal variables visible in
+     * the same function (plus a file-level fallback for top-level code).
+     *
+     * @param list<Node> $nodes
+     * @return list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}>
+     */
+    private function literalVarScopes(array $nodes): array
+    {
+        $scopes = [];
+        $funcs = $this->finder()->find($nodes, function (Node $node): bool {
+            return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
+        });
+
+        foreach ($funcs as $func) {
+            if (!$func instanceof Node\Stmt\ClassMethod && !$func instanceof Node\Stmt\Function_) {
+                continue;
+            }
+            $calls = [];
+            foreach (
+                $this->finder()->find($func, static function (Node $node): bool {
+                    return $node instanceof Node\Expr\StaticCall
+                    || $node instanceof Node\Expr\MethodCall
+                    || $node instanceof Node\Expr\FuncCall;
+                }) as $call
+            ) {
+                $calls[spl_object_id($call)] = true;
+            }
+            $scopes[] = ['func' => spl_object_id($func), 'vars' => $this->literalAssignedVars($func), 'calls' => $calls];
+        }
+
+        $scopes[] = ['func' => null, 'vars' => $this->literalAssignedVars($nodes), 'calls' => []];
+
+        return $scopes;
+    }
+
+    /**
+     * @param Node|list<Node> $scope
+     * @return array<string, true>
+     */
+    private function literalAssignedVars(Node|array $scope): array
+    {
+        $vars = [];
+        $assigns = $this->finder()->find($scope, static function (Node $node): bool {
+            return $node instanceof Node\Expr\Assign;
+        });
+        foreach ($assigns as $assign) {
+            if (
+                $assign instanceof Node\Expr\Assign
+                && $assign->var instanceof Node\Expr\Variable
+                && is_string($assign->var->name)
+                && $assign->expr instanceof Node\Scalar\String_
+            ) {
+                $vars[$assign->var->name] = true;
+            }
+        }
+
+        return $vars;
     }
 }

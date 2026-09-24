@@ -103,6 +103,8 @@ php artisan quality:check --tier=all --fail-on=none
   - command injection: đối số đã bọc `escapeshellarg()`/`escapeshellcmd()`,
     và `new Process()` với command dạng array (không qua shell — kể cả khi
     array nằm trong biến `$command = [...]` cùng function).
+  - SSTI: biến template được gán string literal trong cùng function
+    (`$viewName = 'backend.page'; view($viewName)` — case SiroLingo).
 - **Case pilot (SiroHRM)**: `BackupService::binary()` dùng
   `shell_exec('where ' . escapeshellarg($tool))`, `new Process($command)` với
   array từ config, `UpdaterService` dùng `escapeshellarg(base_path())` —
