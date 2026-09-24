@@ -147,6 +147,38 @@ php artisan quality:check --tier=all --fail-on=none
   recover được từ schema (case BookStack: 7 migration drop index cũ khi build
   search index mới).
 
+### `OWASP_OPEN_REDIRECT`
+- **Báo đúng khi**: target của `redirect()` / `->away()` / `->to()` /
+  `Redirect::away()` là biến, call hoặc concat chứa phần động.
+- **Tự động bỏ qua**: `redirect()->route()` / `Redirect::route()`, `back()`,
+  string literal, `url()->previous()`, `config()`/`env()` (kể cả concat mà
+  mọi leaf đều safe, vd `redirect(config('app.url') . '/done')`),
+  `url()` với args toàn literal.
+- **Confidence**: biến thuần / `$request->input()` / concat động = High;
+  `redirect($page->getUrl())` (method/property/static — thường là internal
+  URL builder) = Medium. Chạy `--min-confidence=high` để chỉ thấy nhóm
+  nguy hiểm nhất.
+- **Sửa đúng**: dùng named route thay vì URL từ input:
+  `redirect()->route('home')` thay cho `redirect($request->input('next'))`.
+
+### `OWASP_PATH_TRAVERSAL`
+- **Báo đúng khi**: file sink (`file_get_contents`, `Storage::get`,
+  `response()->download`, `include $var`, ...) nhận path động.
+- **Tự động bỏ qua**: literal (kể cả `storage_path()` với args literal),
+  `basename()`-wrapped, `env()`/`config()`, sink trong tests/.
+- **Sửa đúng**: `basename()` input hoặc resolve cứng thư mục gốc:
+  `Storage::get('docs/' . basename($name))`.
+
+### `OWASP_BLADE_XSS`
+- **Báo đúng khi**: `{!! ... !!}` chứa `$biến` hoặc `request(` trong
+  `*.blade.php`.
+- **Tự động bỏ qua**: `{!! csrf_field() !!}` (không dữ liệu động),
+  `{!! e($x) !!}` (escape thủ công), `{{ ... }}` (escaped syntax), và
+  convention HTML đã sanitize: biến `*Html/*Rendered/*Sanitized` hoặc method
+  `->getHtml()/->toHtml()` (case BookStack render markdown đã purify).
+- **Sửa đúng**: chuyển sang `{{ ... }}`; chỉ dùng `{!! ... !!}` + inline
+  ignore cho HTML đã review.
+
 ### `HARDCODED_SECRET`
 - Regex bắt `sk-`, `AIza`, `AKIA`, private key, ... **Chuỗi test/fixture cũng
   bị bắt** — đó là hành vi có chủ ý. Với fixture test, hoặc dùng giá trị

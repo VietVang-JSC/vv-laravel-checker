@@ -9,7 +9,10 @@ use PHPUnit\Framework\TestCase;
 use VietVang\QualityChecker\Analyzers\AbstractAnalyzer;
 use VietVang\QualityChecker\Analyzers\Laravel\MigrationAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspAccessControlAnalyzer;
+use VietVang\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer;
+use VietVang\QualityChecker\Analyzers\Owasp\OwaspOpenRedirectAnalyzer;
+use VietVang\QualityChecker\Analyzers\Owasp\OwaspPathTraversalAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspXxeAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\InsecureHashAnalyzer;
@@ -186,6 +189,102 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'mig_fp_dropindex' => [
             static fn (): AbstractAnalyzer => new MigrationAnalyzer(),
             ['database/migrations/2026_01_01_z.php' => "<?php\nreturn new class extends Migration {\n    public function up(): void { Schema::table('pages', function (Blueprint \$t) { \$t->dropIndex('search'); }); }\n    public function down(): void { }\n};\n"],
+            null,
+        ];
+
+        // --- Open redirect ---
+        yield 'openredirect_tp_redirect_input' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nreturn redirect(\$request->input('next'));\n"],
+            'OWASP_OPEN_REDIRECT',
+        ];
+        yield 'openredirect_tp_facade_away_var' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nuse Illuminate\\Support\\Facades\\Redirect;\nreturn Redirect::away(\$url);\n"],
+            'OWASP_OPEN_REDIRECT',
+        ];
+        yield 'openredirect_tp_concat_target' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nreturn redirect('/go?next=' . \$next);\n"],
+            'OWASP_OPEN_REDIRECT',
+        ];
+        yield 'openredirect_fp_route' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nreturn redirect()->route('home');\n"],
+            null,
+        ];
+        yield 'openredirect_fp_back' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nreturn redirect()->back();\n"],
+            null,
+        ];
+        yield 'openredirect_fp_config_concat' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nreturn redirect(config('app.url') . '/done');\n"],
+            null,
+        ];
+
+        // --- Path traversal ---
+        yield 'traversal_tp_response_download' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Http/Controllers/DownloadController.php' => "<?php\nreturn response()->download(storage_path('docs/' . \$request->file));\n"],
+            'OWASP_PATH_TRAVERSAL',
+        ];
+        yield 'traversal_tp_file_get_contents_var' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Services/FileService.php' => "<?php\n\$contents = file_get_contents(\$var);\n"],
+            'OWASP_PATH_TRAVERSAL',
+        ];
+        yield 'traversal_tp_storage_get' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Services/DocService.php' => "<?php\nuse Illuminate\\Support\\Facades\\Storage;\n\$contents = Storage::get(\$name);\n"],
+            'OWASP_PATH_TRAVERSAL',
+        ];
+        yield 'traversal_fp_basename' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Services/FileService.php' => "<?php\n\$contents = file_get_contents(storage_path('app/' . basename(\$name)));\n"],
+            null,
+        ];
+        yield 'traversal_fp_literal' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Services/FileService.php' => "<?php\n\$contents = file_get_contents('docs/fixed.txt');\n"],
+            null,
+        ];
+        yield 'traversal_fp_storage_path_literal' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Services/FileService.php' => "<?php\n\$contents = file_get_contents(storage_path('app/fixed.txt'));\n"],
+            null,
+        ];
+
+        // --- Blade XSS ---
+        yield 'bladexss_tp_variable' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/comments/show.blade.php' => "<div>{!! \$comment->body !!}</div>\n"],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'bladexss_tp_request' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/search/show.blade.php' => "<div>{!! request('x') !!}</div>\n"],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'bladexss_fp_csrf' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/forms/create.blade.php' => "<form>{!! csrf_field() !!}</form>\n"],
+            null,
+        ];
+        yield 'bladexss_fp_escaped_echo' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/users/show.blade.php' => "<div>{{ \$name }}</div>\n"],
+            null,
+        ];
+        yield 'bladexss_fp_manual_escape' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/users/show.blade.php' => "<div>{!! e(\$x) !!}</div>\n"],
+            null,
+        ];
+        yield 'bladexss_fp_rendered_html' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/comments/comment.blade.php' => "<div>{!! \$commentHtml !!}</div>\n"],
             null,
         ];
     }

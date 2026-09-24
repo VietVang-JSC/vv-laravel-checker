@@ -68,6 +68,9 @@ return [
             // Resolve route-middleware authorization (Route::middleware('can:...'),
             // groups) so actions protected outside the controller are not flagged.
             'route_middleware' => true,
+            'blade_xss' => true,
+            'open_redirect' => true,
+            'path_traversal' => true,
             'ssrf' => true,
             'ssti' => true,
             'misconfiguration' => true,

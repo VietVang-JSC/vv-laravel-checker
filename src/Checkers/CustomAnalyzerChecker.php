@@ -12,8 +12,11 @@ use VietVang\QualityChecker\Analyzers\Deduplicator;
 use VietVang\QualityChecker\Analyzers\Laravel\MigrationAnalyzer;
 use VietVang\QualityChecker\Analyzers\Laravel\RouteValidationAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspAccessControlAnalyzer;
+use VietVang\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspMisconfigurationAnalyzer;
+use VietVang\QualityChecker\Analyzers\Owasp\OwaspOpenRedirectAnalyzer;
+use VietVang\QualityChecker\Analyzers\Owasp\OwaspPathTraversalAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspSstiAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspXxeAnalyzer;
@@ -68,6 +71,7 @@ final class CustomAnalyzerChecker implements CheckerInterface
     {
         $start = microtime(true);
         $files = $this->collectFiles($ctx);
+        $files = array_values(array_unique(array_merge($files, $this->collectBladeFiles($ctx))));
         $issues = [];
 
         foreach ($this->buildAnalyzers($ctx) as $entry) {
@@ -140,6 +144,9 @@ final class CustomAnalyzerChecker implements CheckerInterface
             $this->entry($analyzers, 'owasp.broken_access_control', new OwaspAccessControlAnalyzer(
                 (bool) ($analyzers['owasp']['route_middleware'] ?? true)
             )),
+            $this->entry($analyzers, 'owasp.blade_xss', new OwaspBladeXssAnalyzer()),
+            $this->entry($analyzers, 'owasp.open_redirect', new OwaspOpenRedirectAnalyzer()),
+            $this->entry($analyzers, 'owasp.path_traversal', new OwaspPathTraversalAnalyzer()),
             $this->entry($analyzers, 'owasp.ssrf', new OwaspSsrfAnalyzer()),
             $this->entry($analyzers, 'owasp.ssti', new OwaspSstiAnalyzer()),
             $this->entry($analyzers, 'owasp.misconfiguration', new OwaspMisconfigurationAnalyzer()),
@@ -259,6 +266,48 @@ final class CustomAnalyzerChecker implements CheckerInterface
                     $files[] = $file->getPathname();
                 }
             }
+        }
+
+        return array_values(array_unique($files));
+    }
+
+    /**
+     * Blade views live under `resources/` which is not part of the default scan
+     * paths (phpcs/phpstan must not lint templates). Collected separately so
+     * only blade-aware analyzers consume them — every other analyzer filters
+     * by `.php` in `supports()`.
+     *
+     * @return list<string>
+     */
+    private function collectBladeFiles(CheckContext $ctx): array
+    {
+        $files = [];
+        $abs = $ctx->resolvePath('resources');
+        if (!is_dir($abs)) {
+            return $files;
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($abs, \FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $file) {
+            if (!$file instanceof \SplFileInfo || !$file->isFile()) {
+                continue;
+            }
+            if (!str_ends_with(strtolower($file->getFilename()), '.blade.php')) {
+                continue;
+            }
+
+            $pathname = str_replace('\\', '/', $file->getPathname());
+            if (
+                str_contains($pathname, '/vendor/')
+                || str_contains($pathname, '/node_modules/')
+                || str_contains($pathname, '/storage/')
+            ) {
+                continue;
+            }
+            $files[] = $file->getPathname();
         }
 
         return array_values(array_unique($files));

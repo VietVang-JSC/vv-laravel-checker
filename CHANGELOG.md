@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- 3 new OWASP rule families (precision wave 2, each with labeled corpus cases):
+  `OWASP_OPEN_REDIRECT` (`owasp.open_redirect` — `redirect()`/`away()`/`to()`
+  with dynamic target; skips `route()`/`back()`/literal/`config()` targets and
+  literal-arg `url()`; bare-variable/request targets are High confidence,
+  method/property/static targets like `$page->getUrl()` are Medium),
+  `OWASP_PATH_TRAVERSAL` (`owasp.path_traversal` — file/Storage/download sinks
+  with tainted path; skips literals, `basename()`-wrapped, `env()`/`config()`),
+  `OWASP_BLADE_XSS` (`owasp.blade_xss` — `{!! ... !!}` with dynamic data in
+  `*.blade.php`, collected separately from `resources/`; skips `csrf_field()`,
+  `e(...)`, `{{ ... }}` and pre-rendered-HTML naming convention).
+
 ## [1.0.0] - 2026-09-24
 
 ### Added
