@@ -591,6 +591,42 @@ final class HtmlReporter implements ReporterInterface
         var links = Array.prototype.slice.call(
             document.querySelectorAll('.sidebar nav a[href^="#"]:not([data-side-sev]):not([data-side-rule]):not([data-side-file])')
         );
+
+        /* Jumping to a checker section must reveal its issues: reset filters
+           (the section may be hidden) and expand all file groups. */
+        function revealSection(id) {
+            var el = document.getElementById(id);
+            if (!el) {
+                return;
+            }
+            if (search) {
+                search.value = '';
+            }
+            chips.forEach(function (chip) {
+                activeSevs[chip.getAttribute('data-sev')] = true;
+                chip.setAttribute('aria-pressed', 'true');
+            });
+            syncSidebarSev();
+            applyFilters();
+            if (el.classList.contains('checker-section')) {
+                el.querySelectorAll('details.issue-group').forEach(function (d) { d.open = true; });
+            }
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        document.querySelectorAll('.sidebar nav a[href^="#checker-"]').forEach(function (a) {
+            a.addEventListener('click', function (e) {
+                e.preventDefault();
+                revealSection(a.getAttribute('href').slice(1));
+            });
+        });
+        window.addEventListener('hashchange', function () {
+            if (location.hash.length > 1) {
+                revealSection(location.hash.slice(1));
+            }
+        });
+        if (location.hash && location.hash.length > 1) {
+            revealSection(location.hash.slice(1));
+        }
         if ('IntersectionObserver' in window && links.length > 0) {
             var byId = {};
             links.forEach(function (a) {

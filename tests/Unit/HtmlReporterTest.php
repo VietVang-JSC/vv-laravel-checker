@@ -200,6 +200,9 @@ final class HtmlReporterTest extends TestCase
         self::assertStringContainsString('id="expand-all"', $html);
         self::assertStringContainsString('id="collapse-all"', $html);
         self::assertStringContainsString('details.issue-group', $html);
+        // Deep-linking to a checker section reveals its collapsed groups.
+        self::assertStringContainsString('function revealSection', $html);
+        self::assertStringContainsString("'hashchange'", $html);
     }
 
     public function testFileLinksDefaultToVscodeDeepLinks(): void
