@@ -61,6 +61,9 @@ return [
         // OWASP Top 10 (2023) API mapping — high confidence.
         'owasp' => [
             'broken_access_control' => true,
+            // Resolve route-middleware authorization (Route::middleware('can:...'),
+            // groups) so actions protected outside the controller are not flagged.
+            'route_middleware' => true,
             'ssrf' => true,
             'ssti' => true,
             'misconfiguration' => true,

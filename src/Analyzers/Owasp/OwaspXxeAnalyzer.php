@@ -14,7 +14,7 @@ use VietVang\QualityChecker\Result\Severity;
  *
  * Assumes: any XXE-capable XML sink in a file is reported unless that file also contains a call to
  * libxml_disable_entity_loader(true) or uses the LIBXML_NONET constant. File-level guard detection is
- * a deliberate simplification of the secure-processing intent.
+ * a deliberate simplification of the secure-processing intent. Sinks inside test paths are skipped.
  */
 final class OwaspXxeAnalyzer extends AbstractAnalyzer
 {
@@ -33,6 +33,9 @@ final class OwaspXxeAnalyzer extends AbstractAnalyzer
         $issues = [];
         foreach ($files as $file) {
             if (!$this->supports($file)) {
+                continue;
+            }
+            if ($this->isTestPath($file)) {
                 continue;
             }
             foreach ($this->analyzeFile($file) as $issue) {

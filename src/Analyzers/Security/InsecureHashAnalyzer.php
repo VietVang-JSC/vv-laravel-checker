@@ -43,6 +43,10 @@ final class InsecureHashAnalyzer
             return [];
         }
 
+        if (stripos($code, 'pwnedpasswords') !== false) {
+            return [];
+        }
+
         $ast = $this->parse($code);
         if ($ast === null) {
             return [];

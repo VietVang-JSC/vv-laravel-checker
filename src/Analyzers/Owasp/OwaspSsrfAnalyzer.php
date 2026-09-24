@@ -15,6 +15,11 @@ use VietVang\QualityChecker\Result\Severity;
  * Assumes: SSRF sinks are flagged when their URL argument is a variable, a property/method call, or
  * a concat/interpolation that resolves to user input. URL variables not conclusively user-derived are
  * flagged when the sink receives a non-literal argument. This is a heuristic, not a full data-flow analysis.
+ *
+ * Deliberately not flagged: sinks inside test paths, `fopen()` in a write/append
+ * mode (local file creation, not a server-side request), and arguments that look
+ * like local filesystem paths (path/file/source/target names or Laravel path
+ * helpers such as storage_path()/base_path()).
  */
 final class OwaspSsrfAnalyzer extends AbstractAnalyzer
 {
@@ -23,6 +28,19 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
     private const FUNC_SINKS = ['file_get_contents', 'fopen', 'curl_init', 'get_headers'];
 
     private const METHOD_SINKS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'request', 'send'];
+
+    private const PATH_HELPERS = [
+        'storage_path', 'base_path', 'public_path', 'resource_path',
+        'database_path', 'app_path', 'config_path', 'lang_path',
+    ];
+
+    private const LOCAL_NAME_HINTS = [
+        'path', 'file', 'filepath', 'filename', 'fullpath', 'source', 'target', 'local',
+    ];
+
+    private const REMOTE_NAME_HINTS = [
+        'url', 'uri', 'endpoint', 'host', 'domain', 'link', 'href', 'remote', 'webhook', 'feed',
+    ];
 
     private const STATIC_CLIENTS = [
         'Http',
@@ -36,6 +54,9 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         $issues = [];
         foreach ($files as $file) {
             if (!$this->supports($file)) {
+                continue;
+            }
+            if ($this->isTestPath($file)) {
                 continue;
             }
             foreach ($this->analyzeFile($file) as $issue) {
@@ -64,6 +85,10 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         foreach ($calls as $call) {
             $sink = $this->resolveSink($call);
             if ($sink === null) {
+                continue;
+            }
+
+            if ($sink === 'fopen()' && $this->isWriteModeOpen($call)) {
                 continue;
             }
 
@@ -178,6 +203,10 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             return false;
         }
 
+        if ($this->isLocalPath($expr)) {
+            return false;
+        }
+
         if (
             $expr instanceof Node\Expr\BinaryOp\Concat
             || $expr instanceof Node\Scalar\InterpolatedString
@@ -186,6 +215,77 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         }
 
         return $this->isTaintedExpr($expr);
+    }
+
+    private function isWriteModeOpen(Node $node): bool
+    {
+        if (!$node instanceof Node\Expr\FuncCall) {
+            return false;
+        }
+        $mode = $node->args[1] ?? null;
+        if (!$mode instanceof Node\Arg || !$mode->value instanceof Node\Scalar\String_) {
+            return false;
+        }
+
+        return (bool) preg_match('/^[waxc]/i', ltrim($mode->value->value));
+    }
+
+    private function isLocalPath(Node\Expr $expr): bool
+    {
+        if (
+            $expr instanceof Node\Expr\FuncCall
+            && $expr->name instanceof Node\Name
+            && in_array(strtolower($expr->name->toString()), self::PATH_HELPERS, true)
+        ) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+            return $this->isLocalName($expr->name);
+        }
+
+        if ($expr instanceof Node\Expr\PropertyFetch && $expr->name instanceof Node\Identifier) {
+            return $this->isLocalName($expr->name->toString());
+        }
+
+        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
+            return $this->isLocalPathOperand($expr->left) && $this->isLocalPathOperand($expr->right);
+        }
+
+        if ($expr instanceof Node\Scalar\InterpolatedString) {
+            foreach ($expr->parts as $part) {
+                if ($part instanceof Node\Expr && !$this->isLocalPathOperand($part)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private function isLocalPathOperand(Node\Expr $expr): bool
+    {
+        return $expr instanceof Node\Scalar\String_ || $this->isLocalPath($expr);
+    }
+
+    private function isLocalName(string $name): bool
+    {
+        $lower = strtolower($name);
+        foreach (self::REMOTE_NAME_HINTS as $hint) {
+            if (str_contains($lower, $hint)) {
+                return false;
+            }
+        }
+
+        foreach (self::LOCAL_NAME_HINTS as $hint) {
+            if (str_contains($lower, $hint)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isLiteralString(Node\Expr $expr): bool

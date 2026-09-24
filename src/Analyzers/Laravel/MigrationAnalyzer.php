@@ -16,7 +16,9 @@ use VietVang\QualityChecker\Result\Severity;
  * Flags:
  *  - migrations that declare an `up()` but no `down()` (not reversible)
  *  - destructive schema operations in `up()` (dropTable, dropColumn, delete
- *    of a whole table without a re-creation path)
+ *    of a whole table without a re-creation path). A drop is not flagged when
+ *    every dropped table/column name re-appears as a string literal in `down()`
+ *    (best-effort restore detection).
  *
  * Assumes: only files under a `/database/migrations/` path segment are considered.
  * Reversibility is a best-effort heuristic, so confidence is medium.
@@ -91,16 +93,22 @@ final class MigrationAnalyzer extends AbstractAnalyzer
             );
         }
 
-        if ($up !== null && $up->stmts !== null && $this->hasDestructiveCall($up->stmts)) {
-            $issues[] = $this->makeIssue(
-                self::RULE_DESTRUCTIVE_UP,
-                'Destructive schema operation in up(): dropping a table/column that is not re-created in the same migration.',
-                $file,
-                $up->getStartLine(),
-                Severity::Warning,
-                ['kind' => 'destructive_up'],
-                Confidence::Medium
-            );
+        if ($up !== null && $up->stmts !== null) {
+            $destructive = $this->destructiveCalls($up->stmts);
+            if ($destructive !== []) {
+                $dropped = $this->droppedIdentifiers($destructive);
+                if ($dropped === [] || !$this->isRestoredInDown($down, $dropped)) {
+                    $issues[] = $this->makeIssue(
+                        self::RULE_DESTRUCTIVE_UP,
+                        'Destructive schema operation in up(): dropping a table/column that is not re-created in the same migration.',
+                        $file,
+                        $up->getStartLine(),
+                        Severity::Warning,
+                        ['kind' => 'destructive_up'],
+                        Confidence::Medium
+                    );
+                }
+            }
         }
 
         return $issues;
@@ -108,8 +116,9 @@ final class MigrationAnalyzer extends AbstractAnalyzer
 
     /**
      * @param array<Node\Stmt> $stmts
+     * @return list<Node\Expr\MethodCall>
      */
-    private function hasDestructiveCall(array $stmts): bool
+    private function destructiveCalls(array $stmts): array
     {
         $found = $this->finder()->find($stmts, function (Node $node): bool {
             if ($node instanceof Node\Expr\MethodCall && $node->name instanceof Node\Identifier) {
@@ -119,6 +128,87 @@ final class MigrationAnalyzer extends AbstractAnalyzer
             return false;
         });
 
-        return $found !== [];
+        return array_values(array_filter(
+            $found,
+            static fn (Node $node): bool => $node instanceof Node\Expr\MethodCall
+        ));
+    }
+
+    /**
+     * @param list<Node\Expr\MethodCall> $calls
+     * @return list<string>
+     */
+    private function droppedIdentifiers(array $calls): array
+    {
+        $names = [];
+        foreach ($calls as $call) {
+            if (!$call->name instanceof Node\Identifier) {
+                continue;
+            }
+            $method = $call->name->toString();
+            if ($method === 'delete') {
+                continue;
+            }
+            foreach ($call->args as $arg) {
+                if (!$arg instanceof Node\Arg) {
+                    continue;
+                }
+                $names = array_merge($names, $this->stringValues($arg->value, $method === 'dropColumn'));
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function stringValues(Node\Expr $expr, bool $recurseArray): array
+    {
+        if ($expr instanceof Node\Scalar\String_) {
+            return [$expr->value];
+        }
+
+        if ($recurseArray && $expr instanceof Node\Expr\Array_) {
+            $out = [];
+            foreach ($expr->items as $item) {
+                if ($item instanceof Node\Expr\ArrayItem && $item->value instanceof Node\Scalar\String_) {
+                    $out[] = $item->value->value;
+                }
+            }
+
+            return $out;
+        }
+
+        return [];
+    }
+
+    /**
+     * @param list<string> $dropped
+     */
+    private function isRestoredInDown(?Node\Stmt\ClassMethod $down, array $dropped): bool
+    {
+        if ($down === null || $down->stmts === null) {
+            return false;
+        }
+
+        $literals = [];
+        foreach (
+            $this->finder()->find($down->stmts, static function (Node $node): bool {
+                return $node instanceof Node\Scalar\String_;
+            }) as $node
+        ) {
+            if ($node instanceof Node\Scalar\String_) {
+                $literals[] = $node->value;
+            }
+        }
+
+        foreach ($dropped as $name) {
+            if (!in_array($name, $literals, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

@@ -24,6 +24,15 @@ abstract class AbstractAnalyzer
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
+    protected function isTestPath(string $path): bool
+    {
+        $normalized = strtolower(str_replace('\\', '/', $path));
+
+        return str_contains($normalized, '/tests/')
+            || str_contains($normalized, '/test/')
+            || str_ends_with($normalized, 'test.php');
+    }
+
     protected function readFile(string $path): string
     {
         if (!is_file($path)) {

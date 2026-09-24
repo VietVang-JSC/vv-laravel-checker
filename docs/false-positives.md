@@ -64,23 +64,62 @@ php artisan quality:check --tier=all --fail-on=none
 
 ### `OWASP_BROKEN_ACCESS_CONTROL`
 - **Báo đúng khi**: action mutating (`store`/`update`/`destroy`/...) không thấy
-  `authorize()`, `Gate::`, `$this->authorize()`, `abort()`, middleware.
-- **Sai khi**: phân quyền đặt ở route middleware, policy tự động, hoặc base
-  controller — analyzer chỉ nhìn trong thân method nên không thấy.
-- **Xử lý**: nếu phân quyền nằm ngoài method, review một lần rồi baseline
-  finding đó (đừng tắt cả rule).
-- **Case pilot (Bagisto/LienHoaEc)**: rule báo **453 lần** trên admin
-  controllers. Bagisto kiểm quyền qua route middleware (`bouncer::permission`,
-  policy registration trong `RouteServiceProvider`) chứ không gọi
-  `authorize()` trong method — classic false positive đã mô tả ở trên.
-  Kỳ vọng với framework dùng middleware-based auth: số lượng finding lớn
-  là bình thường; review theo mẫu (1 file) rồi baseline cả nhóm thay vì
-  tắt rule.
+  `authorize()`, `Gate::`, `$this->authorize()`, `abort()`, middleware trong
+  method, constructor — **và** không có route middleware bảo vệ.
+- **Tự động bỏ qua khi**: action được bảo vệ bởi route middleware. Analyzer đọc
+  các file route (`/routes/`, `/Routes/`, `web.php`/`api.php`) và hiểu:
+  `Route::middleware(...)` / `->middleware(...)` chains,
+  `Route::group(['middleware' => ...])` (kể cả group lồng nhau và group gọi
+  static trực tiếp), `Route::controller(X::class)` với action là bare string,
+  `Route::resource()`/`apiResource()`, và `require`/`include` file route trong
+  group closure (file được require kế thừa middleware stack, không parse standalone).
+  Tên middleware chứa `auth`/`can`/`permission`/`role`/`gate`/`admin`/`bouncer`/
+  `checklevel`... được coi là bảo vệ; `throttle` thì không. Actions so khớp theo
+  FQCN (`use` imports được resolve) nên 2 controller trùng tên khác namespace
+  (Admin vs Shop API) không lẫn vào nhau. Tắt bằng
+  `analyzers.owasp.route_middleware => false` nếu muốn hành vi cũ (chỉ nhìn
+  trong method).
+- **Vẫn báo (review rồi baseline)**: route public by design (login, password
+  reset, 2FA verify, storefront, payment callback/IPN), action không có route
+  nào (dead code), và sample code trong thư mục tài liệu (ví dụ OpenAPI `Docs`
+  của Bagisto RestApi — class ví dụ tên `*Controller` nhưng không bao giờ chạy).
+- **Case pilot**: SiroHRM 45 → 1 (còn `TwoFactorController@verify`, public by
+  design); Bagisto 453 → 150, trong đó 105 là `Docs` sample, còn lại là
+  storefront/auth/callback public và vài admin method không có route.
 
 ### `OWASP_SSRF` / `OWASP_COMMAND_INJECTION` / `OWASP_SSTI`
 - Engine chỉ báo khi URL/template/lệnh **không phải literal** và có dấu vết
   input người dùng. Nếu giá trị đã qua allow-list/validate chặt, review rồi
   baseline thay vì tắt rule.
+- **Tự động bỏ qua**:
+  - sink trong đường dẫn test (`tests/`, `Test.php`) — áp dụng cho SSRF,
+    command injection, XXE;
+  - `fopen()` ở mode write/append (`w`, `a`, `x`, `c`, ...) — tạo file local,
+    không phải server-side request;
+  - đối số có dạng local path: tên biến/property gợi ý file
+    (`$path`, `$file`, `$source`, `$fullPath`, ...) mà không gợi ý remote
+    (`$url`, `$endpoint`, ...), hoặc built từ `storage_path()`/`base_path()`/
+    `public_path()`/...
+  - command injection: đối số đã bọc `escapeshellarg()`/`escapeshellcmd()`,
+    và `new Process()` với command dạng array (không qua shell — kể cả khi
+    array nằm trong biến `$command = [...]` cùng function).
+- **Case pilot (SiroHRM)**: `BackupService::binary()` dùng
+  `shell_exec('where ' . escapeshellarg($tool))`, `new Process($command)` với
+  array từ config, `UpdaterService` dùng `escapeshellarg(base_path())` —
+  cả 4 finding command injection đều đã tự hết; 9 SSRF (local file + test
+  fixture) cũng vậy.
+
+### `INSECURE_HASH`
+- **Báo đúng khi**: `md5()`/`sha1()` trên password trong ngữ cảnh credential.
+- **Tự động bỏ qua**: file nhắc tới `pwnedpasswords` — HIBP k-anonymity chỉ gửi
+  5 ký tự đầu của SHA-1 lên API, không phải lưu password bằng SHA-1
+  (case `ChangePasswordController` ở SiroHRM).
+
+### `MIGRATION_DESTRUCTIVE_UP`
+- **Báo đúng khi**: `up()` drop table/column mà `down()` không khôi phục.
+- **Tự động bỏ qua**: mọi tên table/column bị drop đều xuất hiện lại dưới dạng
+  string literal trong `down()` (ví dụ drop `country_id` có guard
+  `Schema::hasColumn` + `down()` tạo lại column — case SiroHRM).
 
 ### `HARDCODED_SECRET`
 - Regex bắt `sk-`, `AIza`, `AKIA`, private key, ... **Chuỗi test/fixture cũng

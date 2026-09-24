@@ -119,7 +119,9 @@ final class CustomAnalyzerChecker implements CheckerInterface
             $this->entry($analyzers, 'security.insecure_hash', new InsecureHashAnalyzer()),
             $this->entry($analyzers, 'security.laravel_taint', new LaravelTaintAnalyzer()),
             $this->entry($analyzers, 'security.disabled_csrf', new DisabledCsrfAnalyzer()),
-            $this->entry($analyzers, 'owasp.broken_access_control', new OwaspAccessControlAnalyzer()),
+            $this->entry($analyzers, 'owasp.broken_access_control', new OwaspAccessControlAnalyzer(
+                (bool) ($analyzers['owasp']['route_middleware'] ?? true)
+            )),
             $this->entry($analyzers, 'owasp.ssrf', new OwaspSsrfAnalyzer()),
             $this->entry($analyzers, 'owasp.ssti', new OwaspSstiAnalyzer()),
             $this->entry($analyzers, 'owasp.misconfiguration', new OwaspMisconfigurationAnalyzer()),

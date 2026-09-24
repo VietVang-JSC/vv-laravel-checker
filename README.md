@@ -330,16 +330,24 @@ Measured on **Bagisto / LienHoaEc** (Laravel 11 e-commerce monolith):
 `packages/Webkul` modules, custom analyzers only (phpcs/phpstan/phpunit
 excluded), `tier=security`, `fail-on=none`:
 
-| Metric | Result |
-|---|---|
-| Duration | **~170 s** (cold, no cache) |
-| Findings | 1,246 (7 critical / 466 error / 773 warning) |
-| Distinct rules | 12 |
-| SARIF output | valid 2.1.0, 1,246 results, 12 rules |
+| Metric | Result (route-middleware aware) | Before |
+|---|---|---|
+| Duration | **~92 s** (cold, no cache) | ~170 s |
+| Findings | 939 (6 critical / 160 error / 773 warning) | 1,246 (7 / 466 / 773) |
+| Distinct rules | 12 | 12 |
+| SARIF output | valid 2.1.0, 939 results, 12 rules | valid 2.1.0 |
 
-Top rules: `OWASP_BROKEN_ACCESS_CONTROL` (453 — mostly middleware-based-auth
-false positives, see [docs/false-positives.md](docs/false-positives.md)),
-`MISSING_CONTROLLER_TEST` (309), `ROUTE_MISSING_VALIDATION` (250).
+Top rules: `MISSING_CONTROLLER_TEST` (309), `ROUTE_MISSING_VALIDATION` (250),
+`OWASP_BROKEN_ACCESS_CONTROL` (**150**, down from 453 — actions protected by
+route middleware, `Route::controller()` groups and cross-file `require` are now
+resolved; the remainder are public-by-design routes — storefront, auth,
+payment callbacks — plus OpenAPI `Docs` sample code, see
+[docs/false-positives.md](docs/false-positives.md)).
+
+Second pilot — **SiroHRM** (Laravel 12 HRM, 526 files): **191 → 131 findings**
+(−31%): `OWASP_BROKEN_ACCESS_CONTROL` 45 → 1, `OWASP_SSRF` 9 → 0,
+`OWASP_COMMAND_INJECTION` 4 → 0, `OWASP_XXE` / `INSECURE_HASH` /
+`MIGRATION_DESTRUCTIVE_UP` → 0; critical 5 → 1 (test fixture), error 55 → 1.
 
 Repeat runs are near-instant via the result cache (1 h TTL, keyed by
 file-set hash + tool config).

@@ -255,6 +255,18 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testInsecureHashSkipsHibpKAnonymity(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nclass PasswordBreachService {\n    public function breached(string \$password): bool {\n        \$prefix = strtoupper(substr(sha1(\$password), 0, 5));\n        \$body = file_get_contents('https://api.pwnedpasswords.com/range/' . \$prefix);\n        return str_contains((string) \$body, 'suffix');\n    }\n}\n",
+            'app/Services/PasswordBreachService.php'
+        );
+
+        $issues = (new InsecureHashAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     /** LaravelTaintAnalyzer */
 
     public function testLaravelTaintFlagsWhereRawInterpolation(): void

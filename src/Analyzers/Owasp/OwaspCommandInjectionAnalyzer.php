@@ -15,12 +15,18 @@ use VietVang\QualityChecker\Result\Severity;
  * Assumes: OS command sinks are flagged when an argument is user input (request/input/superglobal) or
  * a tainted variable/expression. Relies on AbstractAnalyzer::isTaintedExpr plus explicit input shape
  * detection; this is a heuristic without cross-function data-flow tracking.
+ *
+ * Deliberately not flagged: arguments wrapped in escapeshellarg()/escapeshellcmd()
+ * (explicit escaping), Symfony Process constructed with an argument array (no shell
+ * interpretation), and sinks inside test paths.
  */
 final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'OWASP_COMMAND_INJECTION';
 
     private const FUNC_SINKS = ['system', 'exec', 'shell_exec', 'passthru', 'proc_open', 'popen'];
+
+    private const ESCAPE_FUNCS = ['escapeshellarg', 'escapeshellcmd'];
 
     private const PROCESS_CLASS = 'Symfony\\Component\\Process\\Process';
 
@@ -29,6 +35,9 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
         $issues = [];
         foreach ($files as $file) {
             if (!$this->supports($file)) {
+                continue;
+            }
+            if ($this->isTestPath($file)) {
                 continue;
             }
             foreach ($this->analyzeFile($file) as $issue) {
@@ -45,6 +54,16 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
         if ($ast === null) {
             return [];
         }
+
+        // Variables assigned a plain argument-array literal, scoped per function, so
+        // `new Process($command)` with `$command = [...]` is recognized as shell-free.
+        $nodes = [];
+        foreach ($ast as $node) {
+            if ($node instanceof Node) {
+                $nodes[] = $node;
+            }
+        }
+        $scopes = $this->arrayVarScopes($nodes);
 
         $issues = [];
         $calls = $this->finder()->find($ast, function (Node $node): bool {
@@ -86,6 +105,10 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
                 && $call->class instanceof Node\Name
                 && in_array($call->class->toString(), [self::PROCESS_CLASS, '\\' . self::PROCESS_CLASS, 'Process'], true)
             ) {
+                $first = $call->args[0] ?? null;
+                if ($first instanceof Node\Arg && $this->isShellFreeCommand($first->value, $call, $scopes)) {
+                    continue;
+                }
                 foreach ($call->args as $arg) {
                     if ($arg instanceof Node\Arg && $this->isUserInput($arg->value)) {
                         $issues[] = $this->makeIssue(
@@ -107,6 +130,14 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
 
     private function isUserInput(Node\Expr $expr): bool
     {
+        if (
+            $expr instanceof Node\Expr\FuncCall
+            && $expr->name instanceof Node\Name
+            && in_array(strtolower($expr->name->toString()), self::ESCAPE_FUNCS, true)
+        ) {
+            return false;
+        }
+
         if ($expr instanceof Node\Scalar\InterpolatedString) {
             foreach ($expr->parts as $part) {
                 if ($part instanceof Node\Expr && $this->isUserInput($part)) {
@@ -126,5 +157,104 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
         }
 
         return false;
+    }
+
+    /**
+     * @param list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}> $scopes
+     */
+    private function isShellFreeCommand(Node\Expr $expr, Node\Expr\New_ $call, array $scopes): bool
+    {
+        if ($expr instanceof Node\Expr\Array_) {
+            return true;
+        }
+
+        if (!$expr instanceof Node\Expr\Variable || !is_string($expr->name)) {
+            return false;
+        }
+
+        $callId = spl_object_id($call);
+        $inFunc = false;
+        foreach ($scopes as $scope) {
+            if ($scope['func'] === null) {
+                continue;
+            }
+            if (!isset($scope['calls'][$callId])) {
+                continue;
+            }
+            $inFunc = true;
+            if (isset($scope['vars'][$expr->name])) {
+                return true;
+            }
+        }
+
+        if ($inFunc) {
+            return false;
+        }
+
+        foreach ($scopes as $scope) {
+            if ($scope['func'] === null && isset($scope['vars'][$expr->name])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Scopes mapping `new` expressions to the array-literal variables visible in
+     * the same function (plus a file-level fallback for top-level code).
+     *
+     * @param list<Node> $ast
+     * @return list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}>
+     */
+    private function arrayVarScopes(array $ast): array
+    {
+        $scopes = [];
+        $funcs = $this->finder()->find($ast, function (Node $node): bool {
+            return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
+        });
+
+        foreach ($funcs as $func) {
+            if (!$func instanceof Node\Stmt\ClassMethod && !$func instanceof Node\Stmt\Function_) {
+                continue;
+            }
+            $calls = [];
+            foreach (
+                $this->finder()->find($func, static function (Node $node): bool {
+                    return $node instanceof Node\Expr\New_;
+                }) as $new
+            ) {
+                $calls[spl_object_id($new)] = true;
+            }
+            $scopes[] = ['func' => spl_object_id($func), 'vars' => $this->arrayAssignedVars($func), 'calls' => $calls];
+        }
+
+        $scopes[] = ['func' => null, 'vars' => $this->arrayAssignedVars($ast), 'calls' => []];
+
+        return $scopes;
+    }
+
+    /**
+     * @param Node|list<Node> $scope
+     * @return array<string, true>
+     */
+    private function arrayAssignedVars(Node|array $scope): array
+    {
+        $vars = [];
+        $assigns = $this->finder()->find($scope, static function (Node $node): bool {
+            return $node instanceof Node\Expr\Assign;
+        });
+        foreach ($assigns as $assign) {
+            if (
+                $assign instanceof Node\Expr\Assign
+                && $assign->var instanceof Node\Expr\Variable
+                && is_string($assign->var->name)
+                && $assign->expr instanceof Node\Expr\Array_
+            ) {
+                $vars[$assign->var->name] = true;
+            }
+        }
+
+        return $vars;
     }
 }

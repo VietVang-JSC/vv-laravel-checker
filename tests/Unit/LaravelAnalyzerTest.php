@@ -58,6 +58,37 @@ final class LaravelAnalyzerTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testMigrationDestructiveUpRestoredInDownPasses(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn new class extends Migration {\n" .
+            "    public function up(): void { Schema::table('holidays', function (Blueprint \$t) { \$t->dropColumn('country_id'); }); }\n" .
+            "    public function down(): void { Schema::table('holidays', function (Blueprint \$t) { \$t->string('country_id')->nullable(); }); }\n" .
+            "};\n",
+            'database/migrations/2026_01_01_c.php'
+        );
+
+        $issues = (new MigrationAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testMigrationDestructiveUpWithoutRestoreFlagged(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn new class extends Migration {\n" .
+            "    public function up(): void { Schema::table('holidays', function (Blueprint \$t) { \$t->dropColumn('country_id'); }); }\n" .
+            "    public function down(): void { Schema::dropIfExists('holidays_tmp'); }\n" .
+            "};\n",
+            'database/migrations/2026_01_01_d.php'
+        );
+
+        $issues = (new MigrationAnalyzer())->analyze([$file]);
+        $rules = array_map(static fn ($i) => $i->rule, $issues);
+
+        self::assertContains('MIGRATION_DESTRUCTIVE_UP', $rules);
+    }
+
     public function testRouteValidationFlagsMutatingWithoutValidation(): void
     {
         $file = $this->temp(
