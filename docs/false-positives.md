@@ -18,6 +18,11 @@ instead of disabling whole rule groups._
    sau khi đã đọc hết báo cáo. Baseline mù = che cả lỗi thật.
 4. **Không tắt rule `high` confidence diện rộng** — nếu ồn, tăng
    `--min-confidence` hoặc đổi `--tier` thay vì tắt `analyzers.security.*`.
+5. **Inline ignore cho trường hợp cá biệt đã review** — comment
+   `// quality-checker-ignore RULE` cùng dòng (hoặc
+   `// quality-checker-ignore-next-line RULE` ở dòng trên) để bỏ qua đúng
+   finding đó; `all` thay cho RULE để bỏ qua mọi rule trên dòng đó.
+   Tắt hẳn bằng `analyzers.inline_suppression => false`.
 
 ## 2. Mức tin cậy & hành động / Confidence & action
 

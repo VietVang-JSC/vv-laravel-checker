@@ -36,6 +36,7 @@ use VietVang\QualityChecker\Result\Confidence;
 use VietVang\QualityChecker\Result\Issue;
 use VietVang\QualityChecker\Result\Severity;
 use VietVang\QualityChecker\Runner\CheckContext;
+use VietVang\QualityChecker\Suppression\InlineSuppressor;
 
 final class CustomAnalyzerChecker implements CheckerInterface
 {
@@ -83,6 +84,13 @@ final class CustomAnalyzerChecker implements CheckerInterface
 
         $issues = (new Deduplicator())->dedupeList($issues);
 
+        $suppressed = 0;
+        if ($this->inlineSuppressionEnabled($ctx)) {
+            $suppressor = new InlineSuppressor();
+            $issues = $suppressor->filter($issues);
+            $suppressed = $suppressor->countSuppressed();
+        }
+
         $minConfidence = Confidence::fromString((string) ($ctx->config['min_confidence'] ?? 'low'));
         $issues = array_values(array_filter(
             $issues,
@@ -99,8 +107,18 @@ final class CustomAnalyzerChecker implements CheckerInterface
         }
 
         $summary = sprintf('Custom analyzers found %d issue(s) across %d file(s).', count($issues), count($files));
+        if ($suppressed > 0) {
+            $summary .= sprintf(' %d issue(s) suppressed via inline ignore.', $suppressed);
+        }
 
         return new CheckResult($this->name(), $status, microtime(true) - $start, $issues, null, $summary);
+    }
+
+    private function inlineSuppressionEnabled(CheckContext $ctx): bool
+    {
+        $analyzers = $ctx->config['analyzers'] ?? [];
+
+        return (bool) ($analyzers['inline_suppression'] ?? true);
     }
 
     /**

@@ -45,6 +45,10 @@ return [
     'analyzers' => [
         'enabled' => true,
 
+        // Inline per-finding suppression via `// quality-checker-ignore RULE`
+        // (same line) or `// quality-checker-ignore-next-line RULE`.
+        'inline_suppression' => true,
+
         // Security rules (high/medium confidence) — on by default.
         'security' => [
             'sql_injection' => true,

@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Inline per-finding suppression: `// quality-checker-ignore RULE[,RULE2]`
+  (same line) and `// quality-checker-ignore-next-line RULE` (line above);
+  `all` suppresses every rule on that line. Wired into `CustomAnalyzerChecker`
+  (summary reports the suppressed count), opt-out via
+  `analyzers.inline_suppression => false`.
+
+### Removed
+
+- `ParallelRunner` (and its test): the implementation never actually ran
+  checkers in parallel (the `parallel` extension runtime was instantiated but
+  unused, no `pcntl` path existed) while nothing referenced it. Real
+  multi-process execution needs subprocess isolation and is out of scope;
+  `CheckRunner` remains the single sequential, cache-aware entry point.
+
 - OWASP Top-10 (2023) analyzers: broken access control, SSRF, SSTI, misconfiguration, command injection, XXE.
 - Confidence model (`low` / `medium` / `high`) with quality tiers (`security` / `quality` / `all`) and `min_confidence` filtering.
 - Deduplicator for issues generated from multiple analyzers.
