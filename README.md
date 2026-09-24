@@ -36,6 +36,9 @@ The package philosophy:
 
 - One command to rule them all: `php artisan quality:check`
 - Multiple report formats: `console`, `json`, `html`, `md`, `sarif` (or `all`)
+- Enterprise HTML report: collapsible file groups, clickable file links
+  (`vscode://` or GitHub blob), inline code snippets, severity/top-rule
+  charts, sortable tables, dark mode, print stylesheet, OWASP drill-down
 - Standardised exit codes for CI gates
 - Dependency security audit (`composer audit`)
 - Optional filesystem security scan (`trivy`)

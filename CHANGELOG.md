@@ -28,7 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Console report: tier/fail-on/min-confidence header, issues grouped by file,
   50-issue cap per checker with a "… N more" tip, fail remediation tip.
 - HTML report: sticky sidebar TOC with scroll-spy, on-page search, severity
-  chip filters.
+  chip filters, interactive severity/rule/hot-file sidebar filters,
+  collapsible file groups (`<details>`), clickable file links (`vscode://`
+  deep links, or GitHub blob URLs via `html.repo_url` + `html.branch`),
+  inline code snippets with ±`html.code_context` context lines, severity
+  distribution + top-rule bar charts, sortable tables, dark-mode toggle
+  (persisted), print stylesheet, OWASP per-rule drill-down, expand/collapse
+  controls, search auto-expands matching file groups.
 - Pilot benchmark on Bagisto/LienHoaEc (3,283 files): 1,246 findings / 170 s,
   valid SARIF (12 rules) — recorded in README.
 - Auto-provisioning of missing tools: composer-based tools (phpcs/phpstan/phpunit) installed via `composer require --dev` in the target project, and the Trivy binary auto-downloaded into a per-user cache. Disable with `--no-auto-install` / `auto_install_tools => false`.

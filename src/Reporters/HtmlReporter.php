@@ -19,15 +19,37 @@ final class HtmlReporter implements ReporterInterface
         --pass: #16a34a;
         --border: #e5e7eb;
         --bg: #ffffff;
+        --page: #f9fafb;
+        --text: #111827;
         --muted: #6b7280;
+        --hover: #f3f4f6;
+        --code-bg: #0f172a;
+        --code-text: #e2e8f0;
+        --code-ln: #64748b;
+        --code-cur: rgba(220, 38, 38, 0.18);
+        color-scheme: light;
+    }
+    html[data-theme="dark"] {
+        --border: #1f2937;
+        --bg: #111827;
+        --page: #0b1220;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --hover: #1f2937;
+        --critical: #f87171;
+        --error: #f87171;
+        --warning: #fbbf24;
+        --info: #60a5fa;
+        --pass: #4ade80;
+        color-scheme: dark;
     }
     * { box-sizing: border-box; }
     body {
         margin: 0;
         padding: 24px;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        color: #111827;
-        background: #f9fafb;
+        color: var(--text);
+        background: var(--page);
         line-height: 1.5;
     }
     .container { max-width: 1100px; margin: 0 auto; }
@@ -60,6 +82,7 @@ final class HtmlReporter implements ReporterInterface
     .badge.warning { background: var(--warning); }
     .badge.failed { background: var(--error); }
     h2 { font-size: 18px; margin: 0 0 12px; }
+    h3 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
     .card {
         background: var(--bg);
         border: 1px solid var(--border);
@@ -69,7 +92,11 @@ final class HtmlReporter implements ReporterInterface
     }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
     th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
-    th { background: #f3f4f6; font-weight: 600; }
+    th { background: var(--hover); font-weight: 600; }
+    th[data-sortable] { cursor: pointer; user-select: none; white-space: nowrap; }
+    th[data-sortable]:hover { color: var(--info); }
+    th.sort-asc::after { content: " \25B2"; font-size: 10px; }
+    th.sort-desc::after { content: " \25BC"; font-size: 10px; }
     .status { font-weight: 600; }
     .status.passed { color: var(--pass); }
     .status.warning { color: var(--warning); }
@@ -89,16 +116,85 @@ final class HtmlReporter implements ReporterInterface
         border: 1px solid var(--border);
         border-radius: 8px;
         text-align: center;
-        background: #f9fafb;
+        background: var(--page);
     }
     .stat .value { font-size: 26px; font-weight: 700; }
     .stat .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .charts { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 16px; }
+    .chart-block { flex: 1 1 320px; min-width: 0; }
+    .stacked {
+        display: flex;
+        height: 18px;
+        border-radius: 9999px;
+        overflow: hidden;
+        background: var(--page);
+        border: 1px solid var(--border);
+    }
+    .stacked .seg { min-width: 2px; }
+    .stacked .seg.critical { background: var(--critical); }
+    .stacked .seg.error { background: var(--error); }
+    .stacked .seg.warning { background: var(--warning); }
+    .stacked .seg.info { background: var(--info); }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+    .legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+    .legend .dot.critical { background: var(--critical); }
+    .legend .dot.error { background: var(--error); }
+    .legend .dot.warning { background: var(--warning); }
+    .legend .dot.info { background: var(--info); }
+    .bars { display: flex; flex-direction: column; gap: 6px; }
+    .bar-row { display: grid; grid-template-columns: minmax(120px, 220px) 1fr 48px; gap: 8px; align-items: center; font-size: 12px; }
+    .bar-row .bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+    .bar-row .bar-track { background: var(--page); border: 1px solid var(--border); border-radius: 9999px; height: 12px; overflow: hidden; }
+    .bar-row .bar-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 9999px; }
+    .bar-row .bar-val { text-align: right; font-weight: 600; }
     .checker-section { margin-bottom: 32px; }
     .checker-head { margin-bottom: 12px; }
-    .issue-group-title { font-weight: 600; font-size: 14px; margin: 18px 0 8px; }
+    .issue-group { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--bg); overflow: hidden; }
+    .issue-group > summary {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        cursor: pointer;
+        list-style: none;
+        font-size: 13px;
+        background: var(--page);
+    }
+    .issue-group > summary::-webkit-details-marker { display: none; }
+    .issue-group > summary:hover { background: var(--hover); }
+    .issue-group[open] > summary { border-bottom: 1px solid var(--border); }
+    .chev { display: inline-block; transition: transform 0.15s; color: var(--muted); font-size: 11px; }
+    .issue-group[open] .chev { transform: rotate(90deg); }
+    .issue-group .file-link {
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 12px;
+        color: var(--info);
+        text-decoration: none;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+    .issue-group .file-link:hover { text-decoration: underline; }
+    .pill {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 9999px;
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--hover);
+        color: var(--muted);
+        border: 1px solid var(--border);
+    }
+    .pill.critical { background: color-mix(in srgb, var(--critical) 15%, transparent); color: var(--critical); }
+    .pill.error { background: color-mix(in srgb, var(--error) 15%, transparent); color: var(--error); }
+    .pill.warning { background: color-mix(in srgb, var(--warning) 15%, transparent); color: var(--warning); }
+    .pill.info { background: color-mix(in srgb, var(--info) 15%, transparent); color: var(--info); }
+    .issue-group table { margin: 0; }
+    .issue-group tbody tr[data-search]:hover { background: var(--hover); }
     .skipped-hint { color: var(--muted); font-style: italic; }
     .empty { color: var(--muted); }
-    /* Layout with sticky sidebar TOC */
     .layout { display: flex; gap: 24px; align-items: flex-start; }
     .sidebar {
         position: sticky;
@@ -122,29 +218,24 @@ final class HtmlReporter implements ReporterInterface
         gap: 8px;
         padding: 6px 8px;
         border-radius: 6px;
-        color: #374151;
+        color: var(--text);
         text-decoration: none;
     }
-    .sidebar nav a:hover { background: #f3f4f6; }
+    .sidebar nav a:hover { background: var(--hover); }
     .sidebar nav a.active { background: #e0e7ff; color: #1e40af; font-weight: 600; }
+    html[data-theme="dark"] .sidebar nav a.active { background: #1e3a8a; color: #c7d2fe; }
     .sidebar .count {
-        background: #f3f4f6;
+        background: var(--hover);
         border-radius: 9999px;
         padding: 0 8px;
         font-size: 11px;
         color: var(--muted);
     }
     .sidebar a.active .count { background: #c7d2fe; color: #1e40af; }
-    .sidebar a.on { background: #f3f4f6; }
+    .sidebar a.on { background: var(--hover); }
     .sidebar a.on.dimmed { background: transparent; }
     .sidebar a.dimmed { opacity: 0.45; }
-    .sidebar a.dimmed .count { opacity: 0.6; }
-    .sidebar .sev-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        flex: 0 0 8px;
-    }
+    .sidebar .sev-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; }
     .sidebar .sev-dot.critical { background: var(--critical); }
     .sidebar .sev-dot.error { background: var(--error); }
     .sidebar .sev-dot.warning { background: var(--warning); }
@@ -153,16 +244,14 @@ final class HtmlReporter implements ReporterInterface
     .sidebar .count-error { background: #fee2e2; color: var(--error); }
     .sidebar .count-warning { background: #fef3c7; color: var(--warning); }
     .sidebar .count-info { background: #dbeafe; color: var(--info); }
-    .sidebar .rule-label {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        min-width: 0;
-    }
+    html[data-theme="dark"] .sidebar .count-critical,
+    html[data-theme="dark"] .sidebar .count-error { background: #451a1a; }
+    html[data-theme="dark"] .sidebar .count-warning { background: #451a0a; }
+    html[data-theme="dark"] .sidebar .count-info { background: #172554; }
+    .sidebar .rule-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .sidebar nav a[data-side-rule], .sidebar nav a[data-side-file], .sidebar nav a[data-side-sev] { cursor: pointer; }
     .main { flex: 1 1 auto; min-width: 0; }
     .main .container { max-width: none; margin: 0; }
-    /* Sticky on-page search + severity filter toolbar */
     .toolbar {
         position: sticky;
         top: 0;
@@ -171,7 +260,7 @@ final class HtmlReporter implements ReporterInterface
         flex-wrap: wrap;
         gap: 8px;
         align-items: center;
-        background: #f9fafb;
+        background: var(--page);
         padding: 12px 0;
         margin-bottom: 8px;
     }
@@ -182,29 +271,91 @@ final class HtmlReporter implements ReporterInterface
         border-radius: 8px;
         font-size: 14px;
         background: var(--bg);
+        color: var(--text);
     }
     .chip {
         border: 1px solid var(--border);
         background: var(--bg);
+        color: var(--text);
         border-radius: 9999px;
         padding: 4px 12px;
         font-size: 12px;
         font-weight: 600;
         cursor: pointer;
     }
+    .chip:hover { background: var(--hover); }
     .chip[aria-pressed="true"] { background: #111827; color: #fff; border-color: #111827; }
     .chip[data-sev="critical"][aria-pressed="true"] { background: var(--critical); border-color: var(--critical); }
     .chip[data-sev="error"][aria-pressed="true"] { background: var(--error); border-color: var(--error); }
     .chip[data-sev="warning"][aria-pressed="true"] { background: var(--warning); border-color: var(--warning); }
     .chip[data-sev="info"][aria-pressed="true"] { background: var(--info); border-color: var(--info); }
     .match-count { font-size: 12px; color: var(--muted); }
-    tr[hidden], .issue-group[hidden], .checker-section[hidden] { display: none; }
+    .toolbar .spacer { flex: 1 1 auto; }
+    tr[hidden], .issue-group[hidden], .checker-section[hidden], .snippet-row[hidden] { display: none; }
     .no-match { padding: 16px; text-align: center; }
+    .snip-btn {
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--muted);
+        border-radius: 6px;
+        font-size: 11px;
+        padding: 1px 6px;
+        margin-left: 8px;
+        cursor: pointer;
+        font-family: monospace;
+    }
+    .snip-btn:hover { color: var(--info); border-color: var(--info); }
+    .snippet-row > td { padding: 0 12px 10px; background: var(--page); }
+    pre.code {
+        margin: 8px 0 0;
+        padding: 10px 12px;
+        background: var(--code-bg);
+        color: var(--code-text);
+        border-radius: 6px;
+        overflow-x: auto;
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.55;
+    }
+    pre.code .row { display: block; white-space: pre; }
+    pre.code .row.cur { background: var(--code-cur); border-radius: 4px; }
+    pre.code .cl { color: var(--code-ln); user-select: none; display: inline-block; min-width: 4ch; text-align: right; margin-right: 12px; }
+    .owasp-rule { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--bg); }
+    .owasp-rule > summary {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        cursor: pointer;
+        list-style: none;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .owasp-rule > summary::-webkit-details-marker { display: none; }
+    .owasp-rule > summary:hover { background: var(--hover); }
+    .owasp-rule ul { margin: 0; padding: 0 14px 12px 36px; font-size: 13px; }
+    .owasp-rule li { margin: 4px 0; }
+    .owasp-rule a { color: var(--info); text-decoration: none; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+    .owasp-rule a:hover { text-decoration: underline; }
+    .linkish { background: none; border: none; color: var(--info); cursor: pointer; font-size: 12px; padding: 0; text-decoration: underline; }
     html { scroll-behavior: smooth; }
-    section[id], div[id] { scroll-margin-top: 70px; }
+    section[id], div[id], details[id] { scroll-margin-top: 70px; }
     @media (max-width: 860px) {
         .layout { flex-direction: column; }
         .sidebar { position: static; flex: none; width: 100%; max-height: none; }
+    }
+    @media print {
+        .sidebar, .toolbar, .snip-btn, .chev { display: none !important; }
+        body { background: #fff; padding: 0; color: #000; }
+        .layout { display: block; }
+        .card, .issue-group, header { border-color: #ccc; box-shadow: none; }
+        details.issue-group > *, details.owasp-rule > * { display: block !important; }
+        details.issue-group { break-inside: avoid; }
+        .snippet-row { display: table-row !important; }
+        a { color: inherit; }
+        pre.code { background: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; }
+        pre.code .cl { color: #64748b; }
+        pre.code .row.cur { background: #fee2e2; }
     }
     CSS;
 
@@ -224,6 +375,10 @@ final class HtmlReporter implements ReporterInterface
                 var textOk = q === '' || row.getAttribute('data-search').indexOf(q) !== -1;
                 var show = sevOk && textOk;
                 row.hidden = !show;
+                var snip = row.nextElementSibling;
+                if (snip && snip.classList.contains('snippet-row') && !show) {
+                    snip.hidden = true;
+                }
                 if (show) {
                     visible++;
                 }
@@ -234,6 +389,9 @@ final class HtmlReporter implements ReporterInterface
                     function (r) { return !r.hidden; }
                 );
                 group.hidden = !anyVisible;
+                if (q !== '' && anyVisible) {
+                    group.open = true;
+                }
             });
             document.querySelectorAll('.checker-section').forEach(function (section) {
                 var groups = section.querySelectorAll('.issue-group');
@@ -306,9 +464,133 @@ final class HtmlReporter implements ReporterInterface
                 filterByText(a.getAttribute('data-side-file'));
             });
         });
+        document.querySelectorAll('.js-filter').forEach(function (b) {
+            b.addEventListener('click', function () {
+                filterByText(b.getAttribute('data-q') || '');
+            });
+        });
         syncSidebarSev();
 
-        var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a[href^="#"]'));
+        /* Expand / collapse all file groups. */
+        var expandBtn = document.getElementById('expand-all');
+        var collapseBtn = document.getElementById('collapse-all');
+        if (expandBtn) {
+            expandBtn.addEventListener('click', function () {
+                document.querySelectorAll('details.issue-group, details.owasp-rule').forEach(function (d) { d.open = true; });
+            });
+        }
+        if (collapseBtn) {
+            collapseBtn.addEventListener('click', function () {
+                document.querySelectorAll('details.issue-group, details.owasp-rule').forEach(function (d) { d.open = false; });
+            });
+        }
+
+        /* Per-issue code snippet toggles. */
+        document.querySelectorAll('.snip-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var row = document.getElementById(btn.getAttribute('data-for') || '');
+                var snip = row && row.nextElementSibling;
+                if (snip && snip.classList.contains('snippet-row')) {
+                    snip.hidden = !snip.hidden;
+                    btn.setAttribute('aria-expanded', snip.hidden ? 'false' : 'true');
+                }
+            });
+        });
+
+        /* Sortable tables. */
+        var sevRank = { critical: 4, error: 3, warning: 2, info: 1 };
+        function cellVal(row, idx, type) {
+            var td = row.children[idx];
+            if (!td) {
+                return type === 'num' ? 0 : '';
+            }
+            var t = (td.getAttribute('data-sort-value') || td.textContent || '').trim();
+            if (type === 'num') {
+                var n = parseFloat(t);
+                return isNaN(n) ? 0 : n;
+            }
+            if (type === 'sev') {
+                return sevRank[t.toLowerCase()] || 0;
+            }
+            return t.toLowerCase();
+        }
+        function sortTable(th) {
+            var table = th.closest('table');
+            var tbody = table && table.querySelector('tbody');
+            if (!tbody) {
+                return;
+            }
+            var idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+            var type = th.getAttribute('data-type') || 'str';
+            var dir = th.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
+            table.querySelectorAll('th[data-sortable]').forEach(function (h) {
+                h.removeAttribute('data-dir');
+                h.classList.remove('sort-asc', 'sort-desc');
+            });
+            th.setAttribute('data-dir', dir);
+            th.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+            var all = Array.prototype.slice.call(tbody.rows);
+            var issues = all.filter(function (r) { return r.hasAttribute('data-search'); });
+            var plain = issues.length > 0 ? issues : all;
+            var snipMap = {};
+            if (issues.length > 0) {
+                issues.forEach(function (r) {
+                    var n = r.nextElementSibling;
+                    if (n && n.classList.contains('snippet-row')) {
+                        snipMap[r.id] = n;
+                    }
+                });
+            }
+            plain.sort(function (a, b) {
+                var av = cellVal(a, idx, type);
+                var bv = cellVal(b, idx, type);
+                if (av < bv) { return dir === 'asc' ? -1 : 1; }
+                if (av > bv) { return dir === 'asc' ? 1 : -1; }
+                return 0;
+            });
+            if (issues.length > 0) {
+                plain.forEach(function (r) {
+                    tbody.appendChild(r);
+                    if (snipMap[r.id]) {
+                        tbody.appendChild(snipMap[r.id]);
+                    }
+                });
+            } else {
+                plain.forEach(function (r) { tbody.appendChild(r); });
+            }
+        }
+        document.querySelectorAll('th[data-sortable]').forEach(function (th) {
+            th.setAttribute('tabindex', '0');
+            th.addEventListener('click', function () { sortTable(th); });
+            th.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    sortTable(th);
+                }
+            });
+        });
+
+        /* Theme toggle. */
+        var themeBtn = document.getElementById('theme-toggle');
+        function applyTheme(theme) {
+            if (theme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+            }
+            try { localStorage.setItem('qc-theme', theme); } catch (e) { /* ignore */ }
+        }
+        if (themeBtn) {
+            themeBtn.addEventListener('click', function () {
+                var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                applyTheme(isDark ? 'light' : 'dark');
+            });
+        }
+
+        /* Scroll-spy sidebar TOC (navigation links only). */
+        var links = Array.prototype.slice.call(
+            document.querySelectorAll('.sidebar nav a[href^="#"]:not([data-side-sev]):not([data-side-rule]):not([data-side-file])')
+        );
         if ('IntersectionObserver' in window && links.length > 0) {
             var byId = {};
             links.forEach(function (a) {
@@ -332,6 +614,9 @@ final class HtmlReporter implements ReporterInterface
         applyFilters();
     })();
     JS;
+
+    /** @var array<string, list<string>|null> */
+    private array $lineCache = [];
 
     /**
      * @param CheckResult[] $results
@@ -357,6 +642,8 @@ final class HtmlReporter implements ReporterInterface
         $summary = $this->buildSummary($results);
         $rules = IssueGrouper::byRule($results);
         $hotFiles = $this->hotFiles($results);
+        $owasp = IssueGrouper::owaspByRule($results);
+        $owaspIssues = $this->owaspIssues($results);
 
         return '<!DOCTYPE html>' . "\n"
             . '<html lang="en">' . "\n"
@@ -367,11 +654,11 @@ final class HtmlReporter implements ReporterInterface
             . '<div class="main"><div class="container">' . "\n"
             . $this->buildHeader($ctx, $this->overallStatus($results))
             . $this->buildToolbar()
-            . $this->buildSummaryGrid($summary)
-            . $this->buildRulesTable($results)
-            . $this->buildOwaspTable($results)
+            . $this->buildSummaryGrid($summary, $rules)
+            . $this->buildRulesTable($rules)
+            . $this->buildOwaspSection($owasp, $owaspIssues, $ctx)
             . $this->buildCheckerTable($checkers)
-            . $this->buildIssueSections($checkers)
+            . $this->buildIssueSections($checkers, $ctx)
             . '</div></div>' . "\n"
             . '</div>' . "\n"
             . '<script>' . "\n"
@@ -383,10 +670,15 @@ final class HtmlReporter implements ReporterInterface
 
     private function buildHead(): string
     {
+        $bootstrap = "try{var t=localStorage.getItem('qc-theme');"
+            . "if(t==='dark'||(!t&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches))"
+            . "document.documentElement.setAttribute('data-theme','dark')}catch(e){}";
+
         return '<head>' . "\n"
             . '<meta charset="utf-8">' . "\n"
             . '<meta name="viewport" content="width=device-width, initial-scale=1">' . "\n"
             . '<title>Laravel Quality Report</title>' . "\n"
+            . '<script>' . $bootstrap . '</script>' . "\n"
             . '<style>' . "\n"
             . self::CSS . "\n"
             . '</style>' . "\n"
@@ -533,6 +825,10 @@ final class HtmlReporter implements ReporterInterface
             . '<button type="button" class="chip" data-sev="warning" aria-pressed="true">Warning</button>' . "\n"
             . '<button type="button" class="chip" data-sev="info" aria-pressed="true">Info</button>' . "\n"
             . '<span class="match-count" id="match-count" aria-live="polite"></span>' . "\n"
+            . '<span class="spacer"></span>' . "\n"
+            . '<button type="button" class="chip" id="expand-all">Expand files</button>' . "\n"
+            . '<button type="button" class="chip" id="collapse-all">Collapse</button>' . "\n"
+            . '<button type="button" class="chip" id="theme-toggle" aria-label="Toggle color theme">Theme</button>' . "\n"
             . '</div>' . "\n";
     }
 
@@ -543,10 +839,12 @@ final class HtmlReporter implements ReporterInterface
 
         return trim($slug, '-');
     }
+
     /**
      * @param array<string, int> $summary
+     * @param list<array{rule: string, source: string, count: int, critical: int, error: int, warning: int, info: int}> $rules
      */
-    private function buildSummaryGrid(array $summary): string
+    private function buildSummaryGrid(array $summary, array $rules): string
     {
         return '<div class="card" id="summary">' . "\n"
             . '<h2>Summary</h2>' . "\n"
@@ -561,6 +859,49 @@ final class HtmlReporter implements ReporterInterface
             . $this->stat('Warning', (int) ($summary['warning'] ?? 0))
             . $this->stat('Info', (int) ($summary['info'] ?? 0))
             . '</div>' . "\n"
+            . $this->charts($summary, $rules)
+            . '</div>' . "\n";
+    }
+
+    /**
+     * @param array<string, int> $summary
+     * @param list<array{rule: string, source: string, count: int, critical: int, error: int, warning: int, info: int}> $rules
+     */
+    private function charts(array $summary, array $rules): string
+    {
+        $total = max(1, (int) ($summary['total_issues'] ?? 0));
+
+        $segs = '';
+        $legend = '';
+        foreach (['critical', 'error', 'warning', 'info'] as $sev) {
+            $count = (int) ($summary[$sev] ?? 0);
+            $pct = $count > 0 ? ($count / $total) * 100 : 0.0;
+            $segs .= '<span class="seg ' . $sev . '" style="width:' . $this->escape(number_format($pct, 2)) . '%" title="'
+                . $this->escape(ucfirst($sev)) . ': ' . (string) $count . '"></span>';
+            $legend .= '<span><span class="dot ' . $sev . '"></span>' . $this->escape(ucfirst($sev))
+                . ' ' . (string) $count . '</span>';
+        }
+
+        $bars = '';
+        $top = array_slice($rules, 0, 10);
+        $max = $top !== [] ? max(array_column($top, 'count')) : 1;
+        foreach ($top as $r) {
+            $pct = $max > 0 ? ($r['count'] / $max) * 100 : 0.0;
+            $bars .= '<div class="bar-row">'
+                . '<span class="bar-label" title="' . $this->escape($r['rule']) . '">' . $this->escape($r['rule']) . '</span>'
+                . '<span class="bar-track"><span class="bar-fill" style="width:' . $this->escape(number_format($pct, 1)) . '%"></span></span>'
+                . '<span class="bar-val">' . (string) $r['count'] . '</span>'
+                . '</div>';
+        }
+        if ($bars === '') {
+            $bars = '<p class="empty">No issues to chart.</p>';
+        }
+
+        return '<div class="charts">' . "\n"
+            . '<div class="chart-block"><h3>Severity distribution</h3>'
+            . '<div class="stacked" aria-hidden="true">' . $segs . '</div>'
+            . '<div class="legend">' . $legend . '</div></div>' . "\n"
+            . '<div class="chart-block"><h3>Top rules</h3><div class="bars">' . $bars . '</div></div>' . "\n"
             . '</div>' . "\n";
     }
 
@@ -571,17 +912,22 @@ final class HtmlReporter implements ReporterInterface
     }
 
     /**
-     * @param CheckResult[] $results
+     * @param list<array{rule: string, source: string, count: int, critical: int, error: int, warning: int, info: int}> $rules
      */
-    private function buildRulesTable(array $results): string
+    private function buildRulesTable(array $rules): string
     {
-        $rules = IssueGrouper::byRule($results);
         if (count($rules) === 0) {
             return '';
         }
 
         $rows = '<thead><tr>'
-            . '<th>Rule</th><th>Source</th><th>Critical</th><th>Error</th><th>Warning</th><th>Info</th><th>Total</th>'
+            . '<th data-sortable data-type="str">Rule</th>'
+            . '<th data-sortable data-type="str">Source</th>'
+            . '<th data-sortable data-type="num">Critical</th>'
+            . '<th data-sortable data-type="num">Error</th>'
+            . '<th data-sortable data-type="num">Warning</th>'
+            . '<th data-sortable data-type="num">Info</th>'
+            . '<th data-sortable data-type="num">Total</th>'
             . '</tr></thead>' . "\n<tbody>\n";
         foreach (array_slice($rules, 0, 50) as $r) {
             $rows .= '<tr>'
@@ -603,28 +949,48 @@ final class HtmlReporter implements ReporterInterface
     }
 
     /**
-     * @param CheckResult[] $results
+     * OWASP drill-down: one collapsible block per rule listing concrete
+     * findings (capped) with clickable file links + a filter shortcut.
+     *
+     * @param array<string, int> $counts rule => count
+     * @param array<string, list<array{file: string, line: int|null, message: string}>> $issuesByRule
      */
-    private function buildOwaspTable(array $results): string
+    private function buildOwaspSection(array $counts, array $issuesByRule, CheckContext $ctx): string
     {
-        $counts = $this->owaspCounts($results);
-
         $html = '<div class="card" id="owasp">' . "\n"
             . '<h2>OWASP</h2>' . "\n";
 
         if ($counts === []) {
-            $html .= '<p class="empty">No OWASP findings.</p>' . "\n";
-        } else {
-            $html .= '<table>' . "\n"
-                . '<thead>' . "\n"
-                . '<tr><th>Rule</th><th>Count</th></tr>' . "\n"
-                . '</thead>' . "\n"
-                . '<tbody>' . "\n";
-            foreach ($counts as $rule => $count) {
-                $html .= '<tr><td class="rule">' . $this->escape($rule) . '</td><td>' . (string) $count . '</td></tr>' . "\n";
+            $html .= '<p class="empty">No OWASP findings.</p>' . "\n"
+                . '</div>' . "\n";
+
+            return $html;
+        }
+
+        foreach ($counts as $rule => $count) {
+            $html .= '<details class="owasp-rule">' . "\n"
+                . '<summary><span class="chev">&#9656;</span>'
+                . '<span class="rule">' . $this->escape($rule) . '</span>'
+                . '<span class="pill">' . (string) $count . '</span>'
+                . '<button type="button" class="linkish js-filter" data-q="'
+                . $this->escape(strtolower($rule)) . '">filter</button>'
+                . '</summary>' . "\n";
+
+            $items = $issuesByRule[$rule] ?? [];
+            $shown = array_slice($items, 0, 50);
+            $html .= '<ul>' . "\n";
+            foreach ($shown as $item) {
+                $line = $item['line'] !== null ? ':' . (string) $item['line'] : '';
+                $html .= '<li><a href="' . $this->escape($this->fileLink($item['file'], $item['line'], $ctx)) . '">'
+                    . $this->escape($this->shortPath($item['file']) . $line) . '</a>'
+                    . ' &mdash; ' . $this->escape($item['message']) . '</li>' . "\n";
             }
-            $html .= '</tbody>' . "\n"
-                . '</table>' . "\n";
+            if (count($items) > count($shown)) {
+                $html .= '<li class="empty">… ' . (string) (count($items) - count($shown))
+                    . ' more — use the filter button.</li>' . "\n";
+            }
+            $html .= '</ul>' . "\n"
+                . '</details>' . "\n";
         }
 
         return $html . '</div>' . "\n";
@@ -639,7 +1005,13 @@ final class HtmlReporter implements ReporterInterface
             . '<h2>Per-Checker</h2>' . "\n"
             . '<table>' . "\n"
             . '<thead>' . "\n"
-            . '<tr><th>Checker</th><th>Status</th><th>Critical</th><th>Error</th><th>Warning</th><th>Info</th><th>Duration</th></tr>' . "\n"
+            . '<tr><th data-sortable data-type="str">Checker</th>'
+            . '<th data-sortable data-type="str">Status</th>'
+            . '<th data-sortable data-type="num">Critical</th>'
+            . '<th data-sortable data-type="num">Error</th>'
+            . '<th data-sortable data-type="num">Warning</th>'
+            . '<th data-sortable data-type="num">Info</th>'
+            . '<th data-sortable data-type="num">Duration</th></tr>' . "\n"
             . '</thead>' . "\n"
             . '<tbody>' . "\n";
 
@@ -651,7 +1023,8 @@ final class HtmlReporter implements ReporterInterface
                 . '<td>' . (string) $result['counts']['error'] . '</td>'
                 . '<td>' . (string) $result['counts']['warning'] . '</td>'
                 . '<td>' . (string) $result['counts']['info'] . '</td>'
-                . '<td>' . number_format($result['duration'], 2) . 's</td>'
+                . '<td data-sort-value="' . $this->escape((string) $result['duration']) . '">'
+                . number_format($result['duration'], 2) . 's</td>'
                 . '</tr>' . "\n";
         }
 
@@ -663,9 +1036,10 @@ final class HtmlReporter implements ReporterInterface
     /**
      * @param array<int, array{name: string, status: string, duration: float, summary: string|null, counts: array{critical: int, error: int, warning: int, info: int}, files: array<string, list<array{rule: string, severity: string, confidence: string, line: int|null, message: string}>>}> $checkers
      */
-    private function buildIssueSections(array $checkers): string
+    private function buildIssueSections(array $checkers, CheckContext $ctx): string
     {
         $html = '';
+        $issueSeq = 0;
 
         foreach ($checkers as $result) {
             $html .= '<div class="card checker-section" id="checker-' . $this->escape($this->slug($result['name'])) . '">' . "\n"
@@ -683,7 +1057,7 @@ final class HtmlReporter implements ReporterInterface
                 $html .= '<p class="empty">No issues found.</p>' . "\n";
             } else {
                 foreach ($result['files'] as $file => $issues) {
-                    $html .= $this->buildIssueTable($file, $issues);
+                    $html .= $this->buildIssueGroup($file, $issues, $ctx, $issueSeq);
                 }
             }
 
@@ -694,40 +1068,196 @@ final class HtmlReporter implements ReporterInterface
     }
 
     /**
+     * Collapsible file group: <details> with a clickable file link summary,
+     * per-severity pills, sortable issue table and inline code snippets.
+     *
      * @param list<array{rule: string, severity: string, confidence: string, line: int|null, message: string}> $issues
      */
-    private function buildIssueTable(string $file, array $issues): string
+    private function buildIssueGroup(string $file, array $issues, CheckContext $ctx, int &$issueSeq): string
     {
-        $html = '<div class="issue-group" data-file="' . $this->escape($file) . '">' . "\n"
-            . '<div class="issue-group-title">' . $this->escape($file) . '</div>' . "\n"
+        $sevCounts = ['critical' => 0, 'error' => 0, 'warning' => 0, 'info' => 0];
+        foreach ($issues as $issue) {
+            $sevCounts[$issue['severity']] = ($sevCounts[$issue['severity']] ?? 0) + 1;
+        }
+
+        $pills = '';
+        foreach ($sevCounts as $sev => $count) {
+            if ($count > 0) {
+                $pills .= '<span class="pill ' . $sev . '">' . (string) $count . '</span>';
+            }
+        }
+
+        $href = $this->fileLink($file, null, $ctx);
+
+        $html = '<details class="issue-group" data-file="' . $this->escape($file) . '">' . "\n"
+            . '<summary>'
+            . '<span class="chev">&#9656;</span>'
+            . '<a class="file-link" href="' . $this->escape($href) . '" title="Open file">'
+            . $this->escape($file) . '</a>'
+            . '<span class="pill">' . (string) count($issues) . '</span>' . $pills
+            . '</summary>' . "\n"
             . '<table>' . "\n"
             . '<thead>' . "\n"
-            . '<tr><th>Rule</th><th>Severity</th><th>Confidence</th><th>Line</th><th>Message</th></tr>' . "\n"
+            . '<tr><th data-sortable data-type="str">Rule</th>'
+            . '<th data-sortable data-type="sev">Severity</th>'
+            . '<th data-sortable data-type="str">Confidence</th>'
+            . '<th data-sortable data-type="num">Line</th>'
+            . '<th data-sortable data-type="str">Message</th></tr>' . "\n"
             . '</thead>' . "\n"
             . '<tbody>' . "\n";
 
         foreach ($issues as $issue) {
+            ++$issueSeq;
+            $id = 'iss-' . $issueSeq;
             $searchHaystack = strtolower($issue['rule'] . ' ' . $file . ' '
                 . ($issue['line'] !== null ? (string) $issue['line'] : '') . ' '
                 . $issue['message'] . ' ' . $issue['severity'] . ' ' . $issue['confidence']);
-            $html .= '<tr data-severity="' . $this->escape($issue['severity']) . '"'
+
+            $snippet = $this->snippetHtml($ctx, $file, $issue['line']);
+
+            $html .= '<tr id="' . $id . '" data-severity="' . $this->escape($issue['severity']) . '"'
                 . ' data-search="' . $this->escape($searchHaystack) . '">'
                 . '<td class="rule">' . $this->escape($issue['rule']) . '</td>'
                 . '<td class="severity ' . $this->escape($issue['severity']) . '">' . $this->escape($issue['severity']) . '</td>'
                 . '<td>' . $this->escape($issue['confidence']) . '</td>'
                 . '<td>' . $this->escape($issue['line'] !== null ? (string) $issue['line'] : '-') . '</td>'
-                . '<td>' . $this->escape($issue['message']) . '</td>'
+                . '<td>' . $this->escape($issue['message'])
+                . ($snippet !== ''
+                    ? '<button type="button" class="snip-btn" data-for="' . $id . '" aria-expanded="false" title="Toggle code context">&lt;/&gt;</button>'
+                    : '')
+                . '</td>'
                 . '</tr>' . "\n";
+
+            if ($snippet !== '') {
+                $html .= '<tr class="snippet-row" data-for="' . $id . '" hidden><td colspan="5">' . $snippet . '</td></tr>' . "\n";
+            }
         }
 
         return $html . '</tbody>' . "\n"
             . '</table>' . "\n"
-            . '</div>' . "\n";
+            . '</details>' . "\n";
     }
 
     private function escape(mixed $value): string
     {
         return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Clickable file link: GitHub blob URL when html.repo_url is configured,
+     * otherwise a vscode:// deep link (absolute path + optional line).
+     */
+    private function fileLink(string $file, ?int $line, ?CheckContext $ctx): string
+    {
+        $repo = '';
+        $branch = 'main';
+        if ($ctx !== null) {
+            $cfg = $ctx->configFor('html');
+            $repo = trim((string) ($cfg['repo_url'] ?? ''));
+            $branch = trim((string) ($cfg['branch'] ?? 'main'));
+            if ($branch === '') {
+                $branch = 'main';
+            }
+        }
+
+        if ($repo !== '') {
+            $rel = $this->relativeToBase($file, $ctx);
+            $url = rtrim($repo, '/') . '/blob/' . rawurlencode($branch) . '/' . ltrim($rel, '/');
+            if ($line !== null) {
+                $url .= '#L' . (string) $line;
+            }
+
+            return $url;
+        }
+
+        $abs = $ctx !== null ? $ctx->resolvePath($file) : $file;
+        $target = str_replace('\\', '/', $abs);
+        if ($line !== null) {
+            $target .= ':' . (string) $line;
+        }
+
+        return 'vscode://file/' . ltrim($target, '/');
+    }
+
+    private function relativeToBase(string $file, ?CheckContext $ctx): string
+    {
+        $normalized = str_replace('\\', '/', $file);
+        if ($ctx === null) {
+            return $normalized;
+        }
+        $base = rtrim(str_replace('\\', '/', $ctx->basePath), '/');
+        if (str_starts_with($normalized, $base . '/')) {
+            return substr($normalized, strlen($base) + 1);
+        }
+
+        return ltrim($normalized, '/');
+    }
+
+    /**
+     * Render a code snippet with line numbers around the finding; returns
+     * an empty string when snippets are disabled or the file is unreadable.
+     */
+    private function snippetHtml(CheckContext $ctx, string $file, ?int $line): string
+    {
+        $cfg = $ctx->configFor('html');
+        $context = (int) ($cfg['code_context'] ?? 3);
+        if ($context <= 0 || $line === null || $line < 1) {
+            return '';
+        }
+
+        $abs = $ctx->resolvePath($file);
+        if (!isset($this->lineCache[$abs])) {
+            $this->lineCache[$abs] = null;
+            if (is_file($abs) && @filesize($abs) < 1_048_576) {
+                $lines = @file($abs, FILE_IGNORE_NEW_LINES);
+                if (is_array($lines)) {
+                    $this->lineCache[$abs] = $lines;
+                }
+            }
+        }
+
+        $lines = $this->lineCache[$abs];
+        if ($lines === null || $line > count($lines)) {
+            return '';
+        }
+
+        $from = max(1, $line - $context);
+        $to = min(count($lines), $line + $context);
+        $pad = strlen((string) $to);
+        $out = '';
+        for ($i = $from; $i <= $to; ++$i) {
+            $cur = $i === $line ? ' cur' : '';
+            $out .= '<span class="row' . $cur . '"><span class="cl">'
+                . str_pad((string) $i, $pad, ' ', STR_PAD_LEFT) . '</span>'
+                . $this->escape($lines[$i - 1]) . '</span>';
+        }
+
+        return '<pre class="code">' . $out . '</pre>';
+    }
+
+    /**
+     * @param CheckResult[] $results
+     * @return array<string, list<array{file: string, line: int|null, message: string}>>
+     */
+    private function owaspIssues(array $results): array
+    {
+        $out = [];
+        foreach ($results as $result) {
+            if (!$result instanceof CheckResult) {
+                continue;
+            }
+            foreach ($result->issues as $issue) {
+                if (str_starts_with($issue->rule, 'OWASP_')) {
+                    $out[$issue->rule][] = [
+                        'file' => $issue->file ?? '(no file)',
+                        'line' => $issue->line,
+                        'message' => $issue->message,
+                    ];
+                }
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -792,29 +1322,6 @@ final class HtmlReporter implements ReporterInterface
         ksort($groups);
 
         return $groups;
-    }
-
-    /**
-     * @param CheckResult[] $results
-     * @return array<string, int>
-     */
-    private function owaspCounts(array $results): array
-    {
-        $counts = [];
-        foreach ($results as $result) {
-            if (!$result instanceof CheckResult) {
-                continue;
-            }
-            foreach ($result->issues as $issue) {
-                if (str_starts_with($issue->rule, 'OWASP_')) {
-                    $counts[$issue->rule] = ($counts[$issue->rule] ?? 0) + 1;
-                }
-            }
-        }
-
-        ksort($counts);
-
-        return $counts;
     }
 
     /**

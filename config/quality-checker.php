@@ -98,4 +98,14 @@ return [
     'fail_on' => 'error',
 
     'output_dir' => 'reports/quality-checker',
+
+    // HTML report extras. Set repo_url after publishing (or via
+    // config/quality-checker.php) to get GitHub blob links; otherwise the
+    // report uses vscode:// deep links.
+    'html' => [
+        'repo_url' => null, // e.g. https://github.com/org/repo
+        'branch' => 'main',
+        // Context lines rendered around each finding (0 = disable snippets).
+        'code_context' => 3,
+    ],
 ];

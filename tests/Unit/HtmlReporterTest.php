@@ -16,19 +16,61 @@ final class HtmlReporterTest extends TestCase
 {
     private string $tempDir = '';
 
+    private string $baseDir = '';
+
     protected function tearDown(): void
     {
-        if ($this->tempDir !== '' && is_dir($this->tempDir)) {
-            @unlink($this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.html');
-            @rmdir($this->tempDir);
+        foreach ([$this->tempDir, $this->baseDir] as $dir) {
+            if ($dir !== '' && is_dir($dir)) {
+                $this->removeDir($dir);
+            }
         }
         $this->tempDir = '';
+        $this->baseDir = '';
     }
 
-    private function renderHtml(): string
+    private function removeDir(string $dir): void
+    {
+        $items = scandir($dir) ?: [];
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . DIRECTORY_SEPARATOR . $item;
+            if (is_dir($path)) {
+                $this->removeDir($path);
+            } else {
+                @unlink($path);
+            }
+        }
+        @rmdir($dir);
+    }
+
+    /**
+     * @param array<string, mixed> $configOverrides
+     */
+    private function renderHtml(array $configOverrides = []): string
     {
         $this->tempDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-html-' . uniqid('', true);
         @mkdir($this->tempDir, 0777, true);
+        $this->baseDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-base-' . uniqid('', true);
+
+        // Real source file so code snippets can be read from disk.
+        $srcDir = $this->baseDir . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Http' . DIRECTORY_SEPARATOR . 'Controllers';
+        @mkdir($srcDir, 0777, true);
+        $srcLines = [
+            '<?php',
+            '',
+            'class UserController',
+            '{',
+            '    public function index()',
+            '    {',
+            '        $rows = DB::select("select * from users where q = " . $request->q);',
+            '        return $rows;',
+            '    }',
+            '}',
+        ];
+        file_put_contents($srcDir . DIRECTORY_SEPARATOR . 'UserController.php', implode("\n", $srcLines));
 
         $results = [
             new CheckResult('custom', 'failed', 0.5, [
@@ -36,7 +78,7 @@ final class HtmlReporterTest extends TestCase
                     'SQL_INJECTION',
                     'Tainted input flows into select().',
                     'app/Http/Controllers/UserController.php',
-                    14,
+                    7,
                     Severity::Critical,
                     'custom',
                     [],
@@ -52,14 +94,29 @@ final class HtmlReporterTest extends TestCase
                     [],
                     Confidence::Low
                 ),
-            ], null, '2 issues'),
+                new Issue(
+                    'OWASP_SSRF',
+                    'URL from user input into file_get_contents.',
+                    'app/Http/Controllers/UserController.php',
+                    7,
+                    Severity::Error,
+                    'custom',
+                    [],
+                    Confidence::High
+                ),
+            ], null, '3 issues'),
             new CheckResult('phpcs', 'passed', 1.2, [], null, null),
         ];
 
+        $config = array_replace_recursive(
+            ['html' => ['repo_url' => null, 'branch' => 'main', 'code_context' => 3]],
+            $configOverrides
+        );
+
         $ctx = new CheckContext(
-            sys_get_temp_dir(),
+            $this->baseDir,
             ['app'],
-            [],
+            $config,
             $this->tempDir,
             packageVersion: '1.0.0'
         );
@@ -95,7 +152,6 @@ final class HtmlReporterTest extends TestCase
         self::assertStringContainsString('data-side-file="app/http/controllers/usercontroller.php"', $html);
         self::assertStringContainsString('Hot Files', $html);
         self::assertStringContainsString('Top Rules', $html);
-        // Click handlers are wired in the bundled script.
         self::assertStringContainsString('[data-side-sev]', $html);
         self::assertStringContainsString('[data-side-rule]', $html);
         self::assertStringContainsString('[data-side-file]', $html);
@@ -133,5 +189,90 @@ final class HtmlReporterTest extends TestCase
         self::assertStringNotContainsString('src="http', $html);
         self::assertStringNotContainsString('href="http', $html);
         self::assertStringNotContainsString('@import', $html);
+    }
+
+    public function testIssueGroupsAreCollapsibleDetails(): void
+    {
+        $html = $this->renderHtml();
+
+        self::assertStringContainsString('<details class="issue-group"', $html);
+        self::assertStringContainsString('data-file="app/Http/Controllers/UserController.php"', $html);
+        self::assertStringContainsString('id="expand-all"', $html);
+        self::assertStringContainsString('id="collapse-all"', $html);
+        self::assertStringContainsString('details.issue-group', $html);
+    }
+
+    public function testFileLinksDefaultToVscodeDeepLinks(): void
+    {
+        $html = $this->renderHtml();
+
+        self::assertStringContainsString('href="vscode://file/', $html);
+        self::assertStringContainsString('UserController.php:7', $html);
+        self::assertStringNotContainsString('href="https://', $html);
+    }
+
+    public function testFileLinksUseGitHubBlobWhenRepoUrlConfigured(): void
+    {
+        $html = $this->renderHtml([
+            'html' => ['repo_url' => 'https://github.com/org/repo', 'branch' => 'develop'],
+        ]);
+
+        self::assertStringContainsString(
+            'href="https://github.com/org/repo/blob/develop/app/Http/Controllers/UserController.php#L7"',
+            $html
+        );
+    }
+
+    public function testCodeSnippetsRenderWithContextLines(): void
+    {
+        $html = $this->renderHtml();
+
+        self::assertStringContainsString('class="snippet-row"', $html);
+        self::assertStringContainsString('<pre class="code">', $html);
+        self::assertStringContainsString('class="row cur"', $html);
+        self::assertStringContainsString('DB::select', $html);
+        self::assertStringContainsString('.snip-btn', $html);
+        // 3 lines of context around line 7: lines 4..10 (numbers are padded).
+        self::assertStringContainsString('<span class="cl"> 4</span>', $html);
+        self::assertStringContainsString('<span class="cl">10</span>', $html);
+    }
+
+    public function testSnippetsCanBeDisabledViaConfig(): void
+    {
+        $html = $this->renderHtml(['html' => ['code_context' => 0]]);
+
+        self::assertStringNotContainsString('<pre class="code">', $html);
+        self::assertStringNotContainsString('class="snippet-row"', $html);
+    }
+
+    public function testSortableTableHooksExist(): void
+    {
+        $html = $this->renderHtml();
+
+        self::assertStringContainsString('th[data-sortable]', $html);
+        self::assertStringContainsString('data-type="num"', $html);
+        self::assertStringContainsString('data-type="sev"', $html);
+        self::assertStringContainsString('function sortTable', $html);
+    }
+
+    public function testChartsAndThemeTogglePresent(): void
+    {
+        $html = $this->renderHtml();
+
+        self::assertStringContainsString('class="stacked"', $html);
+        self::assertStringContainsString('Severity distribution', $html);
+        self::assertStringContainsString('class="bars"', $html);
+        self::assertStringContainsString('id="theme-toggle"', $html);
+        self::assertStringContainsString("localStorage.getItem('qc-theme')", $html);
+        self::assertStringContainsString('@media print', $html);
+    }
+
+    public function testOwaspSectionIsCollapsibleDrillDown(): void
+    {
+        $html = $this->renderHtml();
+
+        self::assertStringContainsString('<details class="owasp-rule"', $html);
+        self::assertStringContainsString('data-q="owasp_ssrf"', $html);
+        self::assertStringContainsString('UserController.php:7', $html);
     }
 }
