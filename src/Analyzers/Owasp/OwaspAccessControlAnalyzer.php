@@ -690,22 +690,41 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
             return [];
         }
 
-        if ($expr instanceof Node\Expr\Array_ && isset($expr->items[0], $expr->items[1])) {
-            $classItem = $expr->items[0];
-            $methodItem = $expr->items[1];
+        if ($expr instanceof Node\Expr\Array_) {
             if (
-                !$classItem instanceof Node\Expr\ArrayItem
-                || !$methodItem instanceof Node\Expr\ArrayItem
-                || !$methodItem->value instanceof Node\Scalar\String_
+                isset($expr->items[0], $expr->items[1])
+                && $expr->items[0] instanceof Node\Expr\ArrayItem
+                && $expr->items[1] instanceof Node\Expr\ArrayItem
+                && $expr->items[0]->key === null
+                && $expr->items[1]->key === null
             ) {
-                return [];
-            }
-            $class = $this->classItemName($classItem->value, $uses, $namespace);
-            if ($class === null) {
-                return [];
+                $classItem = $expr->items[0];
+                $methodItem = $expr->items[1];
+                if (
+                    !$methodItem->value instanceof Node\Scalar\String_
+                ) {
+                    return [];
+                }
+                $class = $this->classItemName($classItem->value, $uses, $namespace);
+                if ($class === null) {
+                    return [];
+                }
+
+                return [strtolower($class . '@' . $methodItem->value->value)];
             }
 
-            return [strtolower($class . '@' . $methodItem->value->value)];
+            // Legacy array syntax: ['as' => ..., 'uses' => 'FQCN@method'].
+            foreach ($expr->items as $item) {
+                if (
+                    $item instanceof Node\Expr\ArrayItem
+                    && $item->key instanceof Node\Scalar\String_
+                    && $item->key->value === 'uses'
+                ) {
+                    return $this->actionKeys($item->value, $controller, $uses, $namespace);
+                }
+            }
+
+            return [];
         }
 
         if ($expr instanceof Node\Expr\ClassConstFetch && $expr->class instanceof Node\Name) {

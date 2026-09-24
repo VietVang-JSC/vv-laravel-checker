@@ -73,6 +73,8 @@ php artisan quality:check --tier=all --fail-on=none
   static trực tiếp), `Route::controller(X::class)` với action là bare string,
   `Route::resource()`/`apiResource()`, và `require`/`include` file route trong
   group closure (file được require kế thừa middleware stack, không parse standalone).
+  Cả syntax array cũ (`['as' => ..., 'uses' => 'FQCN@method']` kiểu Aimeos) lẫn
+  `[Controller::class, 'method']` đều được resolve.
   Tên middleware chứa `auth`/`can`/`permission`/`role`/`gate`/`admin`/`bouncer`/
   `checklevel`... được coi là bảo vệ; `throttle` thì không. Actions so khớp theo
   FQCN (`use` imports được resolve) nên 2 controller trùng tên khác namespace

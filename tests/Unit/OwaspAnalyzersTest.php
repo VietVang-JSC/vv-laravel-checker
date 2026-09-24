@@ -422,6 +422,46 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testAccessControlSkipsLegacyUsesActionWithAuth(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace Aimeos\\Shop\\Controller;\n" .
+            "class AccountController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
+            'src/Controller/AccountController.php'
+        );
+        $routes = $this->temp(
+            "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+            "Route::group(['middleware' => ['web', 'auth']], function () {\n" .
+            "    Route::match(['POST'], 'profile', ['as' => 'shop.account', 'uses' => 'Aimeos\\\\Shop\\\\Controller\\\\AccountController@store']);\n" .
+            "});\n",
+            'routes/shop.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testAccessControlStillFlagsLegacyUsesActionWithoutAuth(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace Aimeos\\Shop\\Controller;\n" .
+            "class JsonapiController extends Controller {\n    public function deleteAction() {\n        \$this->client->delete();\n    }\n}\n",
+            'src/Controller/JsonapiController.php'
+        );
+        $routes = $this->temp(
+            "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+            "Route::group(['middleware' => ['web', 'api']], function () {\n" .
+            "    Route::match(['DELETE'], '{resource}', ['as' => 'shop.jsonapi.delete', 'uses' => 'Aimeos\\\\Shop\\\\Controller\\\\JsonapiController@deleteAction']);\n" .
+            "});\n",
+            'routes/shop.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
+
+        self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $this->rules($issues)[0] ?? null);
+    }
+
     public function testAccessControlDistinguishesSameNamedControllers(): void
     {
         $adminController = $this->temp(
