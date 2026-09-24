@@ -17,7 +17,9 @@ use VietVang\QualityChecker\Result\Severity;
  * contain user input. Safe dynamic rendering with a whitelisted template key is not tracked.
  *
  * Deliberately not flagged: variables assigned a plain string literal in the same
- * function (`$view = 'backend.page'; view($view)`), which carry no user input.
+ * function (`$view = 'backend.page'; view($view)`), which carry no user input;
+ * and non-public helpers whose template parameter provably receives only string
+ * literals at every same-file call site.
  */
 final class OwaspSstiAnalyzer extends AbstractAnalyzer
 {
@@ -82,6 +84,13 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
                 continue;
             }
             if ($arg instanceof Node\Expr\Variable && $this->isLiteralVariable($arg, $call, $scopes)) {
+                continue;
+            }
+            if (
+                $arg instanceof Node\Expr\Variable
+                && is_string($arg->name)
+                && $this->isLiteralOnlyParam($arg->name, $call, $nodes, $scopes)
+            ) {
                 continue;
             }
 
@@ -260,6 +269,125 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
         $scopes[] = ['func' => null, 'vars' => $this->literalAssignedVars($nodes), 'calls' => []];
 
         return $scopes;
+    }
+
+    /**
+     * A template variable that is a function parameter is safe when the enclosing
+     * function is non-public (no external callers with arbitrary input) and every
+     * same-file call site passes a string literal (or literal variable) for it.
+     *
+     * @param list<Node> $nodes
+     * @param list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}> $scopes
+     */
+    private function isLiteralOnlyParam(string $name, Node $call, array $nodes, array $scopes): bool
+    {
+        $func = $this->enclosingFunction($call, $nodes);
+        if ($func === null) {
+            return false;
+        }
+        if ($func instanceof Node\Stmt\ClassMethod && $func->isPublic()) {
+            return false;
+        }
+
+        $index = null;
+        foreach ($func->params as $i => $param) {
+            if ($param instanceof Node\Param && $param->var instanceof Node\Expr\Variable && $param->var->name === $name) {
+                $index = $i;
+                break;
+            }
+        }
+        if ($index === null) {
+            return false;
+        }
+
+        if ($func instanceof Node\Stmt\ClassMethod) {
+            $method = $func->name->toString();
+        } else {
+            $funcName = $func->name;
+            if (!$funcName instanceof Node\Identifier) {
+                return false;
+            }
+            $method = $funcName->toString();
+        }
+
+        $callSites = $this->finder()->find($nodes, static function (Node $node) use ($method): bool {
+            if ($node instanceof Node\Expr\MethodCall && $node->name instanceof Node\Identifier) {
+                return $node->name->toString() === $method;
+            }
+            if ($node instanceof Node\Expr\StaticCall && $node->name instanceof Node\Identifier) {
+                return $node->name->toString() === $method;
+            }
+
+            return false;
+        });
+
+        if ($callSites === []) {
+            return false;
+        }
+
+        foreach ($callSites as $site) {
+            if (!$site instanceof Node\Expr\MethodCall && !$site instanceof Node\Expr\StaticCall) {
+                continue;
+            }
+            if (!$this->callSiteArgIsLiteral($site, $index, $name, $scopes)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param list<Node> $nodes
+     */
+    private function enclosingFunction(Node $call, array $nodes): Node\Stmt\ClassMethod|Node\Stmt\Function_|null
+    {
+        $target = spl_object_id($call);
+        $funcs = $this->finder()->find($nodes, static function (Node $node): bool {
+            return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
+        });
+
+        foreach ($funcs as $func) {
+            if (!$func instanceof Node\Stmt\ClassMethod && !$func instanceof Node\Stmt\Function_) {
+                continue;
+            }
+            $found = $this->finder()->find($func, static function (Node $node) use ($target): bool {
+                return spl_object_id($node) === $target;
+            });
+            if ($found !== []) {
+                return $func;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}> $scopes
+     */
+    private function callSiteArgIsLiteral(
+        Node\Expr\MethodCall|Node\Expr\StaticCall $site,
+        int $index,
+        string $paramName,
+        array $scopes
+    ): bool {
+        foreach ($site->args as $i => $arg) {
+            if (!$arg instanceof Node\Arg) {
+                continue;
+            }
+            if ($arg->name instanceof Node\Identifier) {
+                if ($arg->name->toString() !== $paramName) {
+                    continue;
+                }
+            } elseif ($i !== $index) {
+                continue;
+            }
+
+            return $this->isLiteralString($arg->value)
+                || ($arg->value instanceof Node\Expr\Variable && $this->isLiteralVariable($arg->value, $site, $scopes));
+        }
+
+        return false;
     }
 
     /**

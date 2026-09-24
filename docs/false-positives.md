@@ -106,7 +106,10 @@ php artisan quality:check --tier=all --fail-on=none
     và `new Process()` với command dạng array (không qua shell — kể cả khi
     array nằm trong biến `$command = [...]` cùng function).
   - SSTI: biến template được gán string literal trong cùng function
-    (`$viewName = 'backend.page'; view($viewName)` — case SiroLingo).
+    (`$viewName = 'backend.page'; view($viewName)` — case SiroLingo), và
+    helper non-public mà mọi call site cùng file đều truyền literal cho tham
+    số template (case `viewCustomer(string $view, ...)` ở quanlyinan3m —
+    public helper không được miễn vì có thể gọi từ file khác).
 - **Case pilot (SiroHRM)**: `BackupService::binary()` dùng
   `shell_exec('where ' . escapeshellarg($tool))`, `new Process($command)` với
   array từ config, `UpdaterService` dùng `escapeshellarg(base_path())` —

@@ -185,6 +185,48 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertSame('OWASP_SSTI', $this->rules($issues)[0] ?? null);
     }
 
+    public function testSstiSkipsProtectedHelperWithLiteralCallSites(): void
+    {
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nclass CustomerController extends Controller {\n" .
+            "    public function index() {\n        return \$this->viewCustomer('customer.index', []);\n    }\n" .
+            "    protected function viewCustomer(string \$view, array \$data = []) {\n        return view(\$view, \$data);\n    }\n}\n",
+            'app/Http/Controllers/CustomerController.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSstiStillFlagsProtectedHelperWithInputCallSite(): void
+    {
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nclass CustomerController extends Controller {\n" .
+            "    public function index() {\n        return \$this->viewCustomer(\$request->input('tpl'), []);\n    }\n" .
+            "    protected function viewCustomer(string \$view, array \$data = []) {\n        return view(\$view, \$data);\n    }\n}\n",
+            'app/Http/Controllers/CustomerController.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_SSTI', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testSstiStillFlagsPublicHelperWithLiteralCallSites(): void
+    {
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nclass CustomerController extends Controller {\n" .
+            "    public function index() {\n        return \$this->viewCustomer('customer.index', []);\n    }\n" .
+            "    public function viewCustomer(string \$view, array \$data = []) {\n        return view(\$view, \$data);\n    }\n}\n",
+            'app/Http/Controllers/CustomerController.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_SSTI', $this->rules($issues)[0] ?? null);
+    }
+
     public function testMisconfigFlagsDebugEnabledInConfigApp(): void
     {
         $file = $this->temp(
