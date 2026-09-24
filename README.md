@@ -35,7 +35,7 @@ The package philosophy:
 ## Features / Tính năng
 
 - One command to rule them all: `php artisan quality:check`
-- Multiple report formats: `console`, `json`, `html`, `md` (or `all`)
+- Multiple report formats: `console`, `json`, `html`, `md`, `sarif` (or `all`)
 - Standardised exit codes for CI gates
 - Dependency security audit (`composer audit`)
 - Optional filesystem security scan (`trivy`)
@@ -178,7 +178,7 @@ Missing optional tools are then reported as `skipped` instead of being installed
 
 | Option | Description / Mô tả | Default / Mặc định |
 |---|---|---|
-| `--format=...` | Comma-separated report formats: `console`, `json`, `html`, `md`, or `all` (runs all four). | `console` |
+| `--format=...` | Comma-separated report formats: `console`, `json`, `html`, `md`, `sarif`, or `all` (runs all five). | `console` |
 | `--only=...` | Only run these checkers (comma-separated): `phpcs`, `phpstan`, `phpunit`, `composer_audit`, `trivy`, `custom`. | all checkers |
 | `--exclude=...` | Skip these checkers (comma-separated). | — |
 | `--path=*` | Override scan paths (repeatable, e.g. `--path=app --path=routes`). | from config |
@@ -197,7 +197,8 @@ Missing optional tools are then reported as `skipped` instead of being installed
 | `--baseline-file=...` | Baseline file path. | `baseline.json` (project root) |
 
 > Note: `--json` implies the JSON reporter, while `--ci` adds the JSON reporter
-> automatically. `--format=all` maps to `console,json,html,md`.
+> automatically. `--format=all` maps to `console,json,html,md,sarif`.
+> `sarif` emits `quality-report.sarif` (SARIF 2.1.0) for GitHub code scanning upload.
 
 ---
 
@@ -478,6 +479,25 @@ jobs:
 
 The job fails when the exit code is non-zero, which happens when any issue
 reaches the `error` threshold (the default for `--ci`).
+
+### Upload findings to GitHub code scanning (SARIF)
+
+`--format=sarif` emits a SARIF 2.1.0 file that GitHub Advanced Security can
+ingest, so security findings surface directly on the PR as code-scanning alerts:
+
+```yaml
+      - name: Quality Check (SARIF)
+        run: php artisan quality:check --format=sarif,console --fail-on=none
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/quality-checker/quality-report.sarif
+          category: vietvang-quality-checker
+```
+
+Severity mapping: `critical`/`error` → `error`, `warning` → `warning`,
+`info` → `note`. Each rule is registered once with its highest observed
+severity, and OWASP/taint/security rules are tagged accordingly.
 
 ---
 

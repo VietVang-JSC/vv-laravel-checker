@@ -13,6 +13,7 @@ use VietVang\QualityChecker\Reporters\HtmlReporter;
 use VietVang\QualityChecker\Reporters\JsonReporter;
 use VietVang\QualityChecker\Reporters\MarkdownReporter;
 use VietVang\QualityChecker\Reporters\ReporterInterface;
+use VietVang\QualityChecker\Reporters\SarifReporter;
 use VietVang\QualityChecker\Result\CheckResult;
 use VietVang\QualityChecker\Runner\CheckContext;
 use VietVang\QualityChecker\Runner\CheckRunner;
@@ -20,7 +21,7 @@ use VietVang\QualityChecker\Runner\CheckRunner;
 final class QualityCheckCommand extends Command
 {
     protected $signature = 'quality:check
-        {--format=console : Comma-separated report formats: console,json,html,md or "all".}
+        {--format=console : Comma-separated report formats: console,json,html,md,sarif or "all".}
         {--only= : Only run these checkers (comma-separated): phpcs,phpstan,phpunit,composer_audit,trivy,custom.}
         {--exclude= : Skip these checkers (comma-separated).}
         {--path=* : Override scan paths (repeatable).}
@@ -206,6 +207,7 @@ final class QualityCheckCommand extends Command
             'json' => new JsonReporter(),
             'html' => new HtmlReporter(),
             'md' => new MarkdownReporter(),
+            'sarif' => new SarifReporter(),
             default => null,
         };
     }
@@ -225,7 +227,7 @@ final class QualityCheckCommand extends Command
         if ($raw !== '' && $raw !== 'console') {
             $parts = array_map('trim', explode(',', $raw));
             if (in_array('all', $parts, true)) {
-                $parts = ['console', 'json', 'html', 'md'];
+                $parts = ['console', 'json', 'html', 'md', 'sarif'];
             }
             foreach ($parts as $part) {
                 if ($part !== '' && !in_array($part, $formats, true)) {
