@@ -580,6 +580,64 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testCommandInjectionSkipsDeployTimeConcat(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass SetupDocs {\n    protected function documentation(): void {\n" .
+            "        \$artisan = base_path('artisan');\n" .
+            "        passthru(PHP_BINARY . \" \$artisan migrate:fresh --force -q\");\n" .
+            "    }\n}\n",
+            'app/Console/Commands/SetupDocumentation.php'
+        );
+
+        $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testCommandInjectionStillFlagsDerivedVariable(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass SetupDocs {\n    protected function documentation(): void {\n" .
+            "        \$v = \$this->getVerbosity();\n" .
+            "        passthru(PHP_BINARY . \" artisan scribe:generate --force\$v\");\n" .
+            "    }\n}\n",
+            'app/Console/Commands/SetupDocumentation.php'
+        );
+
+        $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_COMMAND_INJECTION', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testSsrfSkipsGuzzleClientConstructor(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass HttpRequestService {\n    public function buildClient(int \$timeout): object {\n" .
+            "        return new GuzzleHttp\\Client(['timeout' => \$timeout]);\n" .
+            "    }\n}\n",
+            'app/Http/HttpRequestService.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSsrfSkipsUploadedFileRealPath(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass ImageService {\n    public function store(\$file): string {\n" .
+            "        return (string) file_get_contents(\$file->getRealPath());\n" .
+            "    }\n}\n",
+            'app/Uploads/ImageService.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testSsrfSkipsFopenWriteMode(): void
     {
         $file = $this->temp(

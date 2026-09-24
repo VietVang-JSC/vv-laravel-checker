@@ -105,6 +105,16 @@ php artisan quality:check --tier=all --fail-on=none
   - command injection: đối số đã bọc `escapeshellarg()`/`escapeshellcmd()`,
     và `new Process()` với command dạng array (không qua shell — kể cả khi
     array nằm trong biến `$command = [...]` cùng function).
+  - command injection: chuỗi lệnh ghép toàn phần deploy-time — literal,
+    constant (`PHP_BINARY`, `DIRECTORY_SEPARATOR`), Laravel path helper
+    (`base_path()`...), và biến đã gán từ các phần đó trong cùng function
+    (case `passthru(PHP_BINARY." $artisan ...")` với
+    `$artisan = base_path('artisan')` ở Monica — biến gán từ method call
+    như `$v = $this->getVerbosity()` vẫn bị báo).
+  - SSRF: `new GuzzleHttp\Client([...])` không phải sink (constructor chỉ nhận
+    config array — request thật ở `->get()`/`->post()` sau đó đã được cover
+    riêng); `->getRealPath()`/`->getPathname()` (UploadedFile/SplFileInfo)
+    luôn là local path (case BookStack uploads).
   - SSTI: biến template được gán string literal trong cùng function
     (`$viewName = 'backend.page'; view($viewName)` — case SiroLingo), và
     helper non-public mà mọi call site cùng file đều truyền literal cho tham
@@ -127,6 +137,10 @@ php artisan quality:check --tier=all --fail-on=none
 - **Tự động bỏ qua**: mọi tên table/column bị drop đều xuất hiện lại dưới dạng
   string literal trong `down()` (ví dụ drop `country_id` có guard
   `Schema::hasColumn` + `down()` tạo lại column — case SiroHRM).
+- **Không báo từ đầu**: drop index/constraint (`dropIndex`, `dropUnique`,
+  `dropForeign`, `dropPrimary`, `dropTimestamps`) — không mất row dữ liệu,
+  recover được từ schema (case BookStack: 7 migration drop index cũ khi build
+  search index mới).
 
 ### `HARDCODED_SECRET`
 - Regex bắt `sk-`, `AIza`, `AKIA`, private key, ... **Chuỗi test/fixture cũng

@@ -28,6 +28,15 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
 
     private const ESCAPE_FUNCS = ['escapeshellarg', 'escapeshellcmd'];
 
+    /**
+     * Functions whose return value is deploy-time determined, never request
+     * user input (Laravel path helpers).
+     */
+    private const SAFE_COMMAND_FUNCS = [
+        'base_path', 'storage_path', 'public_path', 'resource_path',
+        'database_path', 'app_path', 'config_path', 'lang_path',
+    ];
+
     private const PROCESS_CLASS = 'Symfony\\Component\\Process\\Process';
 
     public function analyze(array $files): array
@@ -64,6 +73,10 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
             }
         }
         $scopes = $this->arrayVarScopes($nodes);
+        // Variables assigned deploy-time-safe command parts (`$artisan =
+        // base_path('artisan')`), so `passthru(PHP_BINARY." $artisan ...")` is
+        // recognized as non-user input.
+        $safeScopes = $this->safeVarScopes($nodes);
 
         $issues = [];
         $calls = $this->finder()->find($ast, function (Node $node): bool {
@@ -85,7 +98,7 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
                 if (!$arg instanceof Node\Arg) {
                     continue;
                 }
-                if (!$this->isUserInput($arg->value)) {
+                if (!$this->isUserInput($arg->value, $call, $safeScopes)) {
                     continue;
                 }
 
@@ -110,7 +123,7 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
                     continue;
                 }
                 foreach ($call->args as $arg) {
-                    if ($arg instanceof Node\Arg && $this->isUserInput($arg->value)) {
+                    if ($arg instanceof Node\Arg && $this->isUserInput($arg->value, $call, $safeScopes)) {
                         $issues[] = $this->makeIssue(
                             self::RULE,
                             'Potential command injection: user input flows into Symfony Process.',
@@ -128,7 +141,10 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
         return $issues;
     }
 
-    private function isUserInput(Node\Expr $expr): bool
+    /**
+     * @param list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}> $safeScopes
+     */
+    private function isUserInput(Node\Expr $expr, Node $call, array $safeScopes): bool
     {
         if (
             $expr instanceof Node\Expr\FuncCall
@@ -138,9 +154,13 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
             return false;
         }
 
+        if ($this->isSafeCommandExpr($expr, $this->safeVarsVisibleAt($call, $safeScopes))) {
+            return false;
+        }
+
         if ($expr instanceof Node\Scalar\InterpolatedString) {
             foreach ($expr->parts as $part) {
-                if ($part instanceof Node\Expr && $this->isUserInput($part)) {
+                if ($part instanceof Node\Expr && $this->isUserInput($part, $call, $safeScopes)) {
                     return true;
                 }
             }
@@ -149,7 +169,8 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
         }
 
         if ($expr instanceof Node\Expr\BinaryOp\Concat) {
-            return $this->isUserInput($expr->left) || $this->isUserInput($expr->right);
+            return $this->isUserInput($expr->left, $call, $safeScopes)
+                || $this->isUserInput($expr->right, $call, $safeScopes);
         }
 
         if ($this->isTaintedExpr($expr)) {
@@ -157,6 +178,142 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
         }
 
         return false;
+    }
+
+    /**
+     * A command expression is deploy-time safe when every leaf is a string
+     * literal, a constant (PHP_BINARY, DIRECTORY_SEPARATOR, ...), a Laravel
+     * path-helper call with safe arguments, or a variable previously assigned
+     * such a safe expression in the same scope.
+     *
+     * @param array<string, true> $known
+     */
+    private function isSafeCommandExpr(Node\Expr $expr, array $known): bool
+    {
+        if ($expr instanceof Node\Scalar\String_) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\ConstFetch) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+            return isset($known[$expr->name]);
+        }
+
+        if (
+            $expr instanceof Node\Expr\FuncCall
+            && $expr->name instanceof Node\Name
+            && in_array(strtolower($expr->name->toString()), self::SAFE_COMMAND_FUNCS, true)
+        ) {
+            foreach ($expr->args as $arg) {
+                if ($arg instanceof Node\Arg && !$this->isSafeCommandExpr($arg->value, $known)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
+            return $this->isSafeCommandExpr($expr->left, $known)
+                && $this->isSafeCommandExpr($expr->right, $known);
+        }
+
+        if ($expr instanceof Node\Scalar\InterpolatedString) {
+            foreach ($expr->parts as $part) {
+                if ($part instanceof Node\Expr && !$this->isSafeCommandExpr($part, $known)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}> $safeScopes
+     * @return array<string, true>
+     */
+    private function safeVarsVisibleAt(Node $call, array $safeScopes): array
+    {
+        $callId = spl_object_id($call);
+        $vars = [];
+        foreach ($safeScopes as $scope) {
+            if ($scope['func'] === null) {
+                $vars += $scope['vars'];
+                continue;
+            }
+            if (isset($scope['calls'][$callId])) {
+                $vars += $scope['vars'];
+            }
+        }
+
+        return $vars;
+    }
+
+    /**
+     * Scopes mapping call expressions to the safe-command variables visible in
+     * the same function (plus a file-level fallback for top-level code).
+     * Assignments are processed in source order so a variable is only known
+     * safe after its own safe assignment.
+     *
+     * @param list<Node> $nodes
+     * @return list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}>
+     */
+    private function safeVarScopes(array $nodes): array
+    {
+        $scopes = [];
+        $funcs = $this->finder()->find($nodes, function (Node $node): bool {
+            return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
+        });
+
+        foreach ($funcs as $func) {
+            if (!$func instanceof Node\Stmt\ClassMethod && !$func instanceof Node\Stmt\Function_) {
+                continue;
+            }
+            $calls = [];
+            foreach (
+                $this->finder()->find($func, static function (Node $node): bool {
+                    return $node instanceof Node\Expr\FuncCall
+                    || $node instanceof Node\Expr\New_;
+                }) as $call
+            ) {
+                $calls[spl_object_id($call)] = true;
+            }
+            $scopes[] = ['func' => spl_object_id($func), 'vars' => $this->safeAssignedVars($func), 'calls' => $calls];
+        }
+
+        $scopes[] = ['func' => null, 'vars' => $this->safeAssignedVars($nodes), 'calls' => []];
+
+        return $scopes;
+    }
+
+    /**
+     * @param Node|list<Node> $scope
+     * @return array<string, true>
+     */
+    private function safeAssignedVars(Node|array $scope): array
+    {
+        $vars = [];
+        $assigns = $this->finder()->find($scope, static function (Node $node): bool {
+            return $node instanceof Node\Expr\Assign;
+        });
+        foreach ($assigns as $assign) {
+            if (
+                $assign instanceof Node\Expr\Assign
+                && $assign->var instanceof Node\Expr\Variable
+                && is_string($assign->var->name)
+                && $this->isSafeCommandExpr($assign->expr, $vars)
+            ) {
+                $vars[$assign->var->name] = true;
+            }
+        }
+
+        return $vars;
     }
 
     /**

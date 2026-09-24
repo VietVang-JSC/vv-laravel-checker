@@ -15,10 +15,14 @@ use VietVang\QualityChecker\Result\Severity;
  *
  * Flags:
  *  - migrations that declare an `up()` but no `down()` (not reversible)
- *  - destructive schema operations in `up()` (dropTable, dropColumn, delete
+ *  - data-destructive schema operations in `up()` (dropTable, dropColumn, delete
  *    of a whole table without a re-creation path). A drop is not flagged when
  *    every dropped table/column name re-appears as a string literal in `down()`
  *    (best-effort restore detection).
+ *
+ * Deliberately not flagged: index/constraint drops (dropIndex, dropUnique,
+ * dropForeign, dropPrimary, dropTimestamps) — they carry no row data and are
+ * recoverable from the schema, unlike table/column drops.
  *
  * Assumes: only files under a `/database/migrations/` path segment are considered.
  * Reversibility is a best-effort heuristic, so confidence is medium.
@@ -29,8 +33,7 @@ final class MigrationAnalyzer extends AbstractAnalyzer
     private const RULE_DESTRUCTIVE_UP = 'MIGRATION_DESTRUCTIVE_UP';
 
     private const DESTRUCTIVE_METHODS = [
-        'dropTable', 'dropIfExists', 'dropColumn', 'dropForeign', 'dropPrimary',
-        'dropIndex', 'dropUnique', 'dropTimestamps', 'delete',
+        'dropTable', 'dropIfExists', 'dropColumn', 'delete',
     ];
 
     public function analyze(array $files): array

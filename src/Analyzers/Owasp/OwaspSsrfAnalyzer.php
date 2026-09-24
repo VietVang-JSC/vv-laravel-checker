@@ -38,6 +38,12 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         'path', 'file', 'filepath', 'filename', 'fullpath', 'source', 'target', 'local',
     ];
 
+    /**
+     * Method calls that provably return local filesystem paths, never URLs
+     * (Symfony UploadedFile / SplFileInfo).
+     */
+    private const LOCAL_PATH_METHODS = ['getrealpath', 'getpathname'];
+
     private const REMOTE_NAME_HINTS = [
         'url', 'uri', 'endpoint', 'host', 'domain', 'link', 'href', 'remote', 'webhook', 'feed',
     ];
@@ -146,14 +152,6 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             }
         }
 
-        if (
-            $node instanceof Node\Expr\New_
-            && $node->class instanceof Node\Name
-            && in_array($node->class->toString(), ['GuzzleHttp\\Client', 'Client', '\\GuzzleHttp\\Client'], true)
-        ) {
-            return 'new GuzzleHttp\Client()';
-        }
-
         return null;
     }
 
@@ -236,6 +234,14 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             $expr instanceof Node\Expr\FuncCall
             && $expr->name instanceof Node\Name
             && in_array(strtolower($expr->name->toString()), self::PATH_HELPERS, true)
+        ) {
+            return true;
+        }
+
+        if (
+            $expr instanceof Node\Expr\MethodCall
+            && $expr->name instanceof Node\Identifier
+            && in_array(strtolower($expr->name->toString()), self::LOCAL_PATH_METHODS, true)
         ) {
             return true;
         }

@@ -89,6 +89,22 @@ final class LaravelAnalyzerTest extends TestCase
         self::assertContains('MIGRATION_DESTRUCTIVE_UP', $rules);
     }
 
+    public function testMigrationIndexDropNotFlagged(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn new class extends Migration {\n" .
+            "    public function up(): void { Schema::table('pages', function (Blueprint \$t) { \$t->dropIndex('search'); \$t->dropIndex('name_search'); }); }\n" .
+            "    public function down(): void { }\n" .
+            "};\n",
+            'database/migrations/2026_01_01_e.php'
+        );
+
+        $issues = (new MigrationAnalyzer())->analyze([$file]);
+        $rules = array_map(static fn ($i) => $i->rule, $issues);
+
+        self::assertNotContains('MIGRATION_DESTRUCTIVE_UP', $rules);
+    }
+
     public function testRouteValidationFlagsMutatingWithoutValidation(): void
     {
         $file = $this->temp(
