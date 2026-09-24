@@ -85,6 +85,22 @@ final class HtmlReporterTest extends TestCase
         self::assertStringContainsString('href="#checker-phpcs"', $html);
     }
 
+    public function testSidebarHasInteractiveSeverityRuleAndFileFilters(): void
+    {
+        $html = $this->renderHtml();
+
+        self::assertStringContainsString('data-side-sev="critical"', $html);
+        self::assertStringContainsString('data-side-sev="info"', $html);
+        self::assertStringContainsString('data-side-rule="sql_injection"', $html);
+        self::assertStringContainsString('data-side-file="app/http/controllers/usercontroller.php"', $html);
+        self::assertStringContainsString('Hot Files', $html);
+        self::assertStringContainsString('Top Rules', $html);
+        // Click handlers are wired in the bundled script.
+        self::assertStringContainsString('[data-side-sev]', $html);
+        self::assertStringContainsString('[data-side-rule]', $html);
+        self::assertStringContainsString('[data-side-file]', $html);
+    }
+
     public function testReportContainsOnPageSearchAndSeverityFilters(): void
     {
         $html = $this->renderHtml();

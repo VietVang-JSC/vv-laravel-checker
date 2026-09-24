@@ -135,6 +135,31 @@ final class HtmlReporter implements ReporterInterface
         color: var(--muted);
     }
     .sidebar a.active .count { background: #c7d2fe; color: #1e40af; }
+    .sidebar a.on { background: #f3f4f6; }
+    .sidebar a.on.dimmed { background: transparent; }
+    .sidebar a.dimmed { opacity: 0.45; }
+    .sidebar a.dimmed .count { opacity: 0.6; }
+    .sidebar .sev-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex: 0 0 8px;
+    }
+    .sidebar .sev-dot.critical { background: var(--critical); }
+    .sidebar .sev-dot.error { background: var(--error); }
+    .sidebar .sev-dot.warning { background: var(--warning); }
+    .sidebar .sev-dot.info { background: var(--info); }
+    .sidebar .count-critical { background: #fee2e2; color: var(--critical); }
+    .sidebar .count-error { background: #fee2e2; color: var(--error); }
+    .sidebar .count-warning { background: #fef3c7; color: var(--warning); }
+    .sidebar .count-info { background: #dbeafe; color: var(--info); }
+    .sidebar .rule-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+    }
+    .sidebar nav a[data-side-rule], .sidebar nav a[data-side-file], .sidebar nav a[data-side-sev] { cursor: pointer; }
     .main { flex: 1 1 auto; min-width: 0; }
     .main .container { max-width: none; margin: 0; }
     /* Sticky on-page search + severity filter toolbar */
@@ -230,14 +255,58 @@ final class HtmlReporter implements ReporterInterface
         if (search) {
             search.addEventListener('input', applyFilters);
         }
+        function syncSidebarSev() {
+            document.querySelectorAll('[data-side-sev]').forEach(function (a) {
+                var sev = a.getAttribute('data-side-sev');
+                a.classList.toggle('on', !!activeSevs[sev]);
+                a.classList.toggle('dimmed', !activeSevs[sev]);
+            });
+        }
+        function toggleSev(sev) {
+            activeSevs[sev] = !activeSevs[sev];
+            chips.forEach(function (chip) {
+                if (chip.getAttribute('data-sev') === sev) {
+                    chip.setAttribute('aria-pressed', activeSevs[sev] ? 'true' : 'false');
+                }
+            });
+            syncSidebarSev();
+            applyFilters();
+        }
         chips.forEach(function (chip) {
             chip.addEventListener('click', function () {
-                var sev = chip.getAttribute('data-sev');
-                activeSevs[sev] = !activeSevs[sev];
-                chip.setAttribute('aria-pressed', activeSevs[sev] ? 'true' : 'false');
-                applyFilters();
+                toggleSev(chip.getAttribute('data-sev'));
             });
         });
+        document.querySelectorAll('[data-side-sev]').forEach(function (a) {
+            a.addEventListener('click', function (e) {
+                e.preventDefault();
+                toggleSev(a.getAttribute('data-side-sev'));
+            });
+        });
+        function filterByText(token) {
+            if (!search) {
+                return;
+            }
+            search.value = token;
+            applyFilters();
+            var target = document.getElementById('checker-custom') || document.getElementById('top-rules');
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+        document.querySelectorAll('[data-side-rule]').forEach(function (a) {
+            a.addEventListener('click', function (e) {
+                e.preventDefault();
+                filterByText(a.getAttribute('data-side-rule'));
+            });
+        });
+        document.querySelectorAll('[data-side-file]').forEach(function (a) {
+            a.addEventListener('click', function (e) {
+                e.preventDefault();
+                filterByText(a.getAttribute('data-side-file'));
+            });
+        });
+        syncSidebarSev();
 
         var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a[href^="#"]'));
         if ('IntersectionObserver' in window && links.length > 0) {
@@ -286,13 +355,15 @@ final class HtmlReporter implements ReporterInterface
     {
         $checkers = $this->buildCheckers($results);
         $summary = $this->buildSummary($results);
+        $rules = IssueGrouper::byRule($results);
+        $hotFiles = $this->hotFiles($results);
 
         return '<!DOCTYPE html>' . "\n"
             . '<html lang="en">' . "\n"
             . $this->buildHead()
             . '<body>' . "\n"
             . '<div class="layout">' . "\n"
-            . $this->buildSidebar($checkers)
+            . $this->buildSidebar($checkers, $summary, $rules, $hotFiles)
             . '<div class="main"><div class="container">' . "\n"
             . $this->buildHeader($ctx, $this->overallStatus($results))
             . $this->buildToolbar()
@@ -340,9 +411,15 @@ final class HtmlReporter implements ReporterInterface
     }
 
     /**
+     * Dashboard-style sticky sidebar: section TOC + interactive severity
+     * filters, top rules and hot files (click = prefill search + jump).
+     *
      * @param array<int, array{name: string, status: string, duration: float, summary: string|null, counts: array{critical: int, error: int, warning: int, info: int}}> $checkers
+     * @param array<string, int> $summary
+     * @param list<array{rule: string, source: string, count: int, critical: int, error: int, warning: int, info: int}> $rules
+     * @param list<array{file: string, count: int}> $hotFiles
      */
-    private function buildSidebar(array $checkers): string
+    private function buildSidebar(array $checkers, array $summary, array $rules, array $hotFiles): string
     {
         $html = '<aside class="sidebar" id="sidebar">' . "\n"
             . '<h3>Contents / Mục lục</h3>' . "\n"
@@ -351,8 +428,48 @@ final class HtmlReporter implements ReporterInterface
             . '<li><a href="#top-rules">Top Rules</a></li>' . "\n"
             . '<li><a href="#owasp">OWASP</a></li>' . "\n"
             . '<li><a href="#checkers">Per-Checker</a></li>' . "\n"
-            . '</ul></nav>' . "\n"
-            . '<h3>Issues by checker</h3>' . "\n"
+            . '</ul></nav>' . "\n";
+
+        $html .= '<h3>Severity</h3>' . "\n"
+            . '<nav aria-label="Severity filters"><ul>' . "\n";
+        foreach (['critical', 'error', 'warning', 'info'] as $sev) {
+            $count = (int) ($summary[$sev] ?? 0);
+            $html .= '<li><a href="#checker-custom" data-side-sev="' . $sev . '" class="on" role="button">'
+                . '<span class="sev-dot ' . $sev . '"></span><span>' . $this->escape(ucfirst($sev)) . '</span>'
+                . '<span class="count count-' . $sev . '">' . (string) $count . '</span>'
+                . '</a></li>' . "\n";
+        }
+        $html .= '</ul></nav>' . "\n";
+
+        if (count($rules) > 0) {
+            $html .= '<h3>Top Rules</h3>' . "\n"
+                . '<nav aria-label="Top rules"><ul>' . "\n";
+            foreach (array_slice($rules, 0, 12) as $r) {
+                $html .= '<li><a href="#checker-custom" data-side-rule="'
+                    . $this->escape(strtolower($r['rule'])) . '" role="button" title="Filter: '
+                    . $this->escape($r['rule']) . '">'
+                    . '<span class="rule-label">' . $this->escape($r['rule']) . '</span>'
+                    . '<span class="count">' . (string) $r['count'] . '</span>'
+                    . '</a></li>' . "\n";
+            }
+            $html .= '</ul></nav>' . "\n";
+        }
+
+        if (count($hotFiles) > 0) {
+            $html .= '<h3>Hot Files</h3>' . "\n"
+                . '<nav aria-label="Files with most issues"><ul>' . "\n";
+            foreach ($hotFiles as $hot) {
+                $html .= '<li><a href="#checker-custom" data-side-file="'
+                    . $this->escape(strtolower($hot['file'])) . '" role="button" title="'
+                    . $this->escape($hot['file']) . '">'
+                    . '<span class="rule-label">' . $this->escape($this->shortPath($hot['file'])) . '</span>'
+                    . '<span class="count">' . (string) $hot['count'] . '</span>'
+                    . '</a></li>' . "\n";
+            }
+            $html .= '</ul></nav>' . "\n";
+        }
+
+        $html .= '<h3>Issues by checker</h3>' . "\n"
             . '<nav aria-label="Issues by checker"><ul>' . "\n";
 
         foreach ($checkers as $result) {
@@ -365,7 +482,46 @@ final class HtmlReporter implements ReporterInterface
                 . '</a></li>' . "\n";
         }
 
-        return $html . '</ul></nav>' . "\n" . '</aside>' . "\n";
+        return $html . '</ul></nav>' . "\n"
+            . '</aside>' . "\n";
+    }
+
+    /**
+     * Files with the most issues, descending, capped for the sidebar.
+     *
+     * @param CheckResult[] $results
+     * @return list<array{file: string, count: int}>
+     */
+    private function hotFiles(array $results): array
+    {
+        $counts = [];
+        foreach ($results as $result) {
+            if (!$result instanceof CheckResult) {
+                continue;
+            }
+            foreach ($result->issues as $issue) {
+                $file = $issue->file ?? '(no file)';
+                $counts[$file] = ($counts[$file] ?? 0) + 1;
+            }
+        }
+
+        arsort($counts);
+        $out = [];
+        foreach (array_slice($counts, 0, 10, true) as $file => $count) {
+            $out[] = ['file' => $file, 'count' => $count];
+        }
+
+        return $out;
+    }
+
+    private function shortPath(string $file): string
+    {
+        $normalized = str_replace('\\', '/', $file);
+        $segments = explode('/', $normalized);
+
+        return count($segments) > 3
+            ? '…/' . implode('/', array_slice($segments, -3))
+            : $normalized;
     }
 
     private function buildToolbar(): string
