@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `*.blade.php`, collected separately from `resources/`; skips `csrf_field()`,
   `e(...)`, `{{ ... }}` and pre-rendered-HTML naming convention).
 
+### Fixed (Minpo pilots audit)
+
+- Open redirect resolves deploy-time-safe variables (`$url = config(...) . '/x'`)
+  and no longer risks crashing on short ternaries; request-derived variables
+  stay flagged.
+- Broken access control recognizes `checkLogin`-style middleware and never
+  treats `guest*` middleware as protection (even `guestAdmin`).
+
 ### Fixed (audit wave, validated on 9 pilots)
 
 - Shared local-path naming heuristic (`AbstractAnalyzer::isLocalPathName`,

@@ -19,8 +19,10 @@ use VietVang\QualityChecker\Result\Severity;
  * Route files are recognized by a `/routes/` (or `/Routes/`) path segment or a
  * `web.php`/`api.php` basename. Middleware whose name hints at authorization
  * (`auth`, `can:`, `permission`, `role`, `gate`, `admin`, `bouncer`,
- * API-key/token guards like `edge.api.key`, `sanctum`, `jwt`, ...) counts
- * as protection; `throttle` and friends do not.
+ * `checklevel`, `checkLogin`, API-key/token guards like `*.api.key`,
+ * `sanctum`, `jwt`, ...) counts
+ * as protection; `throttle` and friends do not. `guest*` middleware is
+ * intentionally NOT treated as protection (guest = unauthenticated).
  *
  * Two framework idioms are resolved: `Route::controller(X::class)` groups whose
  * actions are bare method-name strings, and `require`/`include` of another route
@@ -902,11 +904,17 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
         if ($base === '') {
             return false;
         }
+        // Guest middleware redirects authenticated users away — it marks a
+        // route as public, never as protected (even `guestAdmin` which
+        // contains the `admin` hint).
+        if ($base === 'guest' || str_starts_with($base, 'guest')) {
+            return false;
+        }
         if (in_array($base, ['auth', 'verified', 'signed', 'can'], true)) {
             return true;
         }
 
-        foreach (['can', 'auth', 'permission', 'role', 'gate', 'admin', 'bouncer', 'checklevel', 'apikey', 'api_key', 'api.key', 'sanctum', 'jwt', 'oauth'] as $hint) {
+        foreach (['can', 'auth', 'permission', 'role', 'gate', 'admin', 'bouncer', 'checklevel', 'login', 'apikey', 'api_key', 'api.key', 'sanctum', 'jwt', 'oauth'] as $hint) {
             if (str_contains($base, $hint)) {
                 return true;
             }

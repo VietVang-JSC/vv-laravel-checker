@@ -181,6 +181,38 @@ final class OwaspOpenRedirectAnalyzerTest extends TestCase
         self::assertSame('OWASP_OPEN_REDIRECT', $this->rules($issues)[0] ?? null);
     }
 
+    public function testSkipsConfigAssignedVariable(): void
+    {
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers\\Admin;\nclass LoginCuserController extends Controller {\n" .
+            "    public function corporate() {\n" .
+            "        \$webALoginUrl = config('app.url_course') . '/login';\n" .
+            "        return redirect()->away(\$webALoginUrl);\n" .
+            "    }\n}\n",
+            'app/Http/Controllers/Admin/LoginCuserController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testStillFlagsInputAssignedVariable(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass LoginController extends Controller {\n" .
+            "    public function login() {\n" .
+            "        \$next = \$request->input('next');\n" .
+            "        return redirect(\$next);\n" .
+            "    }\n}\n",
+            'app/Http/Controllers/LoginController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_OPEN_REDIRECT', $this->rules($issues)[0] ?? null);
+    }
+
     public function testVariableTargetIsHighConfidence(): void
     {
         $file = $this->temp(

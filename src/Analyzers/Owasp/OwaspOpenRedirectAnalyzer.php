@@ -67,8 +67,16 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
             return [];
         }
 
+        $nodes = [];
+        foreach ($ast as $node) {
+            if ($node instanceof Node) {
+                $nodes[] = $node;
+            }
+        }
+        $known = $this->safeTargetVars($nodes);
+
         $issues = [];
-        $calls = $this->finder()->find($ast, function (Node $node): bool {
+        $calls = $this->finder()->find($nodes, function (Node $node): bool {
             return $node instanceof Node\Expr\FuncCall
                 || $node instanceof Node\Expr\MethodCall
                 || $node instanceof Node\Expr\StaticCall;
@@ -84,7 +92,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
             if ($target === null) {
                 continue;
             }
-            if ($this->isSafeTarget($target)) {
+            if ($this->isSafeTarget($target, $known)) {
                 continue;
             }
             if (!$this->isFlaggableTarget($target)) {
@@ -230,7 +238,38 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
         return $base === 'redirect' || $base === 'redirector';
     }
 
-    private function isSafeTarget(Node\Expr $expr): bool
+    /**
+     * Variables assigned deploy-time-safe redirect targets in source order
+     * (`$login = config('app.url') . '/login'`), so sinks using the variable
+     * are recognized as safe.
+     *
+     * @param list<Node> $nodes
+     * @return array<string, true>
+     */
+    private function safeTargetVars(array $nodes): array
+    {
+        $known = [];
+        $assigns = $this->finder()->find($nodes, static function (Node $node): bool {
+            return $node instanceof Node\Expr\Assign;
+        });
+        foreach ($assigns as $assign) {
+            if (
+                $assign instanceof Node\Expr\Assign
+                && $assign->var instanceof Node\Expr\Variable
+                && is_string($assign->var->name)
+                && $this->isSafeTarget($assign->expr, $known)
+            ) {
+                $known[$assign->var->name] = true;
+            }
+        }
+
+        return $known;
+    }
+
+    /**
+     * @param array<string, true> $known
+     */
+    private function isSafeTarget(Node\Expr $expr, array $known = []): bool
     {
         if (
             $expr instanceof Node\Scalar\String_
@@ -242,6 +281,10 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
             return true;
         }
 
+        if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+            return isset($known[$expr->name]);
+        }
+
         if (
             $expr instanceof Node\Expr\FuncCall
             && $expr->name instanceof Node\Name
@@ -249,7 +292,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
         ) {
             if (strtolower($expr->name->toString()) === 'url') {
                 foreach ($expr->args as $arg) {
-                    if ($arg instanceof Node\Arg && !$this->isSafeTarget($arg->value)) {
+                    if ($arg instanceof Node\Arg && !$this->isSafeTarget($arg->value, $known)) {
                         return false;
                     }
                 }
@@ -268,12 +311,12 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
         }
 
         if ($expr instanceof Node\Expr\BinaryOp\Concat) {
-            return $this->isSafeTarget($expr->left) && $this->isSafeTarget($expr->right);
+            return $this->isSafeTarget($expr->left, $known) && $this->isSafeTarget($expr->right, $known);
         }
 
         if ($expr instanceof Node\Scalar\InterpolatedString) {
             foreach ($expr->parts as $part) {
-                if ($part instanceof Node\Expr && !$this->isSafeTarget($part)) {
+                if ($part instanceof Node\Expr && !$this->isSafeTarget($part, $known)) {
                     return false;
                 }
             }
@@ -282,11 +325,15 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
         }
 
         if ($expr instanceof Node\Expr\Ternary) {
-            return $this->isSafeTarget($expr->if) && $this->isSafeTarget($expr->else);
+            if ($expr->if !== null && !$this->isSafeTarget($expr->if, $known)) {
+                return false;
+            }
+
+            return $this->isSafeTarget($expr->else, $known);
         }
 
         if ($expr instanceof Node\Expr\BinaryOp\Coalesce) {
-            return $this->isSafeTarget($expr->left) && $this->isSafeTarget($expr->right);
+            return $this->isSafeTarget($expr->left, $known) && $this->isSafeTarget($expr->right, $known);
         }
 
         return false;

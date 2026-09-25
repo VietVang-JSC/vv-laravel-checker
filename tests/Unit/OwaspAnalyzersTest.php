@@ -442,6 +442,46 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testAccessControlSkipsLoginCheckMiddleware(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\n" .
+            "class CourseController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
+            'app/Http/Controllers/CourseController.php'
+        );
+        $routes = $this->temp(
+            "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+            "Route::middleware(['checkLogin'])->group(function () {\n" .
+            "    Route::post('/courses', 'App\\Http\\Controllers\\CourseController@store');\n" .
+            "});\n",
+            'routes/web.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testAccessControlStillFlagsGuestMiddleware(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\n" .
+            "class CourseController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
+            'app/Http/Controllers/CourseController.php'
+        );
+        $routes = $this->temp(
+            "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+            "Route::middleware(['guestAdmin'])->group(function () {\n" .
+            "    Route::post('/courses', 'App\\Http\\Controllers\\CourseController@store');\n" .
+            "});\n",
+            'routes/web.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
+
+        self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $this->rules($issues)[0] ?? null);
+    }
+
     public function testAccessControlRouteMiddlewareCanBeDisabled(): void
     {
         $controller = $this->temp(

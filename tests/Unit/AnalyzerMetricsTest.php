@@ -276,6 +276,11 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/AuthController.php' => "<?php\nreturn redirect(config('app.url') . '/done');\n"],
             null,
         ];
+        yield 'openredirect_fp_config_var' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/Admin/LoginCuserController.php' => "<?php\nnamespace App\\Http\\Controllers\\Admin;\nclass LoginCuserController extends Controller {\n    public function corporate() {\n        \$webALoginUrl = config('app.url_course') . '/login';\n        return redirect()->away(\$webALoginUrl);\n    }\n}\n"],
+            null,
+        ];
 
         // --- Path traversal ---
         yield 'traversal_tp_response_download' => [

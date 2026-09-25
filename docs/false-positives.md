@@ -81,8 +81,9 @@ php artisan quality:check --tier=all --fail-on=none
   Cả syntax array cũ (`['as' => ..., 'uses' => 'FQCN@method']`) lẫn
   `[Controller::class, 'method']` đều được resolve.
   Tên middleware chứa `auth`/`can`/`permission`/`role`/`gate`/`admin`/`bouncer`/
-  `checklevel`/`apikey`/`sanctum`/`jwt`/`oauth`... (kể cả API-key guard kiểu
-  `*.api.key`) được coi là bảo vệ; `throttle` thì không. Actions so khớp theo
+  `checklevel`/`login`/`apikey`/`sanctum`/`jwt`/`oauth`... được coi là bảo vệ;
+  `throttle` thì không; `guest*` không bao giờ được coi là bảo vệ
+  (guest = chưa đăng nhập, kể cả `guestAdmin` chứa chữ `admin`). Actions so khớp theo
   FQCN (`use` imports được resolve) nên 2 controller trùng tên khác namespace
   (Admin vs Shop API) không lẫn vào nhau. Tắt bằng
   `analyzers.owasp.route_middleware => false` nếu muốn hành vi cũ (chỉ nhìn
@@ -165,7 +166,8 @@ php artisan quality:check --tier=all --fail-on=none
   `Redirect::away()` là biến, call hoặc concat chứa phần động.
 - **Tự động bỏ qua**: `redirect()->route()` / `Redirect::route()`, `back()`,
   string literal, `url()->previous()`, `config()`/`env()` (kể cả concat mà
-  mọi leaf đều safe, vd `redirect(config('app.url') . '/done')`),
+  mọi leaf đều safe, vd `redirect(config('app.url') . '/done')` — kể cả qua
+  biến trung gian `$url = config(...) . '/login'`),
   `url()` với args toàn literal.
 - **Confidence**: biến thuần / `$request->input()` / concat động = High;
   `redirect($page->getUrl())` (method/property/static — thường là internal
