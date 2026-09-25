@@ -645,10 +645,23 @@ final class HtmlReporter implements ReporterInterface
             }
             el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-        document.querySelectorAll('.sidebar nav a[href^="#checker-"]').forEach(function (a) {
+        document.querySelectorAll('.sidebar nav a[href^="#checker-"]:not([data-side-sev]):not([data-side-rule]):not([data-side-file])').forEach(function (a) {
             a.addEventListener('click', function (e) {
                 e.preventDefault();
                 revealSection(a.getAttribute('href').slice(1));
+            });
+        });
+        /* Plain TOC links (Summary, Top Rules, OWASP, Per-Checker): smooth-scroll
+           only, never touch search/severity filters and never trigger a real
+           navigation (file:// pages treat every origin as unique). */
+        document.querySelectorAll('.sidebar nav a[href^="#"]:not([href^="#checker-"])').forEach(function (a) {
+            a.addEventListener('click', function (e) {
+                var id = (a.getAttribute('href') || '').slice(1);
+                var el = id && document.getElementById(id);
+                if (el) {
+                    e.preventDefault();
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
             });
         });
         window.addEventListener('hashchange', function () {

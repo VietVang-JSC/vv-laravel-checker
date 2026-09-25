@@ -191,6 +191,19 @@ final class HtmlReporterTest extends TestCase
         self::assertStringNotContainsString('@import', $html);
     }
 
+    public function testSidebarFilterLinksNeverTriggerSectionReveal(): void
+    {
+        $html = $this->renderHtml();
+
+        // Filter links (severity/rule/file, incl. nested sub-menus) must not
+        // also match the revealSection() binding, or a click would filter and
+        // immediately un-filter. Only pure checker links reveal sections.
+        self::assertStringContainsString(
+            'a[href^="#checker-"]:not([data-side-sev]):not([data-side-rule]):not([data-side-file])',
+            $html
+        );
+    }
+
     public function testIssueGroupsAreCollapsibleDetails(): void
     {
         $html = $this->renderHtml();

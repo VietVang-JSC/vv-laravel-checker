@@ -143,6 +143,13 @@ The command returns exit code `0` when the selected threshold passes and a
 non-zero code when the gate fails. Use `--fail-on=none` when reviewing findings
 without failing the shell command.
 
+### Viewing the HTML report
+
+Open `reports/quality-checker/quality-report.html` directly in a browser — the
+report is fully self-contained (no network needed) and works from `file://`.
+File links use `vscode://` deep links (require VS Code); set
+`html.repo_url` in the published config to get GitHub blob links instead.
+
 ### Recommended rollout for an existing project
 
 Do not block the team on every legacy finding on the first day:
