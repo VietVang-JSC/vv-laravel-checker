@@ -743,6 +743,34 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertSame('OWASP_SSRF', $this->rules($issues)[0] ?? null);
     }
 
+    public function testSsrfReadsGuzzleRequestUrlFromSecondArg(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass ApiClient {\n    public function call(string \$method, string \$endpoint): array {\n" .
+            "        \$response = \$client->request(\$method, \$endpoint, []);\n" .
+            "        return [];\n    }\n}\n",
+            'app/Services/ApiClient.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_SSRF', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testSsrfSkipsDeployTimeUrlConcat(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass PrinterController extends Controller {\n    public function list() {\n" .
+            "        \$res = \$client->request('GET', rtrim(env('API_URL'), '/') . '/api/admin/printers/get-all', []);\n" .
+            "        return [];\n    }\n}\n",
+            'app/Http/Controllers/PrinterController.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testCommandInjectionSkipsTypedArrayProcessParam(): void
     {
         $file = $this->temp(

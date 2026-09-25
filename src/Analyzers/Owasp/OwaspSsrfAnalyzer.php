@@ -178,6 +178,18 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
     private function firstUrlArg(Node $node, string $sink): ?Node\Expr
     {
         $args = $node->args;
+
+        // Guzzle-style request(method, url, options): the URL is the second
+        // argument, not the first.
+        if (
+            $sink === 'request()'
+            && ($node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall)
+        ) {
+            $arg = $args[1] ?? $args[0] ?? null;
+
+            return $arg instanceof Node\Arg ? $arg->value : null;
+        }
+
         $arg = $args[0] ?? null;
 
         if ($node instanceof Node\Expr\FuncCall && in_array($sink, ['file_get_contents()', 'fopen()', 'get_headers()'], true)) {
@@ -213,6 +225,10 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             && $expr->name instanceof Node\Name
             && in_array(strtolower($expr->name->toString()), self::CONFIG_FUNCS, true)
         ) {
+            return false;
+        }
+
+        if ($this->isDeployTimeExpr($expr, $origins, [])) {
             return false;
         }
 
@@ -306,6 +322,77 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         }
 
         return (bool) preg_match('/^[waxc]/i', ltrim($mode->value->value));
+    }
+
+    /**
+     * Deploy-time expressions: literals, env()/config() lookups, string
+     * helpers (trim/sprintf/...) applied to deploy-time values, and variables
+     * assigned only such expressions (e.g. `$base = rtrim(env('API_URL'), '/')`).
+     *
+     * @param array<string, list<Node\Expr>> $origins
+     * @param array<string, true> $seen cycle guard
+     */
+    private function isDeployTimeExpr(Node\Expr $expr, array $origins, array $seen): bool
+    {
+        if ($this->isLiteralString($expr)) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\ConstFetch || $expr instanceof Node\Expr\ClassConstFetch) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+            if (isset($seen[$expr->name])) {
+                return false;
+            }
+            $seen[$expr->name] = true;
+            $rhsList = $origins[$expr->name] ?? [];
+            if ($rhsList === []) {
+                return false;
+            }
+            foreach ($rhsList as $rhs) {
+                if (!$this->isDeployTimeExpr($rhs, $origins, $seen)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\FuncCall && $expr->name instanceof Node\Name) {
+            $fn = strtolower($expr->name->toString());
+            if (in_array($fn, self::CONFIG_FUNCS, true)) {
+                return true;
+            }
+            if (!in_array($fn, ['trim', 'ltrim', 'rtrim', 'sprintf'], true)) {
+                return false;
+            }
+            foreach ($expr->args as $arg) {
+                if ($arg instanceof Node\Arg && !$this->isDeployTimeExpr($arg->value, $origins, $seen)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
+            return $this->isDeployTimeExpr($expr->left, $origins, $seen)
+                && $this->isDeployTimeExpr($expr->right, $origins, $seen);
+        }
+
+        if ($expr instanceof Node\Scalar\InterpolatedString) {
+            foreach ($expr->parts as $part) {
+                if ($part instanceof Node\Expr && !$this->isDeployTimeExpr($part, $origins, $seen)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return false;
     }
 
     /**

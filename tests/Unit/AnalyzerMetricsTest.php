@@ -171,6 +171,16 @@ final class AnalyzerMetricsTest extends TestCase
             ['src/Analyzers/Reader.php' => "<?php\nclass Reader {\n    protected function readFile(string \$path): string {\n        return (string) file_get_contents(\$path);\n    }\n}\n"],
             null,
         ];
+        yield 'ssrf_tp_guzzle_request_second_arg' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Services/ApiClient.php' => "<?php\nclass ApiClient {\n    public function call(string \$method, string \$endpoint): array {\n        \$response = \$client->request(\$method, \$endpoint, []);\n        return [];\n    }\n}\n"],
+            'OWASP_SSRF',
+        ];
+        yield 'ssrf_fp_deploytime_url' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Http/Controllers/PrinterController.php' => "<?php\nclass PrinterController extends Controller {\n    public function list() {\n        \$res = \$client->request('GET', rtrim(env('API_URL'), '/') . '/api/x', []);\n        return [];\n    }\n}\n"],
+            null,
+        ];
 
         // --- SSTI ---
         yield 'ssti_tp_input_var' => [
@@ -327,6 +337,11 @@ final class AnalyzerMetricsTest extends TestCase
             static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
             ['src/Base/Config.php' => "<?php\nclass Config {\n    public function get(): object {\n        \$cfgfile = dirname(dirname(__DIR__)) . '/config/default.php';\n        return new Cfg(require \$cfgfile);\n    }\n}\n"],
             null,
+        ];
+        yield 'traversal_tp_file_facade' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Http/Controllers/LogController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\File;\nuse Illuminate\\Http\\Request;\nclass LogController extends Controller {\n    public function show(Request \$request) {\n        return File::get(storage_path('logs/laravel-' . \$request->date . '.log'));\n    }\n}\n"],
+            'OWASP_PATH_TRAVERSAL',
         ];
 
         // --- Blade XSS ---

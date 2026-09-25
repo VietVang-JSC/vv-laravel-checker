@@ -45,6 +45,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are High confidence, method targets (`$page->getUrl()`) are Medium.
 - Dogfooded the new inline suppression on the package's own reviewed sinks.
 
+### Fixed (DeltaPOS + DeltaPosWeb audit)
+
+- Command injection skips private-helper params with literal-only call sites
+  and `foreach` over constant iterables (DeltaPOS `nssm` edge-box manager).
+- SSTI resolves concatenations of literals (`'front.pos_' . $industry`).
+- Broken access control recognizes API-key guards (`edge.api.key`,
+  `sanctum`, `jwt`, `oauth`).
+- Blade XSS skips sanitizer calls, `view_render_event()` hooks, paginator
+  `->links()`, `->renderedHTML` properties, and fully HEX-flagged
+  `json_encode()` (bare `json_encode($x)` in `<script>` stays flagged).
+- SSRF reads Guzzle `$client->request($method, $url)` URLs from the second
+  argument and skips deploy-time URL building (`rtrim(env())`, `sprintf()`,
+  same-scope variables); dynamic subdomains stay flagged.
+- Path traversal covers the `File::` facade (`File::get($request->date)` log
+  read was a true positive) plus `dirname()` and path-builder method calls.
+
 ## [1.0.0] - 2026-09-24
 
 ### Added

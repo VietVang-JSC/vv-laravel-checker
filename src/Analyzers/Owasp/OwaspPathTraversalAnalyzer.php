@@ -12,6 +12,10 @@ use VietVang\QualityChecker\Result\Severity;
 /**
  * A01 Path Traversal (file / Storage / download sinks).
  *
+ * Sinks: file_get_contents/file_put_contents/fopen/file/readfile,
+ * Storage::get/put/delete/download, File::get/put/delete (facade +
+ * Filesystem), response()->download/file, and dynamic include/require.
+ *
  * Assumes: file sinks are flagged when their path argument is a variable, a property/method call, or
  * a concat/interpolation that resolves to request input. A `storage_path()`/`base_path()` wrapper only
  * sanitizes when every argument is itself safe (literal or `basename()`-wrapped); otherwise the taint
@@ -29,6 +33,8 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
     private const FUNC_SINKS = ['file_get_contents', 'file_put_contents', 'fopen', 'file', 'readfile'];
 
     private const STORAGE_METHODS = ['get', 'put', 'delete', 'download'];
+
+    private const FILE_METHODS = ['get', 'put', 'delete'];
 
     private const RESPONSE_METHODS = ['download', 'file'];
 
@@ -139,10 +145,14 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
                     continue;
                 }
                 $method = strtolower($node->name->toString());
-                if (!in_array($method, self::STORAGE_METHODS, true)) {
-                    continue;
+                $class = $node->class->toString();
+                $label = null;
+                if (in_array($method, self::STORAGE_METHODS, true) && $this->isStorageClass($class)) {
+                    $label = 'Storage::' . $node->name->toString() . '()';
+                } elseif (in_array($method, self::FILE_METHODS, true) && $this->isFileClass($class)) {
+                    $label = 'File::' . $node->name->toString() . '()';
                 }
-                if (!$this->isStorageClass($node->class->toString())) {
+                if ($label === null) {
                     continue;
                 }
                 $arg = $node->args[0] ?? null;
@@ -152,14 +162,13 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
                 if (!$this->isTaintedPath($arg->value)) {
                     continue;
                 }
-                $sink = 'Storage::' . $node->name->toString() . '()';
                 $issues[] = $this->makeIssue(
                     self::RULE,
-                    sprintf('Potential path traversal: user input flows into %s.', $sink),
+                    sprintf('Potential path traversal: user input flows into %s.', $label),
                     $file,
                     $node->getStartLine(),
                     Severity::Error,
-                    ['sink' => $sink]
+                    ['sink' => $label]
                 );
                 continue;
             }
@@ -213,6 +222,16 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
         $normalized = strtolower(ltrim($class, '\\'));
 
         return $normalized === 'storage' || str_ends_with($normalized, '\\storage');
+    }
+
+    private function isFileClass(string $class): bool
+    {
+        $normalized = strtolower(ltrim($class, '\\'));
+
+        return $normalized === 'file'
+            || $normalized === 'filesystem'
+            || str_ends_with($normalized, '\\file')
+            || str_ends_with($normalized, '\\filesystem');
     }
 
     private function isResponseReceiver(Node\Expr $expr): bool

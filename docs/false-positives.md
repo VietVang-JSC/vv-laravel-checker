@@ -128,10 +128,13 @@ php artisan quality:check --tier=all --fail-on=none
     (`foreach (self::SERVICES as $svc)` — deploy-time values, case DeltaPOS).
   - SSRF: `new GuzzleHttp\Client([...])` không phải sink (constructor chỉ nhận
     config array — request thật ở `->get()`/`->post()` sau đó đã được cover
-    riêng); `->getRealPath()`/`->getPathname()` (UploadedFile/SplFileInfo)
+    riêng); với Guzzle `$client->request($method, $url)` thì URL là arg thứ 2;
+    `->getRealPath()`/`->getPathname()` (UploadedFile/SplFileInfo)
     luôn là local path (case BookStack uploads); URL host cố định dạng literal
     (`sprintf('https://github.com/...', $v)`, kể cả qua biến trung gian —
-    case TrivyDownloader) không phải SSRF; `env()`/`config()` là deploy-time.
+    case TrivyDownloader) không phải SSRF; `env()`/`config()` là deploy-time,
+    kể cả khi bọc trong `rtrim()`/`sprintf()`/concat toàn deploy-time
+    (case `env('API_URL')` ở DeltaPosWeb).
   - SSRF/traversal dùng chung naming convention: biến/property tên gợi ý
     local (`$file`, `$path`, `$source`, `$outputDir`...) được coi là local
     path — trừ khi root là `$request`/`request()` (case dogfood chính
@@ -179,6 +182,7 @@ php artisan quality:check --tier=all --fail-on=none
 
 ### `OWASP_PATH_TRAVERSAL`
 - **Báo đúng khi**: file sink (`file_get_contents`, `Storage::get`,
+  `File::get` (facade/Filesystem — case DeltaPosWeb đọc log theo `$request->date`),
   `response()->download`, `include $var`, ...) nhận path động.
 - **Tự động bỏ qua**: literal (kể cả `storage_path()` với args literal),
   `basename()`-wrapped, `env()`/`config()`, biến tên local (`$file`, `$path`,

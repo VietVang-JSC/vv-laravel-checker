@@ -56,6 +56,20 @@ final class OwaspPathTraversalAnalyzerTest extends TestCase
         self::assertSame(Severity::Error, $issues[0]->severity ?? null);
     }
 
+    public function testFlagsFileFacadeGetWithRequestDate(): void
+    {
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\File;\nuse Illuminate\\Http\\Request;\n" .
+            "class storageLogController extends Controller {\n    public function indexDate(Request \$request) {\n" .
+            "        return File::get(storage_path('logs/laravel-' . \$request->date . '.log'));\n    }\n}\n",
+            'app/Http/Controllers/storageLogController.php'
+        );
+
+        $issues = (new OwaspPathTraversalAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_PATH_TRAVERSAL', $this->rules($issues)[0] ?? null);
+    }
+
     public function testFlagsStorageGetWithVariable(): void
     {
         $file = $this->temp(
