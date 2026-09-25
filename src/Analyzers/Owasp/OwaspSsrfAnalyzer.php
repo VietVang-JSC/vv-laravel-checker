@@ -34,12 +34,6 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         'database_path', 'app_path', 'config_path', 'lang_path',
     ];
 
-    private const LOCAL_PATH_METHODS = ['getrealpath', 'getpathname'];
-
-    /**
-     * Deploy-time configuration lookups — server environment, never request
-     * user input (e.g. Fortrabbit `file_get_contents(env('APP_SECRETS'))`).
-     */
     private const CONFIG_FUNCS = ['env', 'config'];
 
     private const STATIC_CLIENTS = [
@@ -315,32 +309,6 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
     }
 
     /**
-     * File-level map of variable name to every assigned right-hand side, so a
-     * sink argument like `$url` can be resolved to `$url = sprintf(...)`.
-     *
-     * @param list<Node> $nodes
-     * @return array<string, list<Node\Expr>>
-     */
-    private function variableOrigins(array $nodes): array
-    {
-        $origins = [];
-        $assigns = $this->finder()->find($nodes, static function (Node $node): bool {
-            return $node instanceof Node\Expr\Assign;
-        });
-        foreach ($assigns as $assign) {
-            if (
-                $assign instanceof Node\Expr\Assign
-                && $assign->var instanceof Node\Expr\Variable
-                && is_string($assign->var->name)
-            ) {
-                $origins[$assign->var->name][] = $assign->expr;
-            }
-        }
-
-        return $origins;
-    }
-
-    /**
      * A variable is safe when it has at least one assignment and every
      * assignment is a safe origin (literal, fixed-host URL, local path,
      * deploy-time config). Any dynamic reassignment keeps it flagged.
@@ -388,9 +356,24 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         if (
             $expr instanceof Node\Expr\MethodCall
             && $expr->name instanceof Node\Identifier
-            && in_array(strtolower($expr->name->toString()), self::LOCAL_PATH_METHODS, true)
+            && $this->rootVariableName($expr) !== 'request'
+            && $this->isLocalPathName($expr->name->toString())
         ) {
             return true;
+        }
+
+        if (
+            $expr instanceof Node\Expr\StaticCall
+            && $expr->name instanceof Node\Identifier
+            && $expr->class instanceof Node\Name
+        ) {
+            $class = strtolower(ltrim($expr->class->toString(), '\\'));
+            if ($class === 'request' || str_ends_with($class, '\\request')) {
+                return false;
+            }
+            if ($this->isLocalPathName($expr->name->toString())) {
+                return true;
+            }
         }
 
         if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {

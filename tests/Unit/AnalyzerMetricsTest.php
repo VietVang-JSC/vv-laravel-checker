@@ -290,6 +290,16 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/DownloadController.php' => "<?php\nreturn response()->download(storage_path('docs/' . \$request->file));\n"],
             'OWASP_PATH_TRAVERSAL',
         ];
+        yield 'traversal_fp_method_path' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Services/SmokeReportService.php' => "<?php\nclass SmokeReportService {\n    public function save(): void {\n        file_put_contents(\$this->absolutePath(), '{}');\n    }\n}\n"],
+            null,
+        ];
+        yield 'traversal_fp_dirname_const' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['src/Base/Config.php' => "<?php\nclass Config {\n    public function get(): object {\n        \$cfgfile = dirname(dirname(__DIR__)) . '/config/default.php';\n        return new Cfg(require \$cfgfile);\n    }\n}\n"],
+            null,
+        ];
 
         // --- Blade XSS ---
         yield 'bladexss_tp_variable' => [
@@ -319,7 +329,22 @@ final class AnalyzerMetricsTest extends TestCase
         ];
         yield 'bladexss_fp_rendered_html' => [
             static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
-            ['resources/views/comments/comment.blade.php' => "<div>{!! \$commentHtml !!}</div>\n"],
+            ['resources/views/comments/comment.blade.php' => "<div>{!! \$commentHtml !!}</div>\n<div>{!! \$page->renderedHTML !!}</div>\n"],
+            null,
+        ];
+        yield 'bladexss_fp_sanitizer' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/frontend/lesson/detail.blade.php' => "<div>{!! sanitizeHtml(\$exercise_detail->student_content) !!}</div>\n"],
+            null,
+        ];
+        yield 'bladexss_fp_paginator_links' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/customer/partials/tables.blade.php' => "<div>{!! \$rows->links('pagination::bootstrap-4') !!}</div>\n"],
+            null,
+        ];
+        yield 'bladexss_fp_event_output' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['packages/Webkul/Shop/src/Resources/views/layouts/header.blade.php' => "<div>{!! view_render_event('bagisto.shop.header.before') !!}</div>\n"],
             null,
         ];
     }
@@ -352,6 +377,7 @@ final class AnalyzerMetricsTest extends TestCase
     public function testCorpusPrecisionAndRecallArePerfect(): void
     {
         $truePositives = 0;
+        $trueNegatives = 0;
         $falsePositives = 0;
         $falseNegatives = 0;
         /** @var list<string> $failures */
@@ -373,6 +399,8 @@ final class AnalyzerMetricsTest extends TestCase
                 if ($issues !== []) {
                     $falsePositives++;
                     $failures[] = $id . ' (FP: ' . implode(',', $rules) . ')';
+                } else {
+                    $trueNegatives++;
                 }
             } elseif (in_array($expectedRule, $rules, true)) {
                 $truePositives++;
@@ -392,9 +420,10 @@ final class AnalyzerMetricsTest extends TestCase
         fwrite(
             STDERR,
             sprintf(
-                "\n[metrics] cases=%d TP=%d FP=%d FN=%d precision=%.3f recall=%.3f\n",
-                $truePositives + $falsePositives + $falseNegatives,
+                "\n[metrics] cases=%d TP=%d TN=%d FP=%d FN=%d precision=%.3f recall=%.3f\n",
+                $truePositives + $trueNegatives + $falsePositives + $falseNegatives,
                 $truePositives,
+                $trueNegatives,
                 $falsePositives,
                 $falseNegatives,
                 $precision,

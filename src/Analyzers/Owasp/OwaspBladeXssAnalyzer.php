@@ -17,14 +17,30 @@ use VietVang\QualityChecker\Result\Severity;
  * and must not be parsed with PHP-Parser.
  *
  * Deliberately not flagged: {!! ... !!} blocks without dynamic data (e.g.
- * `{!! csrf_field() !!}`), blocks already escaped manually via `e(...)`, the
- * escaped `{{ ... }}` syntax (which is safe by definition), and variables
- * whose name marks pre-rendered/sanitized HTML (`$commentHtml`,
- * `$page->getHtml()`) — a naming convention for sanitizer output.
+ * `{!! csrf_field() !!}`), blocks already escaped/sanitized via `e(...)`,
+ * `sanitizeHtml(...)`, `strip_tags(...)`, `htmlspecialchars(...)` and alike,
+ * framework event-hook output (`view_render_event(...)`), the escaped
+ * `{{ ... }}` syntax (which is safe by definition), paginator
+ * `->links(...)` output, and variables whose name marks pre-rendered/
+ * sanitized HTML (`$commentHtml`, `$page->getHtml()`).
  */
 final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'OWASP_BLADE_XSS';
+
+    /**
+     * Explicit sanitizer/escaper calls wrapping the output.
+     */
+    private const SANITIZER_FUNCS = [
+        'e', 'sanitizehtml', 'strip_tags', 'htmlspecialchars', 'htmlentities', 'purify', 'clean',
+    ];
+
+    /**
+     * Framework event hooks whose output comes from internal listeners, not
+     * user data (e.g. Bagisto `{!! view_render_event('...') !!}` theming hook
+     * present in hundreds of templates).
+     */
+    private const EVENT_FUNCS = ['view_render_event'];
 
     public function supports(string $path): bool
     {
@@ -78,7 +94,15 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
             [$inner, $offset] = $block;
             $full = (string) ($fullMatches[$index][0] ?? '');
 
-            if (str_contains($inner, 'e(')) {
+            if ($this->isSanitized($inner)) {
+                continue;
+            }
+
+            if ($this->isEventOutput($inner)) {
+                continue;
+            }
+
+            if (str_contains($inner, '->links(')) {
                 continue;
             }
 
@@ -86,7 +110,7 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
                 continue;
             }
 
-            if (preg_match('/->\w*(html|rendered|sanitized|purified|markup)\w*\(/i', $inner) === 1) {
+            if (preg_match('/->\w*(html|rendered|sanitized|purified|markup)/i', $inner) === 1) {
                 continue;
             }
 
@@ -111,5 +135,29 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
         }
 
         return $issues;
+    }
+
+    private function isSanitized(string $inner): bool
+    {
+        $lower = strtolower($inner);
+        foreach (self::SANITIZER_FUNCS as $fn) {
+            if (preg_match('/\b' . preg_quote($fn, '/') . '\s*\(/', $lower) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isEventOutput(string $inner): bool
+    {
+        $lower = strtolower($inner);
+        foreach (self::EVENT_FUNCS as $fn) {
+            if (str_contains($lower, $fn . '(')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

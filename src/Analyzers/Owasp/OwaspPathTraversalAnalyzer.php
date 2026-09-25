@@ -32,15 +32,9 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
 
     private const RESPONSE_METHODS = ['download', 'file'];
 
-    private const PATH_HELPERS = ['storage_path', 'base_path'];
+    private const PATH_HELPERS = ['storage_path', 'base_path', 'dirname'];
 
     private const CONFIG_FUNCS = ['env', 'config'];
-
-    /**
-     * Method calls that provably return local filesystem paths, never
-     * attacker-controlled URLs (SplFileInfo, Symfony UploadedFile).
-     */
-    private const LOCAL_PATH_METHODS = ['getrealpath', 'getpathname'];
 
     /**
      * @param list<string> $files
@@ -74,8 +68,16 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
             return [];
         }
 
+        $roots = [];
+        foreach ($ast as $node) {
+            if ($node instanceof Node) {
+                $roots[] = $node;
+            }
+        }
+        $origins = $this->variableOrigins($roots);
+
         $issues = [];
-        $nodes = $this->finder()->find($ast, function (Node $node): bool {
+        $nodes = $this->finder()->find($roots, function (Node $node): bool {
             return $node instanceof Node\Expr\FuncCall
                 || $node instanceof Node\Expr\StaticCall
                 || $node instanceof Node\Expr\MethodCall
@@ -89,8 +91,9 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
                     continue;
                 }
                 // include/require with a dynamic path is potential LFI (code
-                // execution) — the local-name heuristic never applies here.
-                if (!$this->isTaintedPath($node->expr, false)) {
+                // execution) — the local-name heuristic never applies here,
+                // but a variable provably assigned a safe path does not flag.
+                if (!$this->isTaintedPath($node->expr, false, $origins)) {
                     continue;
                 }
                 $issues[] = $this->makeIssue(
@@ -225,7 +228,10 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
         return false;
     }
 
-    private function isTaintedPath(Node\Expr $expr, bool $allowNameHeuristic = true): bool
+    /**
+     * @param array<string, list<Node\Expr>> $origins
+     */
+    private function isTaintedPath(Node\Expr $expr, bool $allowNameHeuristic = true, array $origins = []): bool
     {
         if ($expr instanceof Node\Scalar\String_) {
             return false;
@@ -235,7 +241,7 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
             return false;
         }
 
-        if ($expr instanceof Node\Expr\ConstFetch) {
+        if ($expr instanceof Node\Expr\ConstFetch || $expr instanceof Node\Scalar\MagicConst) {
             return false;
         }
 
@@ -244,6 +250,9 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
         }
 
         if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+            if ($this->isSafeIncludeOrigin($expr->name, $origins, [])) {
+                return false;
+            }
             if ($allowNameHeuristic && $this->rootVariableName($expr) !== 'request') {
                 return !$this->isLocalPathName($expr->name);
             }
@@ -262,16 +271,32 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
         if (
             $expr instanceof Node\Expr\MethodCall
             && $expr->name instanceof Node\Identifier
-            && in_array(strtolower($expr->name->toString()), self::LOCAL_PATH_METHODS, true)
+            && $this->rootVariableName($expr) !== 'request'
+            && $this->isLocalPathName($expr->name->toString())
         ) {
             return false;
+        }
+
+        if (
+            $expr instanceof Node\Expr\StaticCall
+            && $expr->name instanceof Node\Identifier
+            && $expr->class instanceof Node\Name
+        ) {
+            $class = strtolower(ltrim($expr->class->toString(), '\\'));
+            if ($class === 'request' || str_ends_with($class, '\\request')) {
+                return true;
+            }
+            if ($allowNameHeuristic && $this->isLocalPathName($expr->name->toString())) {
+                return false;
+            }
         }
 
         if ($expr instanceof Node\Expr\FuncCall && $expr->name instanceof Node\Name) {
             $fn = strtolower($expr->name->toString());
             if ($fn === 'basename') {
                 return false;
-            }            if (in_array($fn, self::CONFIG_FUNCS, true)) {
+            }
+            if (in_array($fn, self::CONFIG_FUNCS, true)) {
                 return false;
             }
             if (in_array($fn, self::PATH_HELPERS, true)) {
@@ -279,7 +304,10 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
                     return false;
                 }
                 foreach ($expr->args as $arg) {
-                    if ($arg instanceof Node\Arg && $this->isTaintedPath($arg->value)) {
+                    if (
+                        $arg instanceof Node\Arg
+                        && $this->isTaintedPath($arg->value, $allowNameHeuristic, $origins)
+                    ) {
                         return true;
                     }
                 }
@@ -291,12 +319,16 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
         }
 
         if ($expr instanceof Node\Expr\BinaryOp\Concat) {
-            return $this->isTaintedPath($expr->left) || $this->isTaintedPath($expr->right);
+            return $this->isTaintedPath($expr->left, $allowNameHeuristic, $origins)
+                || $this->isTaintedPath($expr->right, $allowNameHeuristic, $origins);
         }
 
         if ($expr instanceof Node\Scalar\InterpolatedString) {
             foreach ($expr->parts as $part) {
-                if ($part instanceof Node\Expr && $this->isTaintedPath($part)) {
+                if (
+                    $part instanceof Node\Expr
+                    && $this->isTaintedPath($part, $allowNameHeuristic, $origins)
+                ) {
                     return true;
                 }
             }
@@ -305,15 +337,19 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
         }
 
         if ($expr instanceof Node\Expr\BinaryOp) {
-            return $this->isTaintedPath($expr->left) || $this->isTaintedPath($expr->right);
+            return $this->isTaintedPath($expr->left, $allowNameHeuristic, $origins)
+                || $this->isTaintedPath($expr->right, $allowNameHeuristic, $origins);
         }
 
         if ($expr instanceof Node\Expr\Ternary) {
-            if ($expr->if !== null && $this->isTaintedPath($expr->if)) {
+            if (
+                $expr->if !== null
+                && $this->isTaintedPath($expr->if, $allowNameHeuristic, $origins)
+            ) {
                 return true;
             }
 
-            return $this->isTaintedPath($expr->else);
+            return $this->isTaintedPath($expr->else, $allowNameHeuristic, $origins);
         }
 
         if (
@@ -330,5 +366,81 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
         }
 
         return $this->isTaintedExpr($expr);
+    }
+
+    /**
+     * A variable assigned only safe path origins (literals, magic constants,
+     * basename(), path helpers with safe args, deploy-time config) is safe
+     * even for include/require. Any other assignment keeps it flagged.
+     *
+     * @param array<string, list<Node\Expr>> $origins
+     * @param array<string, true> $seen cycle guard
+     */
+    private function isSafeIncludeOrigin(string $name, array $origins, array $seen): bool
+    {
+        if (isset($seen[$name])) {
+            return false;
+        }
+        $seen[$name] = true;
+
+        $rhsList = $origins[$name] ?? [];
+        if ($rhsList === []) {
+            return false;
+        }
+
+        foreach ($rhsList as $rhs) {
+            if (!$this->isSafeIncludeRhs($rhs, $origins, $seen)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, list<Node\Expr>> $origins
+     * @param array<string, true> $seen
+     */
+    private function isSafeIncludeRhs(Node\Expr $expr, array $origins, array $seen): bool
+    {
+        if (
+            $expr instanceof Node\Scalar\String_
+            || $expr instanceof Node\Scalar\LNumber
+            || $expr instanceof Node\Scalar\DNumber
+            || $expr instanceof Node\Expr\ConstFetch
+            || $expr instanceof Node\Scalar\MagicConst
+            || $expr instanceof Node\Expr\ClassConstFetch
+        ) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+            return $this->isSafeIncludeOrigin($expr->name, $origins, $seen);
+        }
+
+        if (
+            $expr instanceof Node\Expr\FuncCall
+            && $expr->name instanceof Node\Name
+            && in_array(
+                strtolower($expr->name->toString()),
+                array_merge(['basename'], self::PATH_HELPERS, self::CONFIG_FUNCS),
+                true
+            )
+        ) {
+            foreach ($expr->args as $arg) {
+                if ($arg instanceof Node\Arg && !$this->isSafeIncludeRhs($arg->value, $origins, $seen)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
+            return $this->isSafeIncludeRhs($expr->left, $origins, $seen)
+                && $this->isSafeIncludeRhs($expr->right, $origins, $seen);
+        }
+
+        return false;
     }
 }

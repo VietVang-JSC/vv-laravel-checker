@@ -172,6 +172,31 @@ abstract class AbstractAnalyzer
     }
 
     /**
+     * File-level map of variable name to every assigned right-hand side.
+     *
+     * @param list<Node> $nodes
+     * @return array<string, list<Node\Expr>>
+     */
+    protected function variableOrigins(array $nodes): array
+    {
+        $origins = [];
+        $assigns = $this->finder()->find($nodes, static function (Node $node): bool {
+            return $node instanceof Node\Expr\Assign;
+        });
+        foreach ($assigns as $assign) {
+            if (
+                $assign instanceof Node\Expr\Assign
+                && $assign->var instanceof Node\Expr\Variable
+                && is_string($assign->var->name)
+            ) {
+                $origins[$assign->var->name][] = $assign->expr;
+            }
+        }
+
+        return $origins;
+    }
+
+    /**
      * @return list<string>
      */
     protected function listPhpFiles(string $dir): array

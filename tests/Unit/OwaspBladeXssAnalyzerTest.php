@@ -96,7 +96,7 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
     public function testSkipsRenderedHtmlConvention(): void
     {
         $file = $this->temp(
-            "<div>{!! \$commentHtml !!}</div>\n<div>{!! \$book->descriptionInfo()->getHtml() !!}</div>\n",
+            "<div>{!! \$commentHtml !!}</div>\n<div>{!! \$book->descriptionInfo()->getHtml() !!}</div>\n<div>{!! \$page->renderedHTML !!}</div>\n",
             'resources/views/comments/comment.blade.php'
         );
 
@@ -115,6 +115,42 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
         $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
 
         self::assertSame('OWASP_BLADE_XSS', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testSkipsSanitizerWrapped(): void
+    {
+        $file = $this->temp(
+            "<div>{!! sanitizeHtml(\$exercise_detail->student_content) !!}</div>\n<div>{!! strip_tags(\$x) !!}</div>\n",
+            'resources/views/frontend/lesson/detail.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsPaginatorLinks(): void
+    {
+        $file = $this->temp(
+            "<div>{!! \$importCreatedRows->links('pagination::bootstrap-4') !!}</div>\n",
+            'resources/views/customer/partials/tables.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsFrameworkEventOutput(): void
+    {
+        $file = $this->temp(
+            "<div>{!! view_render_event('bagisto.shop.layout.header.before') !!}</div>\n",
+            'packages/Webkul/Shop/src/Resources/views/layouts/header.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
     }
 
     public function testSkipsNonBladeExtension(): void

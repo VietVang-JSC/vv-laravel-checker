@@ -186,9 +186,13 @@ php artisan quality:check --tier=all --fail-on=none
 - **Báo đúng khi**: `{!! ... !!}` chứa `$biến` hoặc `request(` trong
   `*.blade.php`.
 - **Tự động bỏ qua**: `{!! csrf_field() !!}` (không dữ liệu động),
-  `{!! e($x) !!}` (escape thủ công), `{{ ... }}` (escaped syntax), và
+  sanitizer tường minh (`e()`, `sanitizeHtml()`, `strip_tags()`,
+  `htmlspecialchars()`, `purify()`, `clean()`), framework event-hook
+  (`view_render_event(...)` — output từ listeners nội bộ, case 440 findings
+  Bagisto), paginator `->links()`, `{{ ... }}` (escaped syntax), và
   convention HTML đã sanitize: biến `*Html/*Rendered/*Sanitized` hoặc method
-  `->getHtml()/->toHtml()` (case BookStack render markdown đã purify).
+  `->getHtml()`/property `->renderedHTML` (case BookStack render markdown
+  đã purify).
 - **Sửa đúng**: chuyển sang `{{ ... }}`; chỉ dùng `{!! ... !!}` + inline
   ignore cho HTML đã review.
 
