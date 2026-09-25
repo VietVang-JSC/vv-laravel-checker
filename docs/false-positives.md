@@ -112,14 +112,24 @@ php artisan quality:check --tier=all --fail-on=none
     array nằm trong biến `$command = [...]` cùng function).
   - command injection: chuỗi lệnh ghép toàn phần deploy-time — literal,
     constant (`PHP_BINARY`, `DIRECTORY_SEPARATOR`), Laravel path helper
-    (`base_path()`...), và biến đã gán từ các phần đó trong cùng function
-    (case `passthru(PHP_BINARY." $artisan ...")` với
-    `$artisan = base_path('artisan')` ở Monica — biến gán từ method call
+    (`base_path()`...), `escapeshellarg()`-wrapped, và biến đã gán từ các
+    phần đó trong cùng function (case `passthru(PHP_BINARY." $artisan ...")`
+    với `$artisan = base_path('artisan')` ở Monica — biến gán từ method call
     như `$v = $this->getVerbosity()` vẫn bị báo).
+  - command injection: `new Process()` với command là array — kể cả qua biến
+    type-hint `array`, docblock `@param array`, hoặc ternary chọn giữa các
+    array (case dogfood `runProcess(array $command)` và `extract()` trong
+    chính codebase này).
   - SSRF: `new GuzzleHttp\Client([...])` không phải sink (constructor chỉ nhận
     config array — request thật ở `->get()`/`->post()` sau đó đã được cover
     riêng); `->getRealPath()`/`->getPathname()` (UploadedFile/SplFileInfo)
-    luôn là local path (case BookStack uploads).
+    luôn là local path (case BookStack uploads); URL host cố định dạng literal
+    (`sprintf('https://github.com/...', $v)`, kể cả qua biến trung gian —
+    case TrivyDownloader) không phải SSRF; `env()`/`config()` là deploy-time.
+  - SSRF/traversal dùng chung naming convention: biến/property tên gợi ý
+    local (`$file`, `$path`, `$source`, `$outputDir`...) được coi là local
+    path — trừ khi root là `$request`/`request()` (case dogfood chính
+    codebase này); `include/require` động luôn bị báo (LFI→RCE, không miễn).
   - SSTI: biến template được gán string literal trong cùng function
     (`$viewName = 'backend.page'; view($viewName)` — case SiroLingo), và
     helper non-public mà mọi call site cùng file đều truyền literal cho tham
@@ -165,7 +175,10 @@ php artisan quality:check --tier=all --fail-on=none
 - **Báo đúng khi**: file sink (`file_get_contents`, `Storage::get`,
   `response()->download`, `include $var`, ...) nhận path động.
 - **Tự động bỏ qua**: literal (kể cả `storage_path()` với args literal),
-  `basename()`-wrapped, `env()`/`config()`, sink trong tests/.
+  `basename()`-wrapped, `env()`/`config()`, biến tên local (`$file`, `$path`,
+  `$outputDir`...) trừ root `$request`, method `getRealPath()/getPathname()`.
+- **Không miễn write-mode**: `fopen($x, 'wb')` vẫn báo — ghi file sai chỗ là
+  vuln thật (khác SSRF chỉ đọc). Đã review thì inline-ignore.
 - **Sửa đúng**: `basename()` input hoặc resolve cứng thư mục gốc:
   `Storage::get('docs/' . basename($name))`.
 

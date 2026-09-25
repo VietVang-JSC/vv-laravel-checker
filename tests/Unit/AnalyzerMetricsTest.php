@@ -150,6 +150,16 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Services/ExternalService.php' => "<?php\n\$data = file_get_contents(\$url);\n"],
             'OWASP_SSRF',
         ];
+        yield 'ssrf_fp_sprintf_fixed_host_var' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['src/Tools/Downloader.php' => "<?php\n\$url = sprintf('https://github.com/aquasecurity/trivy/releases/download/v%s/t.tgz', \$version);\n\$fp = fopen(\$url, 'rb');\n"],
+            null,
+        ];
+        yield 'ssrf_fp_file_var' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['src/Analyzers/Reader.php' => "<?php\nclass Reader {\n    protected function readFile(string \$path): string {\n        return (string) file_get_contents(\$path);\n    }\n}\n"],
+            null,
+        ];
 
         // --- XXE ---
         yield 'xxe_tp_sink' => [
@@ -254,6 +264,31 @@ final class AnalyzerMetricsTest extends TestCase
             static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
             ['app/Services/FileService.php' => "<?php\n\$contents = file_get_contents(storage_path('app/fixed.txt'));\n"],
             null,
+        ];
+        yield 'traversal_fp_file_var' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['src/Analyzers/Reader.php' => "<?php\nclass Reader {\n    protected function readFile(string \$path): string {\n        return (string) file_get_contents(\$path);\n    }\n}\n"],
+            null,
+        ];
+        yield 'traversal_tp_download_request' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Http/Controllers/DownloadController.php' => "<?php\nclass DownloadController extends Controller {\n    public function show() {\n        \$name = (string) request('file', '');\n        return response()->download(storage_path('docs/' . \$name));\n    }\n}\n"],
+            'OWASP_PATH_TRAVERSAL',
+        ];
+        yield 'traversal_fp_output_dir_concat' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['src/Reporters/JsonReporter.php' => "<?php\nclass JsonReporter {\n    public function render(object \$ctx): void {\n        file_put_contents(\$ctx->outputDir . '/quality-report.json', 'x');\n    }\n}\n"],
+            null,
+        ];
+        yield 'traversal_fp_spl_pathname' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['src/Runner/Cache.php' => "<?php\nclass Cache {\n    public function hash(object \$file): string {\n        return md5((string) file_get_contents(\$file->getPathname()));\n    }\n}\n"],
+            null,
+        ];
+        yield 'traversal_tp_request_property' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Http/Controllers/DownloadController.php' => "<?php\nreturn response()->download(storage_path('docs/' . \$request->file));\n"],
+            'OWASP_PATH_TRAVERSAL',
         ];
 
         // --- Blade XSS ---

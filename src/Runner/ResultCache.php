@@ -52,6 +52,9 @@ final class ResultCache
             'data' => $data,
         ];
 
+        // Reviewed: cache file path is assembled from the configured output
+        // dir plus an md5 key — no user input can escape the cache directory.
+        // quality-checker-ignore-next-line OWASP_PATH_TRAVERSAL
         file_put_contents($this->pathFor($key), json_encode($payload));
     }
 

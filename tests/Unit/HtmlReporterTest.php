@@ -258,8 +258,10 @@ final class HtmlReporterTest extends TestCase
     {
         $html = $this->renderHtml(['html' => ['code_context' => 0]]);
 
-        self::assertStringNotContainsString('<pre class="code">', $html);
         self::assertStringNotContainsString('class="snippet-row"', $html);
+        // Remediation fix samples are generic guidance, not project code:
+        // they stay visible even when snippets are off.
+        self::assertStringContainsString('class="fixbox"', $html);
     }
 
     public function testSortableTableHooksExist(): void

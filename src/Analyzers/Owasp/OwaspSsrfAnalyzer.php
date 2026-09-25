@@ -34,14 +34,6 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         'database_path', 'app_path', 'config_path', 'lang_path',
     ];
 
-    private const LOCAL_NAME_HINTS = [
-        'path', 'file', 'filepath', 'filename', 'fullpath', 'source', 'target', 'local',
-    ];
-
-    /**
-     * Method calls that provably return local filesystem paths, never URLs
-     * (Symfony UploadedFile / SplFileInfo).
-     */
     private const LOCAL_PATH_METHODS = ['getrealpath', 'getpathname'];
 
     /**
@@ -49,10 +41,6 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
      * user input (e.g. Fortrabbit `file_get_contents(env('APP_SECRETS'))`).
      */
     private const CONFIG_FUNCS = ['env', 'config'];
-
-    private const REMOTE_NAME_HINTS = [
-        'url', 'uri', 'endpoint', 'host', 'domain', 'link', 'href', 'remote', 'webhook', 'feed',
-    ];
 
     private const STATIC_CLIENTS = [
         'Http',
@@ -86,8 +74,16 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             return [];
         }
 
+        $nodes = [];
+        foreach ($ast as $node) {
+            if ($node instanceof Node) {
+                $nodes[] = $node;
+            }
+        }
+        $origins = $this->variableOrigins($nodes);
+
         $issues = [];
-        $calls = $this->finder()->find($ast, function (Node $node): bool {
+        $calls = $this->finder()->find($nodes, function (Node $node): bool {
             return $node instanceof Node\Expr\FuncCall
                 || $node instanceof Node\Expr\MethodCall
                 || $node instanceof Node\Expr\StaticCall
@@ -109,7 +105,7 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
                 continue;
             }
 
-            if (!$this->isPotentialUserInput($urlArg)) {
+            if (!$this->isPotentialUserInput($urlArg, $origins)) {
                 continue;
             }
 
@@ -201,9 +197,20 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         return null;
     }
 
-    private function isPotentialUserInput(Node\Expr $expr): bool
+    /**
+     * @param array<string, list<Node\Expr>> $origins
+     */
+    private function isPotentialUserInput(Node\Expr $expr, array $origins): bool
     {
         if ($this->isLiteralString($expr)) {
+            return false;
+        }
+
+        if (
+            $expr instanceof Node\Expr\Variable
+            && is_string($expr->name)
+            && $this->isSafeVariable($expr->name, $origins, [])
+        ) {
             return false;
         }
 
@@ -219,6 +226,10 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             return false;
         }
 
+        if ($this->hasFixedHost($expr)) {
+            return false;
+        }
+
         if (
             $expr instanceof Node\Expr\BinaryOp\Concat
             || $expr instanceof Node\Scalar\InterpolatedString
@@ -227,6 +238,67 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         }
 
         return $this->isTaintedExpr($expr);
+    }
+
+    /**
+     * A URL whose host part is a string literal cannot be steered off-site:
+     * only path/query remain dynamic, which is not SSRF. Matches
+     * `https://literal-host/...` built by concat, interpolation, or sprintf()
+     * with a literal format. A dynamic subdomain (`https://$lang.host/...`)
+     * does NOT match and stays flagged.
+     */
+    private function hasFixedHost(Node\Expr $expr): bool
+    {
+        if (
+            $expr instanceof Node\Expr\FuncCall
+            && $expr->name instanceof Node\Name
+            && strtolower($expr->name->toString()) === 'sprintf'
+        ) {
+            $format = $expr->args[0] ?? null;
+            if (!$format instanceof Node\Arg || !$format->value instanceof Node\Scalar\String_) {
+                return false;
+            }
+
+            return $this->isFixedHostPrefix($format->value->value);
+        }
+
+        return $this->isFixedHostPrefix($this->leadingLiteral($expr));
+    }
+
+    private function isFixedHostPrefix(string $prefix): bool
+    {
+        return preg_match('#^https?://[^/$\s]+\/#i', $prefix) === 1;
+    }
+
+    private function leadingLiteral(Node\Expr $expr): string
+    {
+        if ($expr instanceof Node\Scalar\String_) {
+            return $expr->value;
+        }
+
+        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
+            $left = $this->leadingLiteral($expr->left);
+            if ($left === '') {
+                return '';
+            }
+            $right = $expr->right instanceof Node\Scalar\String_ ? $expr->right->value : '';
+
+            return $left . $right;
+        }
+
+        if ($expr instanceof Node\Scalar\InterpolatedString) {
+            $out = '';
+            foreach ($expr->parts as $part) {
+                if ($part instanceof Node\Expr) {
+                    break;
+                }
+                $out .= $part->value;
+            }
+
+            return $out;
+        }
+
+        return '';
     }
 
     private function isWriteModeOpen(Node $node): bool
@@ -240,6 +312,67 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         }
 
         return (bool) preg_match('/^[waxc]/i', ltrim($mode->value->value));
+    }
+
+    /**
+     * File-level map of variable name to every assigned right-hand side, so a
+     * sink argument like `$url` can be resolved to `$url = sprintf(...)`.
+     *
+     * @param list<Node> $nodes
+     * @return array<string, list<Node\Expr>>
+     */
+    private function variableOrigins(array $nodes): array
+    {
+        $origins = [];
+        $assigns = $this->finder()->find($nodes, static function (Node $node): bool {
+            return $node instanceof Node\Expr\Assign;
+        });
+        foreach ($assigns as $assign) {
+            if (
+                $assign instanceof Node\Expr\Assign
+                && $assign->var instanceof Node\Expr\Variable
+                && is_string($assign->var->name)
+            ) {
+                $origins[$assign->var->name][] = $assign->expr;
+            }
+        }
+
+        return $origins;
+    }
+
+    /**
+     * A variable is safe when it has at least one assignment and every
+     * assignment is a safe origin (literal, fixed-host URL, local path,
+     * deploy-time config). Any dynamic reassignment keeps it flagged.
+     *
+     * @param array<string, list<Node\Expr>> $origins
+     * @param array<string, true> $seen cycle guard
+     */
+    private function isSafeVariable(string $name, array $origins, array $seen): bool
+    {
+        if (isset($seen[$name])) {
+            return false;
+        }
+        $seen[$name] = true;
+
+        $rhsList = $origins[$name] ?? [];
+        if ($rhsList === []) {
+            return false;
+        }
+
+        foreach ($rhsList as $rhs) {
+            if ($rhs instanceof Node\Expr\Variable && is_string($rhs->name)) {
+                if (!$this->isSafeVariable($rhs->name, $origins, $seen)) {
+                    return false;
+                }
+                continue;
+            }
+            if (!$this->isLiteralString($rhs) && !$this->hasFixedHost($rhs) && !$this->isLocalPath($rhs)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function isLocalPath(Node\Expr $expr): bool
@@ -261,11 +394,19 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         }
 
         if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
-            return $this->isLocalName($expr->name);
+            if ($this->rootVariableName($expr) === 'request') {
+                return false;
+            }
+
+            return $this->isLocalPathName($expr->name);
         }
 
         if ($expr instanceof Node\Expr\PropertyFetch && $expr->name instanceof Node\Identifier) {
-            return $this->isLocalName($expr->name->toString());
+            if ($this->rootVariableName($expr) === 'request') {
+                return false;
+            }
+
+            return $this->isLocalPathName($expr->name->toString());
         }
 
         if ($expr instanceof Node\Expr\BinaryOp\Concat) {
@@ -288,24 +429,6 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
     private function isLocalPathOperand(Node\Expr $expr): bool
     {
         return $expr instanceof Node\Scalar\String_ || $this->isLocalPath($expr);
-    }
-
-    private function isLocalName(string $name): bool
-    {
-        $lower = strtolower($name);
-        foreach (self::REMOTE_NAME_HINTS as $hint) {
-            if (str_contains($lower, $hint)) {
-                return false;
-            }
-        }
-
-        foreach (self::LOCAL_NAME_HINTS as $hint) {
-            if (str_contains($lower, $hint)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function isLiteralString(Node\Expr $expr): bool

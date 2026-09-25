@@ -6,6 +6,7 @@ namespace VietVang\QualityChecker\Reporters;
 
 use VietVang\QualityChecker\Result\CheckResult;
 use VietVang\QualityChecker\Result\Severity;
+use VietVang\QualityChecker\Remediation\RuleRemediation;
 use VietVang\QualityChecker\Runner\CheckContext;
 
 final class HtmlReporter implements ReporterInterface
@@ -341,6 +342,11 @@ final class HtmlReporter implements ReporterInterface
     pre.code .row { display: block; white-space: pre; }
     pre.code .row.cur { background: var(--code-cur); border-radius: 4px; }
     pre.code .cl { color: var(--code-ln); user-select: none; display: inline-block; min-width: 4ch; text-align: right; margin-right: 12px; }
+    .fixbox { margin: 0 0 10px; padding: 10px 14px; border-left: 3px solid var(--info); background: var(--page); border-radius: 0 6px 6px 0; font-size: 13px; }
+    .fixbox .fix-why { margin: 0 0 2px; }
+    .fixbox .fix-why-vi { margin: 0 0 8px; color: var(--muted); font-style: italic; }
+    .fixbox pre.code { margin: 0 0 8px; }
+    .fixbox .fix-docs { font-size: 12px; }
     .owasp-rule { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--bg); }
     .owasp-rule > summary {
         display: flex;
@@ -1201,6 +1207,7 @@ final class HtmlReporter implements ReporterInterface
             . '<span class="rule-name">' . $this->escape($rule) . '</span>'
             . '<span class="pill">' . (string) count($issues) . '</span>' . $pills
             . '</summary>' . "\n"
+            . $this->fixBoxHtml($rule)
             . '<table>' . "\n"
             . '<thead>' . "\n"
             . '<tr><th data-sortable data-type="str">File</th>'
@@ -1244,6 +1251,29 @@ final class HtmlReporter implements ReporterInterface
         return $html . '</tbody>' . "\n"
             . '</table>' . "\n"
             . '</details>' . "\n";
+    }
+
+    /**
+     * Per-rule remediation box: what the finding means and how to fix it,
+     * rendered once at the top of each rule group.
+     */
+    private function fixBoxHtml(string $rule): string
+    {
+        $entry = RuleRemediation::for($rule);
+        if ($entry === null) {
+            return '';
+        }
+
+        $html = '<div class="fixbox">' . "\n"
+            . '<p class="fix-why"><strong>Cách sửa / Fix:</strong> ' . $this->escape($entry['why']) . '</p>' . "\n"
+            . '<p class="fix-why-vi">' . $this->escape($entry['why_vi']) . '</p>' . "\n"
+            . '<pre class="code">' . $this->escape($entry['fix']) . '</pre>' . "\n";
+
+        if ($entry['docs'] !== null) {
+            $html .= '<p class="fix-docs">Chi tiết: <code>docs/false-positives.md</code> (' . $this->escape($entry['docs']) . ')</p>' . "\n";
+        }
+
+        return $html . '</div>' . "\n";
     }
 
     private function escape(mixed $value): string
@@ -1317,6 +1347,9 @@ final class HtmlReporter implements ReporterInterface
         if (!isset($this->lineCache[$abs])) {
             $this->lineCache[$abs] = null;
             if (is_file($abs) && @filesize($abs) < 1_048_576) {
+                // Reviewed: $abs comes from resolvePath() (base path + scan
+                // file list), not from request input.
+                // quality-checker-ignore-next-line OWASP_PATH_TRAVERSAL
                 $lines = @file($abs, FILE_IGNORE_NEW_LINES);
                 if (is_array($lines)) {
                     $this->lineCache[$abs] = $lines;

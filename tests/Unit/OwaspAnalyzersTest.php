@@ -686,6 +686,57 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testSsrfSkipsSprintfWithFixedHost(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$url = sprintf('https://github.com/aquasecurity/trivy/releases/download/v%s/t.tgz', \$version);\n\$fp = fopen(\$url, 'rb');\n",
+            'src/Tools/Downloader.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSsrfStillFlagsDynamicSubdomain(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$lang = currentLang();\n\$url = \"https://\$lang.wikipedia.org/w/api.php\";\n\$r = file_get_contents(\$url);\n",
+            'app/Helpers/WikipediaHelper.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_SSRF', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testCommandInjectionSkipsTypedArrayProcessParam(): void
+    {
+        $file = $this->temp(
+            "<?php\nuse Symfony\\Component\\Process\\Process;\nclass Runner {\n    /** @return array{0: int, 1: string, 2: string} */\n" .
+            "    protected function runProcess(array \$command): array {\n        \$process = new Process(\$command);\n        \$process->run();\n        return [0, '', ''];\n    }\n}\n",
+            'src/Checkers/Runner.php'
+        );
+
+        $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testCommandInjectionSkipsTernaryArrayProcess(): void
+    {
+        $file = $this->temp(
+            "<?php\nuse Symfony\\Component\\Process\\Process;\nclass Extractor {\n    public function extract(string \$archive, string \$dest): void {\n" .
+            "        \$cmd = str_ends_with(\$archive, '.zip') ? ['unzip', '-o', \$archive, '-d', \$dest] : ['tar', '-xzf', \$archive, '-C', \$dest];\n" .
+            "        \$process = new Process(\$cmd);\n        \$process->run();\n    }\n}\n",
+            'src/Tools/Extractor.php'
+        );
+
+        $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testXxeSkipsTestPaths(): void
     {
         $file = $this->temp(

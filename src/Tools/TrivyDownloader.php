@@ -149,11 +149,16 @@ final class TrivyDownloader
             'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
         ]);
 
+        // Reviewed: $url is sprintf()'d from the RELEASE_BASE class constant
+        // (fixed github.com host) plus a pinned version string.
+        // quality-checker-ignore-next-line OWASP_SSRF,OWASP_PATH_TRAVERSAL
         $fp = @fopen($url, 'rb', false, $context);
         if ($fp === false) {
             return false;
         }
 
+        // Reviewed: $dest is always inside our own cache dir ($cacheDir).
+        // quality-checker-ignore-next-line OWASP_PATH_TRAVERSAL
         $out = @fopen($dest, 'wb');
         if ($out === false) {
             fclose($fp);

@@ -6,6 +6,7 @@ namespace VietVang\QualityChecker\Reporters;
 
 use VietVang\QualityChecker\Result\CheckResult;
 use VietVang\QualityChecker\Result\Severity;
+use VietVang\QualityChecker\Remediation\RuleRemediation;
 use VietVang\QualityChecker\Runner\CheckContext;
 
 final class MarkdownReporter implements ReporterInterface
@@ -33,6 +34,7 @@ final class MarkdownReporter implements ReporterInterface
         $lines[] = '- [Summary](#summary)';
         $lines[] = '- [Top Rules](#top-rules)';
         $lines[] = '- [OWASP](#owasp)';
+        $lines[] = '- [Remediation / Cách sửa theo rule](#remediation--cách-sửa-theo-rule)';
         $lines[] = '- [Per-Checker](#per-checker)';
         $lines[] = '- [Issues](#issues)';
         foreach ($results as $result) {
@@ -91,6 +93,10 @@ final class MarkdownReporter implements ReporterInterface
                 $lines[] = '| ' . $this->esc($rule) . ' | ' . $count . ' |';
             }
             $lines[] = '';
+        }
+
+        foreach ($this->remediationBlocks($results) as $block) {
+            $lines[] = $block;
         }
 
         $lines[] = '## Per-Checker';
@@ -245,6 +251,54 @@ final class MarkdownReporter implements ReporterInterface
         ksort($groups);
 
         return $groups;
+    }
+
+    /**
+     * One remediation block per rule present in the report, so every level of
+     * developer sees what the finding means and how to fix it.
+     *
+     * @param list<CheckResult> $results
+     * @return list<string>
+     */
+    private function remediationBlocks(array $results): array
+    {
+        $rules = [];
+        foreach ($results as $result) {
+            if (!$result instanceof CheckResult) {
+                continue;
+            }
+            foreach ($result->issues as $issue) {
+                $rules[$issue->rule] = true;
+            }
+        }
+
+        if ($rules === []) {
+            return [];
+        }
+
+        $lines = ['## Remediation / Cách sửa theo rule', ''];
+        foreach (array_keys($rules) as $rule) {
+            $entry = RuleRemediation::for($rule);
+            if ($entry === null) {
+                continue;
+            }
+            $lines[] = '### `' . $rule . '`';
+            $lines[] = '';
+            $lines[] = $entry['why'];
+            $lines[] = '';
+            $lines[] = '_' . $entry['why_vi'] . '_';
+            $lines[] = '';
+            $lines[] = '```php';
+            $lines[] = $entry['fix'];
+            $lines[] = '```';
+            $lines[] = '';
+            if ($entry['docs'] !== null) {
+                $lines[] = 'Chi tiết: `docs/false-positives.md` (' . $entry['docs'] . ')';
+                $lines[] = '';
+            }
+        }
+
+        return $lines;
     }
 
     /**

@@ -10,6 +10,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use VietVang\QualityChecker\Result\CheckResult;
 use VietVang\QualityChecker\Result\Issue;
 use VietVang\QualityChecker\Result\Severity;
+use VietVang\QualityChecker\Remediation\RuleRemediation;
 use VietVang\QualityChecker\Runner\CheckContext;
 
 final class ConsoleReporter implements ReporterInterface
@@ -94,6 +95,7 @@ final class ConsoleReporter implements ReporterInterface
         $this->printOwaspFindings($results);
         $this->printTopRules($results);
         $this->printIssues($results);
+        $this->printRemediation($results);
     }
 
     private function renderSummaryLine(array $results): void
@@ -157,6 +159,44 @@ final class ConsoleReporter implements ReporterInterface
                 ));
             }
         }
+    }
+
+    /**
+     * Per-rule fix guidance so junior developers see what to do, not just
+     * what was found. Full code samples live in the HTML/JSON/Markdown reports.
+     *
+     * @param CheckResult[] $results
+     */
+    private function printRemediation(array $results): void
+    {
+        $rules = [];
+        foreach ($results as $result) {
+            if (!$result instanceof CheckResult) {
+                continue;
+            }
+            foreach ($result->issues as $issue) {
+                if ($issue instanceof Issue) {
+                    $rules[$issue->rule] = true;
+                }
+            }
+        }
+
+        if ($rules === []) {
+            return;
+        }
+
+        $this->output->writeln('');
+        $this->output->writeln('<fg=cyan>Remediation (cách sửa theo rule):</>');
+
+        foreach (array_keys($rules) as $rule) {
+            $entry = RuleRemediation::for($rule);
+            if ($entry === null) {
+                continue;
+            }
+            $this->output->writeln(sprintf('  <options=bold>[%s]</> %s', $rule, $entry['why_vi']));
+        }
+
+        $this->output->writeln('  Code mẫu sửa đúng: quality-report.html / .md / .json (mục remediation).');
     }
 
     /**

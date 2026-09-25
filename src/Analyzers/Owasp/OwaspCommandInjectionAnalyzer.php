@@ -119,7 +119,7 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
                 && in_array($call->class->toString(), [self::PROCESS_CLASS, '\\' . self::PROCESS_CLASS, 'Process'], true)
             ) {
                 $first = $call->args[0] ?? null;
-                if ($first instanceof Node\Arg && $this->isShellFreeCommand($first->value, $call, $scopes)) {
+                if ($first instanceof Node\Arg && $this->isShellFreeCommand($first->value, $call, $scopes, $nodes)) {
                     continue;
                 }
                 foreach ($call->args as $arg) {
@@ -182,9 +182,9 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
 
     /**
      * A command expression is deploy-time safe when every leaf is a string
-     * literal, a constant (PHP_BINARY, DIRECTORY_SEPARATOR, ...), a Laravel
-     * path-helper call with safe arguments, or a variable previously assigned
-     * such a safe expression in the same scope.
+     * literal, a constant (PHP_BINARY, DIRECTORY_SEPARATOR, ...), an explicit
+     * shell-escaping call, a Laravel path-helper call with safe arguments, or
+     * a variable previously assigned such a safe expression in the same scope.
      *
      * @param array<string, true> $known
      */
@@ -205,15 +205,20 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
         if (
             $expr instanceof Node\Expr\FuncCall
             && $expr->name instanceof Node\Name
-            && in_array(strtolower($expr->name->toString()), self::SAFE_COMMAND_FUNCS, true)
         ) {
-            foreach ($expr->args as $arg) {
-                if ($arg instanceof Node\Arg && !$this->isSafeCommandExpr($arg->value, $known)) {
-                    return false;
-                }
+            $fn = strtolower($expr->name->toString());
+            if (in_array($fn, self::ESCAPE_FUNCS, true)) {
+                return true;
             }
+            if (in_array($fn, self::SAFE_COMMAND_FUNCS, true)) {
+                foreach ($expr->args as $arg) {
+                    if ($arg instanceof Node\Arg && !$this->isSafeCommandExpr($arg->value, $known)) {
+                        return false;
+                    }
+                }
 
-            return true;
+                return true;
+            }
         }
 
         if ($expr instanceof Node\Expr\BinaryOp\Concat) {
@@ -318,15 +323,40 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
 
     /**
      * @param list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}> $scopes
+     * @param list<Node> $nodes
      */
-    private function isShellFreeCommand(Node\Expr $expr, Node\Expr\New_ $call, array $scopes): bool
-    {
+    private function isShellFreeCommand(
+        Node\Expr $expr,
+        Node\Expr\New_ $call,
+        array $scopes,
+        array $nodes
+    ): bool {
         if ($expr instanceof Node\Expr\Array_) {
+            return true;
+        }
+
+        // Ternary/coalesce whose every branch is shell-free (e.g. picking
+        // between two argument arrays) never touches a shell either.
+        if ($expr instanceof Node\Expr\Ternary) {
+            $branches = [$expr->else];
+            if ($expr->if !== null) {
+                $branches[] = $expr->if;
+            }
+            foreach ($branches as $branch) {
+                if (!$this->isShellFreeCommand($branch, $call, $scopes, $nodes)) {
+                    return false;
+                }
+            }
+
             return true;
         }
 
         if (!$expr instanceof Node\Expr\Variable || !is_string($expr->name)) {
             return false;
+        }
+
+        if ($this->isTypedArrayParam($expr->name, $call, $nodes)) {
+            return true;
         }
 
         $callId = spl_object_id($call);
@@ -358,16 +388,115 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
     }
 
     /**
+     * A `new Process($command)` argument is shell-free when the variable is a
+     * natively typed `array` parameter (or `@param array/list` documented) of
+     * the enclosing function — Symfony Process bypasses the shell for arrays.
+     *
+     * @param list<Node> $nodes
+     */
+    private function isTypedArrayParam(string $name, Node\Expr\New_ $call, array $nodes): bool
+    {
+        $func = $this->enclosingFunction($call, $nodes);
+        if ($func === null) {
+            return false;
+        }
+
+        foreach ($func->params as $param) {
+            if (
+                !$param instanceof Node\Param
+                || !$param->var instanceof Node\Expr\Variable
+                || $param->var->name !== $name
+            ) {
+                continue;
+            }
+            if ($this->isArrayType($param->type)) {
+                return true;
+            }
+
+            return $this->hasArrayDocType($param);
+        }
+
+        return false;
+    }
+
+    /**
+     * @param list<Node> $nodes
+     */
+    private function enclosingFunction(
+        Node $call,
+        array $nodes
+    ): Node\Stmt\ClassMethod|Node\Stmt\Function_|null {
+        $target = spl_object_id($call);
+        $funcs = $this->finder()->find($nodes, static function (Node $node): bool {
+            return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
+        });
+
+        foreach ($funcs as $func) {
+            if (!$func instanceof Node\Stmt\ClassMethod && !$func instanceof Node\Stmt\Function_) {
+                continue;
+            }
+            $found = $this->finder()->find($func, static function (Node $node) use ($target): bool {
+                return spl_object_id($node) === $target;
+            });
+            if ($found !== []) {
+                return $func;
+            }
+        }
+
+        return null;
+    }
+
+    private function isArrayType(Node\Name|Node\Identifier|Node\ComplexType|null $type): bool
+    {
+        if ($type instanceof Node\Identifier) {
+            return strtolower($type->toString()) === 'array';
+        }
+
+        if ($type instanceof Node\NullableType) {
+            return $this->isArrayType($type->type);
+        }
+
+        if ($type instanceof Node\UnionType || $type instanceof Node\IntersectionType) {
+            foreach ($type->types as $inner) {
+                if ($this->isArrayType($inner)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function hasArrayDocType(Node\Param $param): bool
+    {
+        $doc = $param->getAttribute('comments');
+        if (!is_array($doc)) {
+            return false;
+        }
+        foreach ($doc as $comment) {
+            if (!$comment instanceof Node\Stmt\Nop && !$comment instanceof \PhpParser\Comment) {
+                continue;
+            }
+            $text = $comment instanceof \PhpParser\Comment ? $comment->getText() : '';
+            if (preg_match('/@param\s+(?:list<[^>]*>|array\b)/i', $text) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Scopes mapping `new` expressions to the array-literal variables visible in
      * the same function (plus a file-level fallback for top-level code).
      *
-     * @param list<Node> $ast
+     * @param list<Node> $nodes
      * @return list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}>
      */
-    private function arrayVarScopes(array $ast): array
+    private function arrayVarScopes(array $nodes): array
     {
         $scopes = [];
-        $funcs = $this->finder()->find($ast, function (Node $node): bool {
+        $funcs = $this->finder()->find($nodes, function (Node $node): bool {
             return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
         });
 
@@ -386,7 +515,7 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
             $scopes[] = ['func' => spl_object_id($func), 'vars' => $this->arrayAssignedVars($func), 'calls' => $calls];
         }
 
-        $scopes[] = ['func' => null, 'vars' => $this->arrayAssignedVars($ast), 'calls' => []];
+        $scopes[] = ['func' => null, 'vars' => $this->arrayAssignedVars($nodes), 'calls' => []];
 
         return $scopes;
     }
@@ -406,12 +535,37 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
                 $assign instanceof Node\Expr\Assign
                 && $assign->var instanceof Node\Expr\Variable
                 && is_string($assign->var->name)
-                && $assign->expr instanceof Node\Expr\Array_
+                && $this->isArrayLike($assign->expr)
             ) {
                 $vars[$assign->var->name] = true;
             }
         }
 
         return $vars;
+    }
+
+    /**
+     * An array literal, or a ternary/coalesce whose every branch is array-like.
+     * Either way Symfony Process bypasses the shell.
+     */
+    private function isArrayLike(Node\Expr $expr): bool
+    {
+        if ($expr instanceof Node\Expr\Array_) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\Ternary) {
+            if ($expr->if !== null && !$this->isArrayLike($expr->if)) {
+                return false;
+            }
+
+            return $this->isArrayLike($expr->else);
+        }
+
+        if ($expr instanceof Node\Expr\BinaryOp\Coalesce) {
+            return $this->isArrayLike($expr->left) && $this->isArrayLike($expr->right);
+        }
+
+        return false;
     }
 }

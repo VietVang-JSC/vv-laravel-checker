@@ -7,6 +7,7 @@ namespace VietVang\QualityChecker\Reporters;
 use VietVang\QualityChecker\Result\CheckResult;
 use VietVang\QualityChecker\Result\Issue;
 use VietVang\QualityChecker\Result\Severity;
+use VietVang\QualityChecker\Remediation\RuleRemediation;
 use VietVang\QualityChecker\Runner\CheckContext;
 
 final class JsonReporter implements ReporterInterface
@@ -52,7 +53,12 @@ final class JsonReporter implements ReporterInterface
                 'status' => $result->status,
                 'duration' => round($result->duration, 3),
                 'summary' => $result->summary,
-                'issues' => array_map(static fn (Issue $issue): array => $issue->toArray(), $result->issues),
+                'issues' => array_map(
+                    static fn (Issue $issue): array => $issue->toArray() + [
+                        'remediation' => RuleRemediation::for($issue->rule),
+                    ],
+                    $result->issues
+                ),
             ];
         }
 

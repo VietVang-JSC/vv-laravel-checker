@@ -7,6 +7,7 @@ namespace VietVang\QualityChecker\Reporters;
 use VietVang\QualityChecker\Result\CheckResult;
 use VietVang\QualityChecker\Result\Issue;
 use VietVang\QualityChecker\Result\Severity;
+use VietVang\QualityChecker\Remediation\RuleRemediation;
 use VietVang\QualityChecker\Runner\CheckContext;
 
 /**
@@ -44,7 +45,7 @@ final class SarifReporter implements ReporterInterface
                     continue;
                 }
 
-                $this->registerRule($rules, $issue);
+                $this->registerRule($rules, $issue, $ctx);
                 $sarifResults[] = $this->buildResult($issue, $ctx->basePath);
             }
         }
@@ -86,7 +87,7 @@ final class SarifReporter implements ReporterInterface
     /**
      * @param array<string, array<string, mixed>> $rules
      */
-    private function registerRule(array &$rules, Issue $issue): void
+    private function registerRule(array &$rules, Issue $issue, CheckContext $ctx): void
     {
         $id = $issue->rule;
         $severity = $issue->severity->value;
@@ -102,7 +103,7 @@ final class SarifReporter implements ReporterInterface
             return;
         }
 
-        $rules[$id] = [
+        $descriptor = [
             'id' => $id,
             'name' => str_replace('-', '_', $id),
             'shortDescription' => [
@@ -118,6 +119,38 @@ final class SarifReporter implements ReporterInterface
             ],
             '_severity' => $severity,
         ];
+
+        $help = RuleRemediation::helpMarkdown($id);
+        if ($help !== null) {
+            $descriptor['help'] = ['text' => $help];
+            $helpUri = $this->helpUri($id, $ctx);
+            if ($helpUri !== null) {
+                $descriptor['helpUri'] = $helpUri;
+            }
+        }
+
+        $rules[$id] = $descriptor;
+    }
+
+    private function helpUri(string $rule, CheckContext $ctx): ?string
+    {
+        $entry = RuleRemediation::for($rule);
+        $anchor = $entry['docs'] ?? null;
+        if ($anchor === null) {
+            return null;
+        }
+
+        $cfg = $ctx->configFor('html');
+        $repo = rtrim(trim((string) ($cfg['repo_url'] ?? '')), '/');
+        if ($repo === '') {
+            $repo = 'https://github.com/VietVang-JSC/vv-laravel-checker';
+        }
+        $branch = trim((string) ($cfg['branch'] ?? 'main'));
+        if ($branch === '') {
+            $branch = 'main';
+        }
+
+        return $repo . '/blob/' . $branch . '/docs/false-positives.md' . $anchor;
     }
 
     /**

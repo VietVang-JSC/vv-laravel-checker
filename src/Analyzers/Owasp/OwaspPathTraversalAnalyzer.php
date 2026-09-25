@@ -19,7 +19,8 @@ use VietVang\QualityChecker\Result\Severity;
  *
  * Deliberately not flagged: string literals (including `storage_path()`/`base_path()` with literal-only
  * args), expressions wrapped in `basename()` (traversal stripped), deploy-time `env()`/`config()`
- * lookups, and sinks inside test paths.
+ * lookups, variables/properties named like local paths ($file, $path, $source, ...),
+ * and sinks inside test paths.
  */
 final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
 {
@@ -34,6 +35,12 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
     private const PATH_HELPERS = ['storage_path', 'base_path'];
 
     private const CONFIG_FUNCS = ['env', 'config'];
+
+    /**
+     * Method calls that provably return local filesystem paths, never
+     * attacker-controlled URLs (SplFileInfo, Symfony UploadedFile).
+     */
+    private const LOCAL_PATH_METHODS = ['getrealpath', 'getpathname'];
 
     /**
      * @param list<string> $files
@@ -81,7 +88,9 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
                 if ($sink === null) {
                     continue;
                 }
-                if (!$this->isTaintedPath($node->expr)) {
+                // include/require with a dynamic path is potential LFI (code
+                // execution) — the local-name heuristic never applies here.
+                if (!$this->isTaintedPath($node->expr, false)) {
                     continue;
                 }
                 $issues[] = $this->makeIssue(
@@ -216,7 +225,7 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
         return false;
     }
 
-    private function isTaintedPath(Node\Expr $expr): bool
+    private function isTaintedPath(Node\Expr $expr, bool $allowNameHeuristic = true): bool
     {
         if ($expr instanceof Node\Scalar\String_) {
             return false;
@@ -234,12 +243,35 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
             return false;
         }
 
+        if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+            if ($allowNameHeuristic && $this->rootVariableName($expr) !== 'request') {
+                return !$this->isLocalPathName($expr->name);
+            }
+
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\PropertyFetch && $expr->name instanceof Node\Identifier) {
+            if ($allowNameHeuristic && $this->rootVariableName($expr) !== 'request') {
+                return !$this->isLocalPathName($expr->name->toString());
+            }
+
+            return true;
+        }
+
+        if (
+            $expr instanceof Node\Expr\MethodCall
+            && $expr->name instanceof Node\Identifier
+            && in_array(strtolower($expr->name->toString()), self::LOCAL_PATH_METHODS, true)
+        ) {
+            return false;
+        }
+
         if ($expr instanceof Node\Expr\FuncCall && $expr->name instanceof Node\Name) {
             $fn = strtolower($expr->name->toString());
             if ($fn === 'basename') {
                 return false;
-            }
-            if (in_array($fn, self::CONFIG_FUNCS, true)) {
+            }            if (in_array($fn, self::CONFIG_FUNCS, true)) {
                 return false;
             }
             if (in_array($fn, self::PATH_HELPERS, true)) {
