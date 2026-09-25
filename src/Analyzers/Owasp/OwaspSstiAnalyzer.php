@@ -93,6 +93,9 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
             ) {
                 continue;
             }
+            if ($this->isLiteralExpression($arg, $call, $scopes)) {
+                continue;
+            }
 
             $issues[] = $this->makeIssue(
                 self::RULE,
@@ -207,32 +210,100 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
             return false;
         }
 
+        return isset($this->visibleLiteralVars($call, $scopes)[$var->name]);
+    }
+
+    /**
+     * A template argument is literal when it (or every leaf, for concat/
+     * interpolation/coalesce/ternary) is a string literal or a variable
+     * assigned only literals in the visible scope — e.g.
+     * `$view = 'front.pos_' . $industry` with `$industry = 2`.
+     *
+     * @param list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}> $scopes
+     */
+    private function isLiteralExpression(Node\Expr $expr, Node $call, array $scopes): bool
+    {
+        return $this->isLiteralValue($expr, $this->visibleLiteralVars($call, $scopes));
+    }
+
+    /**
+     * @param array<string, true> $known
+     */
+    private function isLiteralValue(Node\Expr $expr, array $known): bool
+    {
+        if (
+            $expr instanceof Node\Scalar\String_
+            || $expr instanceof Node\Scalar\LNumber
+            || $expr instanceof Node\Scalar\DNumber
+        ) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\ConstFetch || $expr instanceof Node\Expr\ClassConstFetch) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+            return isset($known[$expr->name]);
+        }
+
+        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
+            return $this->isLiteralValue($expr->left, $known)
+                && $this->isLiteralValue($expr->right, $known);
+        }
+
+        if ($expr instanceof Node\Scalar\InterpolatedString) {
+            foreach ($expr->parts as $part) {
+                if ($part instanceof Node\Expr && !$this->isLiteralValue($part, $known)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\BinaryOp\Coalesce) {
+            return $this->isLiteralValue($expr->left, $known)
+                && $this->isLiteralValue($expr->right, $known);
+        }
+
+        if ($expr instanceof Node\Expr\Ternary) {
+            if ($expr->if !== null && !$this->isLiteralValue($expr->if, $known)) {
+                return false;
+            }
+
+            return $this->isLiteralValue($expr->else, $known);
+        }
+
+        return false;
+    }
+
+    /**
+     * Literal variables visible at a call: the enclosing function's set, or
+     * the file-level set for top-level code.
+     *
+     * @param list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}> $scopes
+     * @return array<string, true>
+     */
+    private function visibleLiteralVars(Node $call, array $scopes): array
+    {
         $callId = spl_object_id($call);
-        $inFunc = false;
         foreach ($scopes as $scope) {
             if ($scope['func'] === null) {
                 continue;
             }
-            if (!isset($scope['calls'][$callId])) {
-                continue;
+            if (isset($scope['calls'][$callId])) {
+                return $scope['vars'];
             }
-            $inFunc = true;
-            if (isset($scope['vars'][$var->name])) {
-                return true;
-            }
-        }
-
-        if ($inFunc) {
-            return false;
         }
 
         foreach ($scopes as $scope) {
-            if ($scope['func'] === null && isset($scope['vars'][$var->name])) {
-                return true;
+            if ($scope['func'] === null) {
+                return $scope['vars'];
             }
         }
 
-        return false;
+        return [];
     }
 
     /**
@@ -391,6 +462,10 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
     }
 
     /**
+     * Variables assigned plain literals — or concatenations/interpolations
+     * composed solely of literals and previously-known variables, processed
+     * in source order (e.g. `$industry = 2; $view = 'pos_' . $industry`).
+     *
      * @param Node|list<Node> $scope
      * @return array<string, true>
      */
@@ -405,7 +480,7 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
                 $assign instanceof Node\Expr\Assign
                 && $assign->var instanceof Node\Expr\Variable
                 && is_string($assign->var->name)
-                && $assign->expr instanceof Node\Scalar\String_
+                && $this->isLiteralValue($assign->expr, $vars)
             ) {
                 $vars[$assign->var->name] = true;
             }

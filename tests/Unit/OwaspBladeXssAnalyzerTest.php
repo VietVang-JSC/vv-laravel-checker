@@ -153,6 +153,30 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testSkipsJsonEncodeWithHexFlags(): void
+    {
+        $file = $this->temp(
+            "<script>var C = {!! json_encode(\$cfg, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!};</script>\n",
+            'resources/views/pos/index.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testFlagsJsonEncodeWithoutHexFlags(): void
+    {
+        $file = $this->temp(
+            "<script>var C = {!! json_encode(\$cfg) !!};</script>\n",
+            'resources/views/pos/index.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_BLADE_XSS', $this->rules($issues)[0] ?? null);
+    }
+
     public function testSkipsNonBladeExtension(): void
     {
         $file = $this->temp(

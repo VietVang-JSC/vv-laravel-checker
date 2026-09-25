@@ -18,7 +18,8 @@ use VietVang\QualityChecker\Result\Severity;
  * `->middleware(...)` chains, `Route::group(['middleware' => ...])`).
  * Route files are recognized by a `/routes/` (or `/Routes/`) path segment or a
  * `web.php`/`api.php` basename. Middleware whose name hints at authorization
- * (`auth`, `can:`, `permission`, `role`, `gate`, `admin`, `bouncer`, ...) counts
+ * (`auth`, `can:`, `permission`, `role`, `gate`, `admin`, `bouncer`,
+ * API-key/token guards like `edge.api.key`, `sanctum`, `jwt`, ...) counts
  * as protection; `throttle` and friends do not.
  *
  * Two framework idioms are resolved: `Route::controller(X::class)` groups whose
@@ -905,7 +906,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
             return true;
         }
 
-        foreach (['can', 'auth', 'permission', 'role', 'gate', 'admin', 'bouncer', 'checklevel'] as $hint) {
+        foreach (['can', 'auth', 'permission', 'role', 'gate', 'admin', 'bouncer', 'checklevel', 'apikey', 'api_key', 'api.key', 'sanctum', 'jwt', 'oauth'] as $hint) {
             if (str_contains($base, $hint)) {
                 return true;
             }

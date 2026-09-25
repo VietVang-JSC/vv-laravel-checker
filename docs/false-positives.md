@@ -81,7 +81,8 @@ php artisan quality:check --tier=all --fail-on=none
   Cả syntax array cũ (`['as' => ..., 'uses' => 'FQCN@method']` kiểu Aimeos) lẫn
   `[Controller::class, 'method']` đều được resolve.
   Tên middleware chứa `auth`/`can`/`permission`/`role`/`gate`/`admin`/`bouncer`/
-  `checklevel`... được coi là bảo vệ; `throttle` thì không. Actions so khớp theo
+  `checklevel`/`apikey`/`sanctum`/`jwt`/`oauth`... (kể cả API-key guard kiểu
+  `edge.api.key` — case DeltaPOS) được coi là bảo vệ; `throttle` thì không. Actions so khớp theo
   FQCN (`use` imports được resolve) nên 2 controller trùng tên khác namespace
   (Admin vs Shop API) không lẫn vào nhau. Tắt bằng
   `analyzers.owasp.route_middleware => false` nếu muốn hành vi cũ (chỉ nhìn
@@ -120,6 +121,11 @@ php artisan quality:check --tier=all --fail-on=none
     type-hint `array`, docblock `@param array`, hoặc ternary chọn giữa các
     array (case dogfood `runProcess(array $command)` và `extract()` trong
     chính codebase này).
+  - command injection: tham số của function non-public mà mọi call-site cùng
+    file đều truyền literal/deploy-time-safe (case `controlServices('start')`
+    ở DeltaPOS — helper private chỉ gọi với literal).
+  - command injection: biến lặp `foreach` trên array literal hoặc class const
+    (`foreach (self::SERVICES as $svc)` — deploy-time values, case DeltaPOS).
   - SSRF: `new GuzzleHttp\Client([...])` không phải sink (constructor chỉ nhận
     config array — request thật ở `->get()`/`->post()` sau đó đã được cover
     riêng); `->getRealPath()`/`->getPathname()` (UploadedFile/SplFileInfo)
@@ -187,12 +193,13 @@ php artisan quality:check --tier=all --fail-on=none
   `*.blade.php`.
 - **Tự động bỏ qua**: `{!! csrf_field() !!}` (không dữ liệu động),
   sanitizer tường minh (`e()`, `sanitizeHtml()`, `strip_tags()`,
-  `htmlspecialchars()`, `purify()`, `clean()`), framework event-hook
-  (`view_render_event(...)` — output từ listeners nội bộ, case 440 findings
-  Bagisto), paginator `->links()`, `{{ ... }}` (escaped syntax), và
-  convention HTML đã sanitize: biến `*Html/*Rendered/*Sanitized` hoặc method
-  `->getHtml()`/property `->renderedHTML` (case BookStack render markdown
-  đã purify).
+  `htmlspecialchars()`, `purify()`, `clean()`), `json_encode()` với đủ 4
+  flags `JSON_HEX_*` (không flags vẫn báo — `</script>` breakout thật),
+  framework event-hook (`view_render_event(...)` — output từ listeners nội
+  bộ, case 440 findings Bagisto), paginator `->links()`, `{{ ... }}`
+  (escaped syntax), và convention HTML đã sanitize: biến
+  `*Html/*Rendered/*Sanitized` hoặc method/property `->getHtml()`/
+  `->renderedHTML` (case BookStack render markdown đã purify).
 - **Sửa đúng**: chuyển sang `{{ ... }}`; chỉ dùng `{!! ... !!}` + inline
   ignore cho HTML đã review.
 

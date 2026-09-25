@@ -14,6 +14,7 @@ use VietVang\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspOpenRedirectAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspPathTraversalAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer;
+use VietVang\QualityChecker\Analyzers\Owasp\OwaspSstiAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspXxeAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\InsecureHashAnalyzer;
 use VietVang\QualityChecker\Result\Issue;
@@ -113,6 +114,16 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Helpers/helpers.php' => "<?php\nfunction readVersion(string \$gitCommand): string {\n    \$command = \\Illuminate\\Support\\Str::of(\$gitCommand)->start('git ');\n    return trim(exec(\"\$command 2>/dev/null\"));\n}\n"],
             'OWASP_COMMAND_INJECTION',
         ];
+        yield 'cmd_fp_private_helper_literal' => [
+            static fn (): AbstractAnalyzer => new OwaspCommandInjectionAnalyzer(),
+            ['app/Http/Controllers/EdgeManager.php' => "<?php\nclass EdgeManager {\n    public function handle(string \$action): void {\n        if (\$action === 'start') { \$this->controlServices('start'); }\n    }\n    private function controlServices(string \$cmd): void {\n        exec(\"nssm \$cmd svc 2>&1\", \$output, \$code);\n    }\n}\n"],
+            null,
+        ];
+        yield 'cmd_fp_foreach_const' => [
+            static fn (): AbstractAnalyzer => new OwaspCommandInjectionAnalyzer(),
+            ['app/Http/Controllers/EdgeManager.php' => "<?php\nclass EdgeManager {\n    private const SERVICES = ['svc-a'];\n    private function controlServices(string \$cmd): void {\n        foreach (self::SERVICES as \$svc) {\n            exec(\"nssm \$cmd \$svc 2>&1\", \$output, \$code);\n        }\n    }\n    public function start(): void {\n        \$this->controlServices('start');\n    }\n}\n"],
+            null,
+        ];
 
         // --- SSRF ---
         yield 'ssrf_tp_request_input' => [
@@ -158,6 +169,23 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'ssrf_fp_file_var' => [
             static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
             ['src/Analyzers/Reader.php' => "<?php\nclass Reader {\n    protected function readFile(string \$path): string {\n        return (string) file_get_contents(\$path);\n    }\n}\n"],
+            null,
+        ];
+
+        // --- SSTI ---
+        yield 'ssti_tp_input_var' => [
+            static fn (): AbstractAnalyzer => new OwaspSstiAnalyzer(),
+            ['app/Http/Controllers/PageController.php' => "<?php\n\$viewName = \$request->input('template');\nreturn view(\$viewName);\n"],
+            'OWASP_SSTI',
+        ];
+        yield 'ssti_fp_literal_var' => [
+            static fn (): AbstractAnalyzer => new OwaspSstiAnalyzer(),
+            ['app/Http/Controllers/ExerciseController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass ExerciseController extends Controller {\n    public function edit() {\n        \$viewName = 'backend.exercise.edit_catalog';\n        return view(\$viewName);\n    }\n}\n"],
+            null,
+        ];
+        yield 'ssti_fp_concat_literals' => [
+            static fn (): AbstractAnalyzer => new OwaspSstiAnalyzer(),
+            ['app/Http/Controllers/PosController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass PosController extends Controller {\n    public function index() {\n        \$industry = 2;\n        \$viewName = 'front.pos.pos_type_' . \$industry . '.pos_new';\n        return view(\$viewName);\n    }\n}\n"],
             null,
         ];
 
@@ -346,6 +374,16 @@ final class AnalyzerMetricsTest extends TestCase
             static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
             ['packages/Webkul/Shop/src/Resources/views/layouts/header.blade.php' => "<div>{!! view_render_event('bagisto.shop.header.before') !!}</div>\n"],
             null,
+        ];
+        yield 'bladexss_fp_json_hex' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/pos/index.blade.php' => "<script>var C = {!! json_encode(\$cfg, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!};</script>\n"],
+            null,
+        ];
+        yield 'bladexss_tp_json_bare' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/pos/index.blade.php' => "<script>var C = {!! json_encode(\$cfg) !!};</script>\n"],
+            'OWASP_BLADE_XSS',
         ];
     }
 

@@ -98,7 +98,7 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
                 if (!$arg instanceof Node\Arg) {
                     continue;
                 }
-                if (!$this->isUserInput($arg->value, $call, $safeScopes)) {
+                if (!$this->isUserInput($arg->value, $call, $safeScopes, $nodes)) {
                     continue;
                 }
 
@@ -123,7 +123,7 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
                     continue;
                 }
                 foreach ($call->args as $arg) {
-                    if ($arg instanceof Node\Arg && $this->isUserInput($arg->value, $call, $safeScopes)) {
+                    if ($arg instanceof Node\Arg && $this->isUserInput($arg->value, $call, $safeScopes, $nodes)) {
                         $issues[] = $this->makeIssue(
                             self::RULE,
                             'Potential command injection: user input flows into Symfony Process.',
@@ -143,8 +143,9 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
 
     /**
      * @param list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}> $safeScopes
+     * @param list<Node> $nodes
      */
-    private function isUserInput(Node\Expr $expr, Node $call, array $safeScopes): bool
+    private function isUserInput(Node\Expr $expr, Node $call, array $safeScopes, array $nodes): bool
     {
         if (
             $expr instanceof Node\Expr\FuncCall
@@ -158,9 +159,16 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
             return false;
         }
 
+        if (
+            $expr instanceof Node\Expr\Variable
+            && $this->isSafeParam($expr, $call, $nodes, $safeScopes)
+        ) {
+            return false;
+        }
+
         if ($expr instanceof Node\Scalar\InterpolatedString) {
             foreach ($expr->parts as $part) {
-                if ($part instanceof Node\Expr && $this->isUserInput($part, $call, $safeScopes)) {
+                if ($part instanceof Node\Expr && $this->isUserInput($part, $call, $safeScopes, $nodes)) {
                     return true;
                 }
             }
@@ -169,8 +177,8 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
         }
 
         if ($expr instanceof Node\Expr\BinaryOp\Concat) {
-            return $this->isUserInput($expr->left, $call, $safeScopes)
-                || $this->isUserInput($expr->right, $call, $safeScopes);
+            return $this->isUserInput($expr->left, $call, $safeScopes, $nodes)
+                || $this->isUserInput($expr->right, $call, $safeScopes, $nodes);
         }
 
         if ($this->isTaintedExpr($expr)) {
@@ -318,7 +326,129 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
             }
         }
 
+        foreach ($this->safeForeachVars($scope) as $name => $flag) {
+            $vars[$name] = $flag;
+        }
+
         return $vars;
+    }
+
+    /**
+     * Loop variables iterating over a constant iterable (array literal or
+     * class constant, e.g. `foreach (self::SERVICES as $svc)`) are
+     * deploy-time values, never request input.
+     *
+     * @param Node|list<Node> $scope
+     * @return array<string, true>
+     */
+    private function safeForeachVars(Node|array $scope): array
+    {
+        $vars = [];
+        $loops = $this->finder()->find($scope, static function (Node $node): bool {
+            return $node instanceof Node\Stmt\Foreach_;
+        });
+        foreach ($loops as $loop) {
+            if (
+                $loop instanceof Node\Stmt\Foreach_
+                && $loop->valueVar instanceof Node\Expr\Variable
+                && is_string($loop->valueVar->name)
+                && ($loop->expr instanceof Node\Expr\Array_
+                    || $loop->expr instanceof Node\Expr\ClassConstFetch)
+            ) {
+                $vars[$loop->valueVar->name] = true;
+            }
+        }
+
+        return $vars;
+    }
+
+    /**
+     * A command variable that is a parameter of a non-public function is safe
+     * when every same-file call site passes a deploy-time-safe argument
+     * (e.g. a private helper called only with string literals).
+     *
+     * @param list<Node> $nodes
+     * @param list<array{func: int|null, vars: array<string, true>, calls: array<int, true>}> $safeScopes
+     */
+    private function isSafeParam(
+        Node\Expr\Variable $var,
+        Node $call,
+        array $nodes,
+        array $safeScopes
+    ): bool {
+        if (!is_string($var->name)) {
+            return false;
+        }
+
+        $func = $this->enclosingFunction($call, $nodes);
+        if (!$func instanceof Node\Stmt\ClassMethod || $func->isPublic()) {
+            return false;
+        }
+
+        $index = null;
+        $paramName = null;
+        foreach ($func->params as $i => $param) {
+            if (!$param instanceof Node\Param || !$param->var instanceof Node\Expr\Variable) {
+                continue;
+            }
+            $candidate = $param->var->name;
+            if (!is_string($candidate) || $candidate !== $var->name) {
+                continue;
+            }
+            $index = $i;
+            $paramName = $candidate;
+            break;
+        }
+        if ($index === null || $paramName === null) {
+            return false;
+        }
+
+        $method = $func->name->toString();
+        $callSites = $this->finder()->find($nodes, static function (Node $node) use ($method): bool {
+            if ($node instanceof Node\Expr\MethodCall && $node->name instanceof Node\Identifier) {
+                return $node->name->toString() === $method;
+            }
+            if ($node instanceof Node\Expr\StaticCall && $node->name instanceof Node\Identifier) {
+                return $node->name->toString() === $method;
+            }
+
+            return false;
+        });
+
+        if ($callSites === []) {
+            return false;
+        }
+
+        foreach ($callSites as $site) {
+            if (!$site instanceof Node\Expr\MethodCall && !$site instanceof Node\Expr\StaticCall) {
+                continue;
+            }
+            $arg = null;
+            foreach ($site->args as $i => $candidate) {
+                if (!$candidate instanceof Node\Arg) {
+                    continue;
+                }
+                if ($candidate->name instanceof Node\Identifier) {
+                    if ($candidate->name->toString() === $paramName) {
+                        $arg = $candidate;
+                        break;
+                    }
+                    continue;
+                }
+                if ($i === $index) {
+                    $arg = $candidate;
+                    break;
+                }
+            }
+            if (!$arg instanceof Node\Arg) {
+                return false;
+            }
+            if (!$this->isSafeCommandExpr($arg->value, $this->safeVarsVisibleAt($site, $safeScopes))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

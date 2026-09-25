@@ -185,6 +185,19 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertSame('OWASP_SSTI', $this->rules($issues)[0] ?? null);
     }
 
+    public function testSstiSkipsConcatOfLiterals(): void
+    {
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nclass PosController extends Controller {\n" .
+            "    public function index() {\n        \$industry = 2;\n        \$viewName = 'front.pos.pos_type_' . \$industry . '.pos_new';\n        return view(\$viewName);\n    }\n}\n",
+            'app/Http/Controllers/PosController.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testSstiSkipsProtectedHelperWithLiteralCallSites(): void
     {
         $file = $this->temp(
@@ -407,6 +420,26 @@ final class OwaspAnalyzersTest extends TestCase
         $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
 
         self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testAccessControlSkipsApiKeyMiddleware(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers\\Api;\n" .
+            "class SyncStatusController extends Controller {\n    public function trigger() {\n        \$this->model->save();\n    }\n}\n",
+            'app/Http/Controllers/Api/SyncStatusController.php'
+        );
+        $routes = $this->temp(
+            "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+            "Route::prefix('sync')->middleware('edge.api.key')->group(function () {\n" .
+            "    Route::post('/trigger', 'App\\Http\\Controllers\\Api\\SyncStatusController@trigger');\n" .
+            "});\n",
+            'routes/api.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
+
+        self::assertCount(0, $issues);
     }
 
     public function testAccessControlRouteMiddlewareCanBeDisabled(): void
@@ -730,6 +763,63 @@ final class OwaspAnalyzersTest extends TestCase
             "        \$cmd = str_ends_with(\$archive, '.zip') ? ['unzip', '-o', \$archive, '-d', \$dest] : ['tar', '-xzf', \$archive, '-C', \$dest];\n" .
             "        \$process = new Process(\$cmd);\n        \$process->run();\n    }\n}\n",
             'src/Tools/Extractor.php'
+        );
+
+        $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testCommandInjectionSkipsPrivateHelperWithLiteralCallSites(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass EdgeManager {\n" .
+            "    public function handle(string \$action): void {\n" .
+            "        if (\$action === 'start') { \$this->controlServices('start'); }\n" .
+            "        if (\$action === 'stop') { \$this->controlServices('stop'); }\n" .
+            "    }\n" .
+            "    private function controlServices(string \$cmd): void {\n" .
+            "        exec(\"nssm \$cmd svc 2>&1\", \$output, \$code);\n" .
+            "    }\n}\n",
+            'app/Http/Controllers/EdgeManagerController.php'
+        );
+
+        $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testCommandInjectionStillFlagsPrivateHelperWithInputCallSite(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass EdgeManager {\n" .
+            "    public function handle(string \$action): void {\n" .
+            "        \$this->controlServices(\$action);\n" .
+            "    }\n" .
+            "    private function controlServices(string \$cmd): void {\n" .
+            "        exec(\"nssm \$cmd svc 2>&1\", \$output, \$code);\n" .
+            "    }\n}\n",
+            'app/Http/Controllers/EdgeManagerController.php'
+        );
+
+        $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_COMMAND_INJECTION', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testCommandInjectionSkipsForeachOverClassConst(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass EdgeManager {\n    private const SERVICES = ['svc-a', 'svc-b'];\n" .
+            "    private function controlServices(string \$cmd): void {\n" .
+            "        foreach (self::SERVICES as \$svc) {\n" .
+            "            exec(\"nssm \$cmd \$svc 2>&1\", \$output, \$code);\n" .
+            "        }\n" .
+            "    }\n" .
+            "    public function start(): void {\n" .
+            "        \$this->controlServices('start');\n" .
+            "    }\n}\n",
+            'app/Http/Controllers/EdgeManagerController.php'
         );
 
         $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);

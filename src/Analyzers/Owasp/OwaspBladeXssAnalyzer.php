@@ -19,10 +19,10 @@ use VietVang\QualityChecker\Result\Severity;
  * Deliberately not flagged: {!! ... !!} blocks without dynamic data (e.g.
  * `{!! csrf_field() !!}`), blocks already escaped/sanitized via `e(...)`,
  * `sanitizeHtml(...)`, `strip_tags(...)`, `htmlspecialchars(...)` and alike,
- * framework event-hook output (`view_render_event(...)`), the escaped
- * `{{ ... }}` syntax (which is safe by definition), paginator
- * `->links(...)` output, and variables whose name marks pre-rendered/
- * sanitized HTML (`$commentHtml`, `$page->getHtml()`).
+ * `json_encode(...)` with all four JSON_HEX_* flags, framework event-hook
+ * output (`view_render_event(...)`), the escaped `{{ ... }}` syntax (which is
+ * safe by definition), paginator `->links(...)` output, and variables whose
+ * name marks pre-rendered/sanitized HTML (`$commentHtml`, `$page->getHtml()`).
  */
 final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
 {
@@ -34,6 +34,11 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
     private const SANITIZER_FUNCS = [
         'e', 'sanitizehtml', 'strip_tags', 'htmlspecialchars', 'htmlentities', 'purify', 'clean',
     ];
+
+    /**
+     * json_encode() flags that neutralize script breakouts.
+     */
+    private const JSON_HEX_FLAGS = ['JSON_HEX_TAG', 'JSON_HEX_APOS', 'JSON_HEX_AMP', 'JSON_HEX_QUOT'];
 
     /**
      * Framework event hooks whose output comes from internal listeners, not
@@ -98,6 +103,10 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
                 continue;
             }
 
+            if ($this->isHexEncodedJson($inner)) {
+                continue;
+            }
+
             if ($this->isEventOutput($inner)) {
                 continue;
             }
@@ -159,5 +168,24 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
         }
 
         return false;
+    }
+
+    /**
+     * json_encode() with all four HEX flags neutralizes `</script>` breakouts;
+     * without them the output stays flaggable.
+     */
+    private function isHexEncodedJson(string $inner): bool
+    {
+        if (!str_contains($inner, 'json_encode(')) {
+            return false;
+        }
+
+        foreach (self::JSON_HEX_FLAGS as $flag) {
+            if (!str_contains($inner, $flag)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
