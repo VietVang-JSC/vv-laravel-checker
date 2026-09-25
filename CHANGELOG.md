@@ -67,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same-scope variables); dynamic subdomains stay flagged.
 - Path traversal covers the `File::` facade (`File::get($request->date)` log
   read was a true positive) plus `dirname()` and path-builder method calls.
+- Full re-audit pass: variable-origin resolution now applies to every
+  traversal sink branch (not just include/require).
 
 ## [1.0.0] - 2026-09-24
 
