@@ -70,6 +70,34 @@ final class OwaspPathTraversalAnalyzerTest extends TestCase
         self::assertSame('OWASP_PATH_TRAVERSAL', $this->rules($issues)[0] ?? null);
     }
 
+    public function testSkipsConfigPathHelper(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass UpdaterService {\n    protected function writeVersion(string \$version): void {\n" .
+            "        file_put_contents(config_path('version.php'), '{}');\n    }\n}\n",
+            'app/Services/UpdaterService.php'
+        );
+
+        $issues = (new OwaspPathTraversalAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsConfigAssignedVariable(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass SetupDocs {\n    protected function documentation(): void {\n" .
+            "        if (! file_exists(\$database = config('database.connections.docs.database'))) {\n" .
+            "            file_put_contents(\$database, '');\n" .
+            "        }\n    }\n}\n",
+            'app/Console/Commands/SetupDocumentation.php'
+        );
+
+        $issues = (new OwaspPathTraversalAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testFlagsStorageGetWithVariable(): void
     {
         $file = $this->temp(

@@ -38,7 +38,10 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
 
     private const RESPONSE_METHODS = ['download', 'file'];
 
-    private const PATH_HELPERS = ['storage_path', 'base_path', 'dirname'];
+    private const PATH_HELPERS = [
+        'storage_path', 'base_path', 'public_path', 'resource_path',
+        'database_path', 'app_path', 'config_path', 'lang_path', 'dirname',
+    ];
 
     private const CONFIG_FUNCS = ['env', 'config'];
 
@@ -125,7 +128,7 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
                 if (!$arg instanceof Node\Arg) {
                     continue;
                 }
-                if (!$this->isTaintedPath($arg->value)) {
+                if (!$this->isTaintedPath($arg->value, true, $origins)) {
                     continue;
                 }
                 $sink = $fn . '()';
@@ -159,7 +162,7 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
                 if (!$arg instanceof Node\Arg) {
                     continue;
                 }
-                if (!$this->isTaintedPath($arg->value)) {
+                if (!$this->isTaintedPath($arg->value, true, $origins)) {
                     continue;
                 }
                 $issues[] = $this->makeIssue(
@@ -188,7 +191,7 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
                 if (!$arg instanceof Node\Arg) {
                     continue;
                 }
-                if (!$this->isTaintedPath($arg->value)) {
+                if (!$this->isTaintedPath($arg->value, true, $origins)) {
                     continue;
                 }
                 $sink = 'response()->' . $node->name->toString() . '()';
@@ -269,7 +272,7 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
         }
 
         if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
-            if ($this->isSafeIncludeOrigin($expr->name, $origins, [])) {
+            if ($this->isSafeVariableOrigin($expr->name, $origins, [])) {
                 return false;
             }
             if ($allowNameHeuristic && $this->rootVariableName($expr) !== 'request') {
@@ -395,7 +398,7 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
      * @param array<string, list<Node\Expr>> $origins
      * @param array<string, true> $seen cycle guard
      */
-    private function isSafeIncludeOrigin(string $name, array $origins, array $seen): bool
+    private function isSafeVariableOrigin(string $name, array $origins, array $seen): bool
     {
         if (isset($seen[$name])) {
             return false;
@@ -434,7 +437,7 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
         }
 
         if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
-            return $this->isSafeIncludeOrigin($expr->name, $origins, $seen);
+            return $this->isSafeVariableOrigin($expr->name, $origins, $seen);
         }
 
         if (

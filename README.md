@@ -328,18 +328,18 @@ The **tier** controls what the gate fails on:
 Custom analyzers only (phpcs/phpstan/phpunit excluded), `tier=security`,
 `fail-on=none`, cold runs without cache. Quality is pinned by a labeled
 corpus (`tests/Unit/AnalyzerMetricsTest.php`): **precision 1.000 / recall 1.000**
-across 63 true/false-positive cases (24 TP + 39 TN), so the reductions below
+across 67 true/false-positive cases (24 TP + 43 TN), so the reductions below
 cannot regress silently.
 
 | Pilot | Stack | Files | Before | After | Signal left |
 |---|---|---|---|---|---|
-| Bagisto / LienHoaEc | Laravel 11 e-commerce | 3,283 | 1,246 (7 / 466 / 773) | **1,079** (3 / 303 / 773) | 101 blade (raw display, review) + public routes + Docs sample |
-| SiroHRM | Laravel 12 HRM | 526 | 191 (5 / 55 / 131) | **135** (1 / 5 / 129) | 4 open redirects + coverage |
-| SiroLingo | Laravel 12 LMS | ~600 | 176 (0 / 2 / 174) | **203** (0 / 29 / 174) | 21 blade (sanitized display, review) + 8 redirect/traversal |
-| quanlyinan3m | Laravel (internal) | ~500 | 62 (0 / 1 / 61) | **79** (0 / 18 / 61) | 18 blade (import display, review) |
-| BookStack | Laravel docs wiki | ~1,400 | 186 (2 / 30 / 154) | **265** (2 / 111 / 152) | 75 redirect (16 high auth flow) + 21 BAC API |
-| Monica | Laravel PRM (DDD) | ~1,800 | 387 (3 / 7 / 377) | **383** (2 / 6 / 375) | 1 true `exec()` on param + validation debt |
-| Aimeos | Laravel e-commerce pkg | ~200 | — | **3** (0 / 2 / 1) | JSON:API auth-in-core + 1 require review |
+| Bagisto / LienHoaEc | Laravel 11 e-commerce | 3,283 | 1,246 (7 / 466 / 773) | **1,077** (3 / 301 / 773) | 101 blade + public routes + Docs sample |
+| SiroHRM | Laravel 12 HRM | 526 | 191 (5 / 55 / 131) | **136** (1 / 6 / 129) | 4 open redirects + coverage |
+| SiroLingo | Laravel 12 LMS | ~600 | 176 (0 / 2 / 174) | **181** (0 / 7 / 174) | blade sanitized-display review |
+| quanlyinan3m | Laravel (internal) | ~500 | 62 (0 / 1 / 61) | **66** (0 / 5 / 61) | 5 blade import-display |
+| BookStack | Laravel docs wiki | ~1,400 | 186 (2 / 30 / 154) | **263** (2 / 109 / 152) | 75 redirect (16 high auth) + API auth |
+| Monica | Laravel PRM (DDD) | ~1,800 | 387 (3 / 7 / 377) | **386** (2 / 9 / 375) | 1 true `exec()` + validation debt |
+| Aimeos | Laravel e-commerce pkg | ~200 | — | **2** (0 / 1 / 1) | JSON:API auth-in-core + coverage |
 | Cachet | Laravel status page | ~100 | — | **3** (0 / 0 / 3) | CORS wildcard + coverage |
 | laravel-check (dogfood) | Package itself | ~200 | 37 | **5** (3 / 1 / 1) | all intended (vuln fixtures + test secret) |
 | DeltaPOS edge-box | Laravel POS edge | ~400 | — | **100** (0 / 55 / 45) | 39 blade + 10 unauth API (backup/printer review) |
