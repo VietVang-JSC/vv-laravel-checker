@@ -345,6 +345,8 @@ cannot regress silently.
 | I — internal POS edge app | Laravel | ~400 | — | **100** (0 / 55 / 45) | 39 blade + 10 unauth API review |
 | J — internal POS cloud app | Laravel | ~500 | — | **182** (1 / 139 / 42) | 104 blade + 22 server-fetch review + 1 true open redirect |
 | K — internal POS backend | Laravel | ~700 | — | **254** (1 / 50 / 203) | coverage debt + 20 BAC (JWT groups resolved) |
+| L — internal web app (backend) | Laravel | ~600 | — | **511** (8 / 279 / 224) | hardcoded API key + exec-from-DB + 270 blade |
+| M — internal web app (frontend) | Laravel | ~800 | — | **143** (1 / 46 / 96) | auth-flow findings + payment CSRF exceptions |
 
 *(severity split: critical / error / warning)*
 
