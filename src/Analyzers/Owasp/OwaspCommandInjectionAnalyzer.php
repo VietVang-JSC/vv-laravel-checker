@@ -190,15 +190,20 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
 
     /**
      * A command expression is deploy-time safe when every leaf is a string
-     * literal, a constant (PHP_BINARY, DIRECTORY_SEPARATOR, ...), an explicit
-     * shell-escaping call, a Laravel path-helper call with safe arguments, or
-     * a variable previously assigned such a safe expression in the same scope.
+     * literal, a number, a constant (PHP_BINARY, DIRECTORY_SEPARATOR, ...),
+     * an explicit shell-escaping call, a deploy-time config lookup, a Laravel
+     * path-helper call with safe arguments, or a variable previously assigned
+     * such a safe expression in the same scope.
      *
      * @param array<string, true> $known
      */
     private function isSafeCommandExpr(Node\Expr $expr, array $known): bool
     {
         if ($expr instanceof Node\Scalar\String_) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Scalar\LNumber || $expr instanceof Node\Scalar\DNumber) {
             return true;
         }
 
@@ -210,12 +215,28 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
             return isset($known[$expr->name]);
         }
 
+        if ($expr instanceof Node\Expr\Ternary) {
+            if ($expr->if !== null && !$this->isSafeCommandExpr($expr->if, $known)) {
+                return false;
+            }
+
+            return $this->isSafeCommandExpr($expr->else, $known);
+        }
+
+        if ($expr instanceof Node\Expr\BinaryOp\Coalesce) {
+            return $this->isSafeCommandExpr($expr->left, $known)
+                && $this->isSafeCommandExpr($expr->right, $known);
+        }
+
         if (
             $expr instanceof Node\Expr\FuncCall
             && $expr->name instanceof Node\Name
         ) {
             $fn = strtolower($expr->name->toString());
             if (in_array($fn, self::ESCAPE_FUNCS, true)) {
+                return true;
+            }
+            if (in_array($fn, ['env', 'config'], true)) {
                 return true;
             }
             if (in_array($fn, self::SAFE_COMMAND_FUNCS, true)) {

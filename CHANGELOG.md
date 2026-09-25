@@ -45,6 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are High confidence, method targets (`$page->getUrl()`) are Medium.
 - Dogfooded the new inline suppression on the package's own reviewed sinks.
 
+### Fixed (free-pos-backend audit)
+
+- Command injection accepts `env()`/`config()` and ternary/coalesce branches
+  in safe-command expressions (ImageMagick `$imgMagickCLI` case).
+- `DISABLED_CSRF_EXCEPTION_STAR` downgraded to Warning for api-only `api/*`
+  exclusions (stateless APIs); broader wildcards stay Critical.
+
 ### Fixed (DeltaPOS + DeltaPosWeb audit)
 
 - Command injection skips private-helper params with literal-only call sites

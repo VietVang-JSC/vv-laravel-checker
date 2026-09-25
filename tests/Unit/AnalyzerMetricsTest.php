@@ -124,6 +124,11 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/EdgeManager.php' => "<?php\nclass EdgeManager {\n    private const SERVICES = ['svc-a'];\n    private function controlServices(string \$cmd): void {\n        foreach (self::SERVICES as \$svc) {\n            exec(\"nssm \$cmd \$svc 2>&1\", \$output, \$code);\n        }\n    }\n    public function start(): void {\n        \$this->controlServices('start');\n    }\n}\n"],
             null,
         ];
+        yield 'cmd_fp_env_escaped' => [
+            static fn (): AbstractAnalyzer => new OwaspCommandInjectionAnalyzer(),
+            ['app/Services/PdfService.php' => "<?php\nclass PdfService {\n    public function render(string \$pdfPath): void {\n        \$input = escapeshellarg(\$pdfPath);\n        \$bin = env('IMAGE_MAGICK_CLI', 'convert');\n        exec(\"deny 203 {\$input}\", \$o, \$s);\n    }\n}\n"],
+            null,
+        ];
 
         // --- SSRF ---
         yield 'ssrf_tp_request_input' => [

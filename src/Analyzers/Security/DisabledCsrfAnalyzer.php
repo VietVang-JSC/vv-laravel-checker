@@ -68,13 +68,17 @@ final class DisabledCsrfAnalyzer
 
             if ($this->isVerifyCsrfToken($class)) {
                 $except = $this->findProperty($class, 'except');
-                if ($except !== null && $this->containsWildcard($except)) {
+                $patterns = $except !== null ? $this->wildcardPatterns($except) : [];
+                if ($patterns !== []) {
+                    $apiOnly = $patterns !== [] && $this->isApiOnlyExclusion($patterns);
                     $issues[] = new Issue(
                         self::RULE_EXCEPTION_STAR,
-                        'VerifyCsrfToken::$except contains a broad wildcard pattern ("*"), disabling CSRF protection.',
+                        $apiOnly
+                            ? 'VerifyCsrfToken::$except excludes "api/*": acceptable only for stateless (token-authenticated) APIs — verify no session-authenticated route lives under /api/.'
+                            : 'VerifyCsrfToken::$except contains a broad wildcard pattern ("*"), disabling CSRF protection.',
                         $file,
                         $except->getStartLine(),
-                        Severity::Critical,
+                        $apiOnly ? Severity::Warning : Severity::Critical,
                         'custom',
                         ['class' => $this->className($class)]
                     );
@@ -148,27 +152,42 @@ final class DisabledCsrfAnalyzer
         return false;
     }
 
-    private function containsWildcard(Node\Stmt\Property $property): bool
+    /**
+     * @return list<string> wildcard patterns in $except
+     */
+    private function wildcardPatterns(Node\Stmt\Property $property): array
     {
         $items = $property->props[0]->default ?? null;
         if (!$items instanceof Node\Expr\Array_) {
-            return false;
+            return [];
         }
 
+        $patterns = [];
         foreach ($items->items as $item) {
             if ($item === null || $item->value === null) {
                 continue;
             }
             $value = $item->value;
-            if ($value instanceof Node\Scalar\String_ && $value->value === '*') {
-                return true;
-            }
             if ($value instanceof Node\Scalar\String_ && str_contains($value->value, '*')) {
-                return true;
+                $patterns[] = $value->value;
             }
         }
 
-        return false;
+        return $patterns;
+    }
+
+    /**
+     * @param list<string> $patterns
+     */
+    private function isApiOnlyExclusion(array $patterns): bool
+    {
+        foreach ($patterns as $pattern) {
+            if ($pattern !== 'api/*') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function matches(Node\Name $name, string $target): bool

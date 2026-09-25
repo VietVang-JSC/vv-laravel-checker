@@ -855,6 +855,24 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testCommandInjectionSkipsEnvBinaryWithEscapedArgs(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass PdfService {\n    public function render(string \$pdfPath, int \$storeId, string \$paperSize): void {\n" .
+            "        \$input = escapeshellarg(\$pdfPath);\n" .
+            "        \$resizeWidth = \$paperSize == 80 ? 474 : 365;\n" .
+            "        \$imgMagickCLI = env('IMAGE_MAGICK_CLI', 'convert');\n" .
+            "        \$command = \"\$imgMagickCLI -density 203 {\$input} -resize {\$resizeWidth} out.png\";\n" .
+            "        exec(\$command, \$output, \$status);\n" .
+            "    }\n}\n",
+            'app/Services/BaseService.php'
+        );
+
+        $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testXxeSkipsTestPaths(): void
     {
         $file = $this->temp(

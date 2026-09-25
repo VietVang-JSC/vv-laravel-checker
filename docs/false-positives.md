@@ -215,6 +215,13 @@ php artisan quality:check --tier=all --fail-on=none
 - Placeholder như `xxx`, `changeme`, empty string trong file config được báo
   bởi `OWASP_MISCONFIGURATION` (mức warning) — hãy thay bằng `env()`.
 
+### `DISABLED_CSRF_EXCEPTION_STAR`
+- **Báo Critical khi**: `$except` chứa wildcard ngoài `api/*` (vd `*`,
+  `admin/*`) — tắt CSRF diện rộng.
+- **Báo Warning khi**: chỉ exclude đúng `api/*` — chấp nhận được cho API
+  stateless, nhưng phải xác minh không có route session-auth nào dưới `/api/`
+  (case free-pos-backend).
+
 ### Nhóm heuristic `low` (`DEAD_CODE`, `NAMING_CONVENTION`, `TODO_FIXME`, `MISSING_*_TEST`)
 - Mặc định **TẮT** (`analyzers.test_coverage.*`, `analyzers.convention.*` =
   `false`). Nếu bạn bật lên và thấy hàng loạt cảnh báo, đó là kỳ vọng —

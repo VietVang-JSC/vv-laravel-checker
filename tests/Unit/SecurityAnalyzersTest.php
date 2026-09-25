@@ -348,4 +348,18 @@ final class SecurityAnalyzersTest extends TestCase
 
         self::assertCount(0, $issues);
     }
+
+    public function testDisabledCsrfDowngradesApiOnlyException(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Middleware;\nclass VerifyCsrfToken {\n    protected \$except = ['api/*'];\n}\n",
+            'app/Http/Middleware/VerifyCsrfToken.php'
+        );
+
+        $issues = (new DisabledCsrfAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertSame('DISABLED_CSRF_EXCEPTION_STAR', $issues[0]->rule);
+        self::assertSame(Severity::Warning, $issues[0]->severity);
+    }
 }

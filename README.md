@@ -344,6 +344,7 @@ cannot regress silently.
 | laravel-check (dogfood) | Package itself | ~200 | 37 | **5** (3 / 1 / 1) | all intended (vuln fixtures + test secret) |
 | DeltaPOS edge-box | Laravel POS edge | ~400 | — | **100** (0 / 55 / 45) | 39 blade + 10 unauth API (backup/printer review) |
 | DeltaPosWeb | Laravel POS cloud | ~500 | — | **182** (1 / 139 / 42) | 104 blade + 22 server-fetch review + 1 true open redirect |
+| free-pos-backend | Laravel POS backend | ~700 | — | **254** (1 / 50 / 203) | coverage debt + 20 BAC (JWT groups resolved) |
 
 *(severity split: critical / error / warning)*
 
