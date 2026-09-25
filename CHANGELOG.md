@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Remediation catalog (`src/Remediation/RuleRemediation.php`, 38 rules):
+  every finding now teaches the fix — bilingual why + before/after sample,
+  rendered in console (why_vi per rule), HTML (fixbox per rule group),
+  Markdown (`## Remediation`), JSON (`remediation` per issue) and SARIF
+  (`help` + `helpUri` per rule descriptor).
+
 - 3 new OWASP rule families (precision wave 2, each with labeled corpus cases):
   `OWASP_OPEN_REDIRECT` (`owasp.open_redirect` — `redirect()`/`away()`/`to()`
   with dynamic target; skips `route()`/`back()`/literal/`config()` targets and
@@ -19,6 +25,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `OWASP_BLADE_XSS` (`owasp.blade_xss` — `{!! ... !!}` with dynamic data in
   `*.blade.php`, collected separately from `resources/`; skips `csrf_field()`,
   `e(...)`, `{{ ... }}` and pre-rendered-HTML naming convention).
+
+### Fixed (audit wave, validated on 9 pilots)
+
+- Shared local-path naming heuristic (`AbstractAnalyzer::isLocalPathName`,
+  incl. `dir`) for SSRF + traversal; request-rooted expressions (`$request`,
+  `request()`) never count as local; `include/require` stays strict (LFI).
+- Traversal skips path-builder method calls (`absolutePath()`, `pathFor()`,
+  `getPathname()`) and `dirname()` with safe args; include resolves
+  safe variable origins (Aimeos `require $cfgfile` case).
+- Command injection skips `new Process()` with natively typed `array` params,
+  ternary-of-arrays commands, and `escapeshellarg()` inside safe expressions.
+- SSRF skips fixed-host URLs (`sprintf('https://literal-host/...')`,
+  including through same-scope variables) while dynamic subdomains stay flagged.
+- Blade XSS skips explicit sanitizers (`sanitizeHtml`, `strip_tags`,
+  `htmlspecialchars`, ...), `view_render_event()` theme hooks (440 Bagisto
+  findings), paginator `->links()`, and `->renderedHTML`-style properties.
+- Open redirect: literal-arg `url()` is safe; bare-variable/request targets
+  are High confidence, method targets (`$page->getUrl()`) are Medium.
+- Dogfooded the new inline suppression on the package's own reviewed sinks.
 
 ## [1.0.0] - 2026-09-24
 
