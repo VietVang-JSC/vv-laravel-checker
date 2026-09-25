@@ -35,7 +35,7 @@ figures come from its upstream README; that repo is archived since Jan 2026._
 - **Còn sống**: Enlightn dừng phát triển cùng Laravel ≤ 11; tool này active,
   tag semver (`v1.0.0`), CI dogfooding.
 - **Chạy được mọi nơi**: không cần boot app — scan được cả project hỏng
-  `.env`/thiếu DB (case Bagisto pilot); hỗ trợ Windows.
+  `.env`/thiếu DB (một pilot e-commerce); hỗ trợ Windows.
 - **Report mở, self-hosted**: SARIF 2.1.0 (GitHub code scanning native) +
   HTML/JSON/Markdown/console, không phụ thuộc dịch vụ ngoài.
 - **Static precision đo được**: corpus labeled 26 cases, precision/recall

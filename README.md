@@ -333,22 +333,22 @@ cannot regress silently.
 
 | Pilot | Stack | Files | Before | After | Signal left |
 |---|---|---|---|---|---|
-| Bagisto / LienHoaEc | Laravel 11 e-commerce | 3,283 | 1,246 (7 / 466 / 773) | **1,077** (3 / 301 / 773) | 101 blade + public routes + Docs sample |
-| SiroHRM | Laravel 12 HRM | 526 | 191 (5 / 55 / 131) | **136** (1 / 6 / 129) | 4 open redirects + coverage |
-| SiroLingo | Laravel 12 LMS | ~600 | 176 (0 / 2 / 174) | **181** (0 / 7 / 174) | blade sanitized-display review |
-| quanlyinan3m | Laravel (internal) | ~500 | 62 (0 / 1 / 61) | **66** (0 / 5 / 61) | 5 blade import-display |
-| BookStack | Laravel docs wiki | ~1,400 | 186 (2 / 30 / 154) | **263** (2 / 109 / 152) | 75 redirect (16 high auth) + API auth |
-| Monica | Laravel PRM (DDD) | ~1,800 | 387 (3 / 7 / 377) | **386** (2 / 9 / 375) | 1 true `exec()` + validation debt |
-| Aimeos | Laravel e-commerce pkg | ~200 | — | **2** (0 / 1 / 1) | JSON:API auth-in-core + coverage |
-| Cachet | Laravel status page | ~100 | — | **3** (0 / 0 / 3) | CORS wildcard + coverage |
-| laravel-check (dogfood) | Package itself | ~200 | 37 | **5** (3 / 1 / 1) | all intended (vuln fixtures + test secret) |
-| DeltaPOS edge-box | Laravel POS edge | ~400 | — | **100** (0 / 55 / 45) | 39 blade + 10 unauth API (backup/printer review) |
-| DeltaPosWeb | Laravel POS cloud | ~500 | — | **182** (1 / 139 / 42) | 104 blade + 22 server-fetch review + 1 true open redirect |
-| free-pos-backend | Laravel POS backend | ~700 | — | **254** (1 / 50 / 203) | coverage debt + 20 BAC (JWT groups resolved) |
+| A — e-commerce monolith | Laravel 11 | 3,283 | 1,246 (7 / 466 / 773) | **1,077** (3 / 301 / 773) | 101 blade + public routes + Docs sample |
+| B — internal HRM app | Laravel 12 | 526 | 191 (5 / 55 / 131) | **136** (1 / 6 / 129) | 4 open redirects + coverage |
+| C — internal LMS app | Laravel 12 | ~600 | 176 (0 / 2 / 174) | **181** (0 / 7 / 174) | blade sanitized-display review |
+| D — internal business app | Laravel | ~500 | 62 (0 / 1 / 61) | **66** (0 / 5 / 61) | 5 blade import-display |
+| E — OSS wiki app | Laravel | ~1,400 | 186 (2 / 30 / 154) | **263** (2 / 109 / 152) | 75 redirect (16 high auth) + API auth |
+| F — OSS PRM app (DDD) | Laravel | ~1,800 | 387 (3 / 7 / 377) | **386** (2 / 9 / 375) | 1 true `exec()` + validation debt |
+| G — OSS e-commerce package | Laravel | ~200 | — | **2** (0 / 1 / 1) | JSON:API auth-in-core + coverage |
+| H — OSS status-page app | Laravel | ~100 | — | **3** (0 / 0 / 3) | CORS wildcard + coverage |
+| Dogfood — this package | PHP library | ~200 | 37 | **5** (3 / 1 / 1) | all intended (vuln fixtures + test secret) |
+| I — internal POS edge app | Laravel | ~400 | — | **100** (0 / 55 / 45) | 39 blade + 10 unauth API review |
+| J — internal POS cloud app | Laravel | ~500 | — | **182** (1 / 139 / 42) | 104 blade + 22 server-fetch review + 1 true open redirect |
+| K — internal POS backend | Laravel | ~700 | — | **254** (1 / 50 / 203) | coverage debt + 20 BAC (JWT groups resolved) |
 
 *(severity split: critical / error / warning)*
 
-Biggest single win: `OWASP_BROKEN_ACCESS_CONTROL` on Bagisto **453 → 150** —
+Biggest single win: `OWASP_BROKEN_ACCESS_CONTROL` on the e-commerce pilot (A) **453 → 150** —
 actions protected by route middleware, `Route::controller()` groups and
 cross-file `require` are now resolved; FQCN keys keep same-named Admin/Shop
 controllers apart (see [docs/false-positives.md](docs/false-positives.md)).

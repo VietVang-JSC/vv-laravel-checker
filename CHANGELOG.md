@@ -33,31 +33,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `request()`) never count as local; `include/require` stays strict (LFI).
 - Traversal skips path-builder method calls (`absolutePath()`, `pathFor()`,
   `getPathname()`) and `dirname()` with safe args; include resolves
-  safe variable origins (Aimeos `require $cfgfile` case).
+  safe variable origins (config path built from `dirname()` constants).
 - Command injection skips `new Process()` with natively typed `array` params,
   ternary-of-arrays commands, and `escapeshellarg()` inside safe expressions.
 - SSRF skips fixed-host URLs (`sprintf('https://literal-host/...')`,
   including through same-scope variables) while dynamic subdomains stay flagged.
 - Blade XSS skips explicit sanitizers (`sanitizeHtml`, `strip_tags`,
-  `htmlspecialchars`, ...), `view_render_event()` theme hooks (440 Bagisto
-  findings), paginator `->links()`, and `->renderedHTML`-style properties.
+  `htmlspecialchars`, ...), `view_render_event()` theme hooks (440 findings
+  in one pilot), paginator `->links()`, and `->renderedHTML`-style properties.
 - Open redirect: literal-arg `url()` is safe; bare-variable/request targets
   are High confidence, method targets (`$page->getUrl()`) are Medium.
 - Dogfooded the new inline suppression on the package's own reviewed sinks.
 
-### Fixed (free-pos-backend audit)
+### Fixed (POS backend pilot audit)
 
 - Command injection accepts `env()`/`config()` and ternary/coalesce branches
   in safe-command expressions (ImageMagick `$imgMagickCLI` case).
 - `DISABLED_CSRF_EXCEPTION_STAR` downgraded to Warning for api-only `api/*`
   exclusions (stateless APIs); broader wildcards stay Critical.
 
-### Fixed (DeltaPOS + DeltaPosWeb audit)
+### Fixed (POS edge + cloud pilot audit)
 
 - Command injection skips private-helper params with literal-only call sites
-  and `foreach` over constant iterables (DeltaPOS `nssm` edge-box manager).
+  and `foreach` over constant iterables (service-manager helper case).
 - SSTI resolves concatenations of literals (`'front.pos_' . $industry`).
-- Broken access control recognizes API-key guards (`edge.api.key`,
+- Broken access control recognizes API-key guards (`*.api.key`,
   `sanctum`, `jwt`, `oauth`).
 - Blade XSS skips sanitizer calls, `view_render_event()` hooks, paginator
   `->links()`, `->renderedHTML` properties, and fully HEX-flagged
@@ -114,7 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   distribution + top-rule bar charts, sortable tables, dark-mode toggle
   (persisted), print stylesheet, OWASP per-rule drill-down, expand/collapse
   controls, search auto-expands matching file groups.
-- Pilot benchmark on Bagisto/LienHoaEc (3,283 files): 1,246 findings / 170 s,
+- Pilot benchmark on a large e-commerce monolith (3,283 files): 1,246 findings / 170 s,
   valid SARIF (12 rules) — recorded in README.
 - Auto-provisioning of missing tools: composer-based tools (phpcs/phpstan/phpunit) installed via `composer require --dev` in the target project, and the Trivy binary auto-downloaded into a per-user cache. Disable with `--no-auto-install` / `auto_install_tools => false`.
 - Checkers fall back to the package's own `vendor/bin` when a tool is missing but bundled.
@@ -149,8 +149,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Route::controller()` groups with bare-string actions, `resource/apiResource`,
   cross-file `require` inside group closures), legacy `['uses' => 'FQCN@method']`
   array syntax, and FQCN action keys via `use`-import resolution
-  (config `analyzers.owasp.route_middleware`, default on). Bagisto 453 → 150,
-  SiroHRM 45 → 1.
+  (config `analyzers.owasp.route_middleware`, default on). E-commerce pilot
+  453 → 150, HRM pilot 45 → 1.
 - **False-positive wave 2 (SSRF/command/SSTI/hash/migration):** SSRF skips test
   paths, `fopen()` write modes, local-path names/helpers, `->getRealPath()` /
   `->getPathname()`, `env()`/`config()` lookups, and no longer treats the
@@ -160,8 +160,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   safe variables); SSTI skips literal-assigned variables and non-public helpers
   with literal-only call sites; `INSECURE_HASH` skips HIBP k-anonymity clients;
   `MIGRATION_DESTRUCTIVE_UP` skips down()-restored drops and index/constraint
-  drops. Validated on 8 pilots (SiroHRM, Bagisto, SiroLingo, Aimeos,
-  quanlyinan3m, BookStack, Monica, Cachet).
+  drops. Validated on 8 pilots (internal HRM/LMS/business apps, e-commerce
+  monolith + package, wiki, PRM, status page).
 - **Stale cache:** `ResultCache` keys now include a hash of the analyzer/checker
   source, so package upgrades can never serve results computed by older code.
 - Labeled precision/recall corpus (`tests/Unit/AnalyzerMetricsTest.php`, 26

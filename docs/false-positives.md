@@ -78,11 +78,11 @@ php artisan quality:check --tier=all --fail-on=none
   static trực tiếp), `Route::controller(X::class)` với action là bare string,
   `Route::resource()`/`apiResource()`, và `require`/`include` file route trong
   group closure (file được require kế thừa middleware stack, không parse standalone).
-  Cả syntax array cũ (`['as' => ..., 'uses' => 'FQCN@method']` kiểu Aimeos) lẫn
+  Cả syntax array cũ (`['as' => ..., 'uses' => 'FQCN@method']`) lẫn
   `[Controller::class, 'method']` đều được resolve.
   Tên middleware chứa `auth`/`can`/`permission`/`role`/`gate`/`admin`/`bouncer`/
   `checklevel`/`apikey`/`sanctum`/`jwt`/`oauth`... (kể cả API-key guard kiểu
-  `edge.api.key` — case DeltaPOS) được coi là bảo vệ; `throttle` thì không. Actions so khớp theo
+  `*.api.key`) được coi là bảo vệ; `throttle` thì không. Actions so khớp theo
   FQCN (`use` imports được resolve) nên 2 controller trùng tên khác namespace
   (Admin vs Shop API) không lẫn vào nhau. Tắt bằng
   `analyzers.owasp.route_middleware => false` nếu muốn hành vi cũ (chỉ nhìn
@@ -90,9 +90,9 @@ php artisan quality:check --tier=all --fail-on=none
 - **Vẫn báo (review rồi baseline)**: route public by design (login, password
   reset, 2FA verify, storefront, payment callback/IPN), action không có route
   nào (dead code), và sample code trong thư mục tài liệu (ví dụ OpenAPI `Docs`
-  của Bagisto RestApi — class ví dụ tên `*Controller` nhưng không bao giờ chạy).
-- **Case pilot**: SiroHRM 45 → 1 (còn `TwoFactorController@verify`, public by
-  design); Bagisto 453 → 150, trong đó 105 là `Docs` sample, còn lại là
+  của một pilot — class ví dụ tên `*Controller` nhưng không bao giờ chạy).
+- **Case pilot**: HRM pilot 45 → 1 (còn action 2FA verify, public by
+  design); e-commerce pilot 453 → 150, trong đó 105 là `Docs` sample, còn lại là
   storefront/auth/callback public và vài admin method không có route.
 
 ### `OWASP_SSRF` / `OWASP_COMMAND_INJECTION` / `OWASP_SSTI`
@@ -114,57 +114,51 @@ php artisan quality:check --tier=all --fail-on=none
   - command injection: chuỗi lệnh ghép toàn phần deploy-time — literal,
     constant (`PHP_BINARY`, `DIRECTORY_SEPARATOR`), Laravel path helper
     (`base_path()`...), `escapeshellarg()`-wrapped, và biến đã gán từ các
-    phần đó trong cùng function (case `passthru(PHP_BINARY." $artisan ...")`
-    với `$artisan = base_path('artisan')` ở Monica — biến gán từ method call
+    phần đó trong cùng function (vd `passthru(PHP_BINARY." $artisan ...")`
+    với `$artisan = base_path('artisan')` — biến gán từ method call
     như `$v = $this->getVerbosity()` vẫn bị báo).
   - command injection: `new Process()` với command là array — kể cả qua biến
     type-hint `array`, docblock `@param array`, hoặc ternary chọn giữa các
-    array (case dogfood `runProcess(array $command)` và `extract()` trong
-    chính codebase này).
+    array.
   - command injection: tham số của function non-public mà mọi call-site cùng
-    file đều truyền literal/deploy-time-safe (case `controlServices('start')`
-    ở DeltaPOS — helper private chỉ gọi với literal).
+    file đều truyền literal/deploy-time-safe (helper private chỉ gọi với literal).
   - command injection: biến lặp `foreach` trên array literal hoặc class const
-    (`foreach (self::SERVICES as $svc)` — deploy-time values, case DeltaPOS).
+    (`foreach (self::LIST as $item)` — deploy-time values).
   - SSRF: `new GuzzleHttp\Client([...])` không phải sink (constructor chỉ nhận
     config array — request thật ở `->get()`/`->post()` sau đó đã được cover
     riêng); với Guzzle `$client->request($method, $url)` thì URL là arg thứ 2;
     `->getRealPath()`/`->getPathname()` (UploadedFile/SplFileInfo)
-    luôn là local path (case BookStack uploads); URL host cố định dạng literal
-    (`sprintf('https://github.com/...', $v)`, kể cả qua biến trung gian —
-    case TrivyDownloader) không phải SSRF; `env()`/`config()` là deploy-time,
-    kể cả khi bọc trong `rtrim()`/`sprintf()`/concat toàn deploy-time
-    (case `env('API_URL')` ở DeltaPosWeb).
+    luôn là local path; URL host cố định dạng literal
+    (`sprintf('https://example.com/...', $v)`, kể cả qua biến trung gian)
+    không phải SSRF; `env()`/`config()` là deploy-time,
+    kể cả khi bọc trong `rtrim()`/`sprintf()`/concat toàn deploy-time.
   - SSRF/traversal dùng chung naming convention: biến/property tên gợi ý
     local (`$file`, `$path`, `$source`, `$outputDir`...) được coi là local
-    path — trừ khi root là `$request`/`request()` (case dogfood chính
-    codebase này); `include/require` động luôn bị báo (LFI→RCE, không miễn).
+    path — trừ khi root là `$request`/`request()`; `include/require` động
+    luôn bị báo (LFI→RCE, không miễn).
   - SSTI: biến template được gán string literal trong cùng function
-    (`$viewName = 'backend.page'; view($viewName)` — case SiroLingo), và
+    (`$viewName = 'backend.page'; view($viewName)`), và
     helper non-public mà mọi call site cùng file đều truyền literal cho tham
-    số template (case `viewCustomer(string $view, ...)` ở quanlyinan3m —
-    public helper không được miễn vì có thể gọi từ file khác).
-- **Case pilot (SiroHRM)**: `BackupService::binary()` dùng
+    số template (public helper không được miễn vì có thể gọi từ file khác).
+- **Case pilot (HRM app)**: binary resolver dùng
   `shell_exec('where ' . escapeshellarg($tool))`, `new Process($command)` với
-  array từ config, `UpdaterService` dùng `escapeshellarg(base_path())` —
+  array từ config, updater dùng `escapeshellarg(base_path())` —
   cả 4 finding command injection đều đã tự hết; 9 SSRF (local file + test
   fixture) cũng vậy.
 
 ### `INSECURE_HASH`
 - **Báo đúng khi**: `md5()`/`sha1()` trên password trong ngữ cảnh credential.
 - **Tự động bỏ qua**: file nhắc tới `pwnedpasswords` — HIBP k-anonymity chỉ gửi
-  5 ký tự đầu của SHA-1 lên API, không phải lưu password bằng SHA-1
-  (case `ChangePasswordController` ở SiroHRM).
+  5 ký tự đầu của SHA-1 lên API, không phải lưu password bằng SHA-1.
 
 ### `MIGRATION_DESTRUCTIVE_UP`
 - **Báo đúng khi**: `up()` drop table/column mà `down()` không khôi phục.
 - **Tự động bỏ qua**: mọi tên table/column bị drop đều xuất hiện lại dưới dạng
-  string literal trong `down()` (ví dụ drop `country_id` có guard
-  `Schema::hasColumn` + `down()` tạo lại column — case SiroHRM).
+  string literal trong `down()` (ví dụ drop column có guard
+  `Schema::hasColumn` + `down()` tạo lại column).
 - **Không báo từ đầu**: drop index/constraint (`dropIndex`, `dropUnique`,
   `dropForeign`, `dropPrimary`, `dropTimestamps`) — không mất row dữ liệu,
-  recover được từ schema (case BookStack: 7 migration drop index cũ khi build
-  search index mới).
+  recover được từ schema.
 
 ### `OWASP_OPEN_REDIRECT`
 - **Báo đúng khi**: target của `redirect()` / `->away()` / `->to()` /
@@ -182,8 +176,8 @@ php artisan quality:check --tier=all --fail-on=none
 
 ### `OWASP_PATH_TRAVERSAL`
 - **Báo đúng khi**: file sink (`file_get_contents`, `Storage::get`,
-  `File::get` (facade/Filesystem — case DeltaPosWeb đọc log theo `$request->date`),
-  `response()->download`, `include $var`, ...) nhận path động.
+  `File::get` (facade/Filesystem), `response()->download`, `include $var`, ...)
+  nhận path động.
 - **Tự động bỏ qua**: literal (kể cả `storage_path()` với args literal),
   `basename()`-wrapped, `env()`/`config()`, biến tên local (`$file`, `$path`,
   `$outputDir`...) trừ root `$request`, method `getRealPath()/getPathname()`.
@@ -200,10 +194,10 @@ php artisan quality:check --tier=all --fail-on=none
   `htmlspecialchars()`, `purify()`, `clean()`), `json_encode()` với đủ 4
   flags `JSON_HEX_*` (không flags vẫn báo — `</script>` breakout thật),
   framework event-hook (`view_render_event(...)` — output từ listeners nội
-  bộ, case 440 findings Bagisto), paginator `->links()`, `{{ ... }}`
+  bộ, 440 findings từ theme event hooks trong một pilot), paginator `->links()`, `{{ ... }}`
   (escaped syntax), và convention HTML đã sanitize: biến
   `*Html/*Rendered/*Sanitized` hoặc method/property `->getHtml()`/
-  `->renderedHTML` (case BookStack render markdown đã purify).
+  `->renderedHTML` (render markdown đã purify ở tầng model).
 - **Sửa đúng**: chuyển sang `{{ ... }}`; chỉ dùng `{!! ... !!}` + inline
   ignore cho HTML đã review.
 
@@ -219,8 +213,7 @@ php artisan quality:check --tier=all --fail-on=none
 - **Báo Critical khi**: `$except` chứa wildcard ngoài `api/*` (vd `*`,
   `admin/*`) — tắt CSRF diện rộng.
 - **Báo Warning khi**: chỉ exclude đúng `api/*` — chấp nhận được cho API
-  stateless, nhưng phải xác minh không có route session-auth nào dưới `/api/`
-  (case free-pos-backend).
+  stateless, nhưng phải xác minh không có route session-auth nào dưới `/api/`.
 
 ### Nhóm heuristic `low` (`DEAD_CODE`, `NAMING_CONVENTION`, `TODO_FIXME`, `MISSING_*_TEST`)
 - Mặc định **TẮT** (`analyzers.test_coverage.*`, `analyzers.convention.*` =
