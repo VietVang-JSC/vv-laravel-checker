@@ -328,7 +328,7 @@ The **tier** controls what the gate fails on:
 Custom analyzers only (phpcs/phpstan/phpunit excluded), `tier=security`,
 `fail-on=none`, cold runs without cache. Quality is pinned by a labeled
 corpus (`tests/Unit/AnalyzerMetricsTest.php`): **precision 1.000 / recall 1.000**
-across 56 true/false-positive cases (20 TP + 36 TN), so the reductions below
+across 63 true/false-positive cases (24 TP + 39 TN), so the reductions below
 cannot regress silently.
 
 | Pilot | Stack | Files | Before | After | Signal left |
@@ -342,6 +342,8 @@ cannot regress silently.
 | Aimeos | Laravel e-commerce pkg | ~200 | — | **3** (0 / 2 / 1) | JSON:API auth-in-core + 1 require review |
 | Cachet | Laravel status page | ~100 | — | **3** (0 / 0 / 3) | CORS wildcard + coverage |
 | laravel-check (dogfood) | Package itself | ~200 | 37 | **5** (3 / 1 / 1) | all intended (vuln fixtures + test secret) |
+| DeltaPOS edge-box | Laravel POS edge | ~400 | — | **100** (0 / 55 / 45) | 39 blade + 10 unauth API (backup/printer review) |
+| DeltaPosWeb | Laravel POS cloud | ~500 | — | **182** (1 / 139 / 42) | 104 blade + 22 server-fetch review + 1 true open redirect |
 
 *(severity split: critical / error / warning)*
 
