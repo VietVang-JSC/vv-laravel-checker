@@ -186,17 +186,17 @@ final class ConsoleReporter implements ReporterInterface
         }
 
         $this->output->writeln('');
-        $this->output->writeln('<fg=cyan>Remediation (cách sửa theo rule):</>');
+        $this->output->writeln('<fg=cyan>Remediation (how to fix per rule):</>');
 
         foreach (array_keys($rules) as $rule) {
             $entry = RuleRemediation::for($rule);
             if ($entry === null) {
                 continue;
             }
-            $this->output->writeln(sprintf('  <options=bold>[%s]</> %s', $rule, $entry['why_vi']));
+            $this->output->writeln(sprintf('  <options=bold>[%s]</> %s', $rule, $entry['why']));
         }
 
-        $this->output->writeln('  Code mẫu sửa đúng: quality-report.html / .md / .json (mục remediation).');
+        $this->output->writeln('  Fix samples: quality-report.html / .md / .json (remediation section).');
     }
 
     /**
@@ -228,7 +228,7 @@ final class ConsoleReporter implements ReporterInterface
         }
 
         $this->output->writeln('');
-        $this->output->writeln('<fg=cyan>Top rules (nhóm lỗi theo rule):</>');
+        $this->output->writeln('<fg=cyan>Top rules:</>');
         $table = new Table($this->output);
         $table->setHeaders(['Rule', 'Source', 'Critical', 'Error', 'Warning', 'Info', 'Total']);
         foreach (array_slice($rules, 0, 20) as $r) {

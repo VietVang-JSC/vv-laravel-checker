@@ -1,43 +1,43 @@
 # Laravel Quality Checker — Plan & Technical Specification
 
 > Version: 0.1 (draft)
-> Mục tiêu: Package Laravel chạy dạng CLI (Artisan) để kiểm tra chất lượng code toàn diện,
-> gồm coding standard, static analysis, unit test, thiếu test case, security, convention.
-> Bọc các tool CLI có sẵn + tự viết rule bằng PHP-Parser cho phần Security/Testcase/Convention.
+> Goal: A Laravel package running as a CLI (Artisan) for comprehensive code quality checks,
+> covering coding standard, static analysis, unit test, missing test cases, security, convention.
+> It wraps available CLI tools + adds custom rules written with PHP-Parser for Security/Testcase/Convention.
 
 ---
 
-## 1. Tổng quan
+## 1. Overview
 
-### 1.1 Vấn đề cần giải quyết
-- Code quality của các dự án Laravel thường không đồng nhất.
-- Nhà phát triển phải nhớ chạy nhiều tool rời rạc: `phpcs`, `phpstan`, `phpunit`, `composer audit`, `trivy`, ...
-- Không có cơ chế phát hiện **thiếu test case** hay **lỗ hổng bảo mật theo convention của team**.
-- Không có báo cáo thống nhất để tích hợp CI.
+### 1.1 Problem to solve
+- Code quality across Laravel projects is often inconsistent.
+- Developers have to remember to run many separate tools: `phpcs`, `phpstan`, `phpunit`, `composer audit`, `trivy`, ...
+- There is no mechanism to detect **missing test cases** or **security holes per team convention**.
+- There is no unified report for CI integration.
 
-### 1.2 Giải pháp
-Một package Laravel (`vietvang/quality-checker`) cung cấp lệnh Artisan:
+### 1.2 Solution
+A Laravel package (`vietvang/quality-checker`) providing an Artisan command:
 
 ```
 php artisan quality:check
 ```
 
-Gộp tất cả công cụ thành **một lệnh duy nhất**, trả về **bảng console**, **JSON**, **HTML**, **Markdown**, và **exit code** chuẩn cho CI.
+Combines all tools into **a single command**, returning a **console table**, **JSON**, **HTML**, **Markdown**, and a CI-ready **exit code**.
 
-### 1.3 Nguyên tắc thiết kế
-| Nguyên tắc | Mô tả |
+### 1.3 Design principles
+| Principle | Description |
 |---|---|
-| **Wrap, không rewrite** | Các tool chuẩn (phpcs/phpstan/phpunit/audit/trivy) được gọi qua CLI, chỉ parse output. |
-| **Tự viết chỉ khi cần** | PHP-Parser chỉ dùng cho phần chưa có tool sẵn: security heuristics, thiếu testcase, convention. |
-| **Zero-config mặc định** | Chạy được ngay sau khi cài, có cấu hình để mở rộng/tắt rule. |
-| **CI-friendly** | Exit code không-zero khi có lỗi, JSON machine-readable. |
-| **Extensible** | Kiến trúc plugin/rule cho phép thêm rule mới không cần sửa core. |
+| **Wrap, don't rewrite** | Standard tools (phpcs/phpstan/phpunit/audit/trivy) are invoked via CLI, only their output is parsed. |
+| **Write custom code only when needed** | PHP-Parser is only used where no tool exists yet: security heuristics, missing test cases, convention. |
+| **Zero-config by default** | Works right after installation, with config to extend/disable rules. |
+| **CI-friendly** | Non-zero exit code on errors, machine-readable JSON. |
+| **Extensible** | Plugin/rule architecture allows adding new rules without touching core. |
 
 ---
 
-## 2. Kiến trúc package
+## 2. Package architecture
 
-### 2.1 Cấu trúc thư mục
+### 2.1 Directory structure
 
 ```
 laravel-quality-checker/
@@ -45,21 +45,21 @@ laravel-quality-checker/
 ├── LICENSE
 ├── README.md
 ├── config/
-│   └── quality-checker.php          # config publish vào project
+│   └── quality-checker.php          # config published into the project
 ├── src/
 │   ├── QualityCheckerServiceProvider.php
 │   ├── Commands/
 │   │   └── QualityCheckCommand.php   # php artisan quality:check
 │   ├── Checkers/
-│   │   ├── CheckerInterface.php      # contract chung cho mọi checker
-│   │   ├── AbstractProcessChecker.php # chạy tool CLI, parse exit code + output
+│   │   ├── CheckerInterface.php      # shared contract for all checkers
+│   │   ├── AbstractProcessChecker.php # runs a CLI tool, parses exit code + output
 │   │   ├── PhpcsChecker.php
 │   │   ├── PhpstanChecker.php
 │   │   ├── PhpunitChecker.php
 │   │   ├── ComposerAuditChecker.php
 │   │   ├── TrivyChecker.php
-│   │   └── CustomAnalyzerChecker.php  # chạy các custom analyzer (PHP-Parser)
-│   ├── Analyzers/                    # custom rules (tự viết bằng PHP-Parser)
+│   │   └── CustomAnalyzerChecker.php  # runs custom analyzers (PHP-Parser)
+│   ├── Analyzers/                    # custom rules (written with PHP-Parser)
 │   │   ├── AbstractAnalyzer.php
 │   │   ├── Security/
 │   │   │   ├── SqlInjectionAnalyzer.php
@@ -79,24 +79,24 @@ laravel-quality-checker/
 │   │       └── LaravelPitfallAnalyzer.php
 │   ├── Reporters/
 │   │   ├── ReporterInterface.php
-│   │   ├── ConsoleReporter.php        # bảng trong terminal (Symfony Table)
+│   │   ├── ConsoleReporter.php        # terminal table (Symfony Table)
 │   │   ├── JsonReporter.php
 │   │   ├── HtmlReporter.php
 │   │   └── MarkdownReporter.php
 │   ├── Runner/
-│   │   ├── CheckRunner.php            # orchestrator: chạy checker, thu kết quả, exit code
+│   │   ├── CheckRunner.php            # orchestrator: runs checkers, collects results, exit code
 │   │   └── CheckContext.php           # DTO: path, config, options, autoload
 │   ├── Result/
-│   │   ├── CheckResult.php            # kết quả 1 checker (status, issues, duration, raw)
-│   │   ├── Issue.php                  # 1 vấn đề (file, line, severity, rule, message)
+│   │   ├── CheckResult.php            # result of 1 checker (status, issues, duration, raw)
+│   │   ├── Issue.php                  # 1 issue (file, line, severity, rule, message)
 │   │   └── Severity.php               # enum: info | warning | error | critical
 │   └── Exceptions/
-│       └── ToolNotFoundException.php  # tool chưa cài
-├── tests/                            # unit + integration test cho package
+│       └── ToolNotFoundException.php  # tool not installed
+├── tests/                            # unit + integration tests for the package
 └── stubs/                            # published config and hook stubs
 ```
 
-### 2.2 Luồng xử lý
+### 2.2 Processing flow
 
 ```
 php artisan quality:check [--format=...] [--only=...] [--exclude=...] [--fail-on=...]
@@ -115,18 +115,18 @@ CheckRunner.buildCheckers(config, options)
         └─► CustomAnalyzerChecker ──► PHP-Parser parse codebase
                     │
                     ▼
-            Collect CheckResult[] (mỗi checker 1 CheckResult, chứa Issue[])
+            Collect CheckResult[] (1 CheckResult per checker, containing Issue[])
         │
         ▼
 Reporter.render(results, format)
         │
-        ├─ ConsoleReporter  → bảng Symfony (console)
+        ├─ ConsoleReporter  → Symfony table (console)
         ├─ JsonReporter     → quality-report.json
         ├─ HtmlReporter     → quality-report.html
         └─ MarkdownReporter → quality-report.md
         │
         ▼
-exit(code)  // 0 = pass, >0 = có lỗi theo --fail-on
+exit(code)  // 0 = pass, >0 = issues exceed --fail-on
 ```
 
 ---
@@ -140,9 +140,9 @@ interface CheckerInterface
 {
     public function name(): string;            // "phpcs"
     public function description(): string;
-    public function isAvailable(CheckContext $ctx): bool;  // tool tồn tại?
+    public function isAvailable(CheckContext $ctx): bool;  // does the tool exist?
     public function run(CheckContext $ctx): CheckResult;
-    public function config(): array;           // phần config riêng của checker
+    public function config(): array;           // checker's own config section
 }
 ```
 
@@ -153,9 +153,9 @@ final class CheckResult
 {
     public string $name;
     public string $status;     // 'passed' | 'warning' | 'failed' | 'skipped' | 'error'
-    public float $duration;    // giây
+    public float $duration;    // seconds
     public array $issues;      // Issue[]
-    public ?string $rawOutput; // output thô của tool (để debug)
+    public ?string $rawOutput; // raw tool output (for debugging)
     public ?string $summary;   // "12 errors in 5 files"
 }
 ```
@@ -176,108 +176,108 @@ final class Issue
 ```
 
 ### 3.4 `Severity`
-- `info` — gợi ý, không ảnh hưởng exit code.
-- `warning` — cảnh báo (tùy `--fail-on`).
-- `error` — lỗi nghiêm trọng (mặc định fail).
-- `critical` — bảo mật/nguy hiểm (luôn fail trừ khi tắt).
+- `info` — hint, does not affect exit code.
+- `warning` — warning (depends on `--fail-on`).
+- `error` — serious error (fails by default).
+- `critical` — security/dangerous (always fails unless disabled).
 
 ---
 
-## 4. Các Checker — wrap tool CLI
+## 4. Checkers — wrapping CLI tools
 
 ### 4.1 PHPCS (PHP_CodeSniffer)
-- Lệnh: `vendor/bin/phpcs --standard={config} --report=json {paths}`
+- Command: `vendor/bin/phpcs --standard={config} --report=json {paths}`
 - Parse: JSON report → map `files[].messages[]` → `Issue`.
-- Cấu hình:
-  - `standard`: mặc định `PSR-12`, đọc `phpcs.xml` của project nếu có.
-  - `paths`: mặc định `app/ routes/ config/ database/ tests/`.
+- Config:
+  - `standard`: defaults to `PSR-12`, reads the project's `phpcs.xml` if present.
+  - `paths`: defaults to `app/ routes/ config/ database/ tests/`.
   - `severityThreshold`, `excludeSniffs`.
 
 ### 4.2 PHPStan
-- Lệnh: `vendor/bin/phpstan analyse {paths} --level={level} --error-format=json --no-progress`
+- Command: `vendor/bin/phpstan analyse {paths} --level={level} --error-format=json --no-progress`
 - Parse: JSON → `files[].messages[]` (tip, message, line).
-- Cấu hình: `level` (mặc định 5), `paths`, `memoryLimit`.
+- Config: `level` (default 5), `paths`, `memoryLimit`.
 
 ### 4.3 PHPUnit
-- Lệnh: `vendor/bin/phpunit --testsuite=... --log-junit=tmp/phpunit.xml`
-- Parse: JUnit XML → số tests, failures, errors, skipped; đưa failure thành `Issue` (severity error).
-- Cấu hình: `testsuite`, `coverageThreshold` (nếu dùng Xdebug/PCOV — xem §6).
+- Command: `vendor/bin/phpunit --testsuite=... --log-junit=tmp/phpunit.xml`
+- Parse: JUnit XML → test, failure, error, skipped counts; turns failures into `Issue` (error severity).
+- Config: `testsuite`, `coverageThreshold` (with Xdebug/PCOV — see §6).
 
 ### 4.4 Composer Audit (security dependencies)
-- Lệnh: `composer audit --format=json`
-- Parse: `advisories` → `Issue` severity critical/error theo `severity` của advisory.
-- Không cần cài thêm tool; có sẵn trong Composer 2.4+.
+- Command: `composer audit --format=json`
+- Parse: `advisories` → `Issue` with critical/error severity according to the advisory `severity`.
+- No extra tool installation needed; built into Composer 2.4+.
 
 ### 4.5 Trivy (optional — scan filesystem)
-- Lệnh: `trivy fs --format json {path}` hoặc `trivy config` (scan IaC config, secret).
-- Parse: `Results[].Target` + `Vulnerabilities[]` → `Issue` (riêng phần misconfig/secret).
-- Mặc định **disabled** nếu chưa cài trivy → status `skipped` với hint cài đặt.
+- Command: `trivy fs --format json {path}` or `trivy config` (scans IaC config, secrets).
+- Parse: `Results[].Target` + `Vulnerabilities[]` → `Issue` (misconfig/secret part only).
+- Disabled by default if trivy is not installed → `skipped` status with an installation hint.
 
-### 4.6 Xử lý chung khi tool chưa cài
-- `isAvailable()` kiểm tra binary/autoload.
-- Nếu thiếu → `skipped` + gợi ý lệnh cài (`composer require --dev phpstan/phpstan`, v.v.).
+### 4.6 Common handling when a tool is missing
+- `isAvailable()` checks the binary/autoload.
+- If missing → `skipped` + suggested install command (`composer require --dev phpstan/phpstan`, etc.).
 
 ---
 
-## 5. Custom Analyzers (tự viết bằng PHP-Parser)
+## 5. Custom Analyzers (written with PHP-Parser)
 
-Phần này là "ruột" của package — phân tích AST của codebase.
+This is the "core" of the package — AST analysis of the codebase.
 
 ### 5.1 Infrastructure
-- Dùng `nikic/php-parser` (bundle vào package hoặc yêu cầu qua composer).
+- Uses `nikic/php-parser` (bundled with the package or required via composer).
 - `AbstractAnalyzer`:
-  - `analyze(array $files): array` — trả về `Issue[]`.
-  - `supports(string $path): bool` — chỉ nhận `.php`.
+  - `analyze(array $files): array` — returns `Issue[]`.
+  - `supports(string $path): bool` — only accepts `.php`.
   - `analyzeFile(string $file, Node $ast): Issue[]`.
 - `CustomAnalyzerChecker`:
-  - Walk toàn bộ `app/ routes/ database/` (cấu hình được).
-  - Mỗi file parse bằng `ParserFactory` (emit `PhpVersion` theo composer.json).
-  - Chạy từng analyzer đang bật, gom `Issue[]`, set `source = 'custom'`.
+  - Walks all of `app/ routes/ database/` (configurable).
+  - Each file is parsed with `ParserFactory` (emitting `PhpVersion` per composer.json).
+  - Runs each enabled analyzer, collects `Issue[]`, sets `source = 'custom'`.
 
 ### 5.2 Security Analyzers (severity: error/critical)
 
-| Rule ID | Mô tả | Ví dụ phát hiện |
+| Rule ID | Description | Detection example |
 |---|---|---|
-| `SQL_INJECTION` | Phát hiện tainted input chảy vào query raw | `DB::select("SELECT * FROM t WHERE x = " . $request->input('x'))`, `whereRaw()` với biến từ request |
-| `UNSAFE_EVAL` | `eval()`, `assert()` với dữ liệu động | `eval($userInput);` |
-| `HARDCODED_SECRET` | Secret/API key hardcode trong code | `'api_key' => 'sk-12345'`, regex bắt `sk-`, `AIza`, `AKIA`, `-----BEGIN PRIVATE KEY` |
-| `MASS_ASSIGNMENT` | `Model::create($request->all())` không có `$fillable`/`$guarded` | `User::create($request->all());` |
-| `UNSAFE_UNSERIALIZE` | `unserialize()` dữ liệu không tin cậy | `unserialize($cookie);` |
-| `INSECURE_HASH` | Hash yếu | `md5()`, `sha1()` dùng cho mật khẩu |
-| `LARAVEL_TAINT` | Chuỗi nội suy biến tainted vào query builder/`whereRaw` | `->whereRaw("price > $min")` |
-| `DISABLED_CSRF` | `@csrf`/`VerifyCsrfToken` bị bỏ qua | Route `web` không dùng middleware CSRF |
+| `SQL_INJECTION` | Detects tainted input flowing into raw queries | `DB::select("SELECT * FROM t WHERE x = " . $request->input('x'))`, `whereRaw()` with request-derived variables |
+| `UNSAFE_EVAL` | `eval()`, `assert()` with dynamic data | `eval($userInput);` |
+| `HARDCODED_SECRET` | Hardcoded secrets/API keys in code | `'api_key' => 'sk-12345'`, regexes catching `sk-`, `AIza`, `AKIA`, `-----BEGIN PRIVATE KEY` |
+| `MASS_ASSIGNMENT` | `Model::create($request->all())` without `$fillable`/`$guarded` | `User::create($request->all());` |
+| `UNSAFE_UNSERIALIZE` | `unserialize()` on untrusted data | `unserialize($cookie);` |
+| `INSECURE_HASH` | Weak hashing | `md5()`, `sha1()` used for passwords |
+| `LARAVEL_TAINT` | Tainted interpolated variables flowing into query builder/`whereRaw` | `->whereRaw("price > $min")` |
+| `DISABLED_CSRF` | `@csrf`/`VerifyCsrfToken` skipped | `web` route without CSRF middleware |
 
-> Taint tracking: phiên bản v1 dùng **heuristics theo pattern** (AST match) trước; v2 có thể nâng cấp lên data-flow taint (provenance map giữa hàm gọi) — xem Roadmap.
+> Taint tracking: v1 uses **pattern-based heuristics** (AST match) first; v2 may upgrade to data-flow taint (provenance map across calls) — see Roadmap.
 
 ### 5.3 Missing Testcase Analyzers (severity: warning)
 
-| Rule ID | Mô tả | Logic |
+| Rule ID | Description | Logic |
 |---|---|---|
-| `MISSING_CONTROLLER_TEST` | Controller trong `app/Http/Controllers/` không có test tương ứng | `app/.../UserController.php` ↔ `tests/Feature/UserControllerTest.php` hoặc `tests/Feature/Controllers/UserControllerTest.php` |
-| `MISSING_SERVICE_TEST` | Service/Repository trong `app/Services/`, `app/Repositories/` thiếu test | map 1:1 sang `tests/Unit/...` |
-| `MISSING_MODEL_TEST` | Model có logic phức tạp (method custom, scope, cast) không có test | scan method count + tìm file test tương ứng |
-| `MISSING_FEATURE_COVERAGE` | Route/endpoint không có feature test nào chạm tới | parse `routes/`, đối chiếu tên action với test method (heuristic, v1) |
-| `TEST_WITHOUT_ASSERT` | Test method tồn tại nhưng không có assertion | AST test method không chứa `assert*`, `expects*` |
-| `LOW_TEST_RATIO` | Tỷ lệ test so với source thấp hơn ngưỡng | config `minRatio` (mặc định 0.3) |
+| `MISSING_CONTROLLER_TEST` | Controller in `app/Http/Controllers/` without a matching test | `app/.../UserController.php` ↔ `tests/Feature/UserControllerTest.php` or `tests/Feature/Controllers/UserControllerTest.php` |
+| `MISSING_SERVICE_TEST` | Service/Repository in `app/Services/`, `app/Repositories/` without a test | 1:1 mapping to `tests/Unit/...` |
+| `MISSING_MODEL_TEST` | Model with complex logic (custom methods, scopes, casts) without a test | scans method count + finds the matching test file |
+| `MISSING_FEATURE_COVERAGE` | Route/endpoint no feature test touches | parses `routes/`, matches action names against test methods (heuristic, v1) |
+| `TEST_WITHOUT_ASSERT` | Test method exists but has no assertion | test method AST contains no `assert*`, `expects*` |
+| `LOW_TEST_RATIO` | Test-to-source ratio below threshold | config `minRatio` (default 0.3) |
 
-> Map file test ↔ source: dùng quy ước thư mục + tên class (bỏ prefix, suffix `Controller`/`Service`/...). Kết quả warning, không fail CI mặc định.
+> Test ↔ source file mapping: uses directory conventions + class names (stripping prefix, `Controller`/`Service`/... suffixes). Results are warnings, CI does not fail by default.
 
 ### 5.4 Convention Analyzers (severity: info/warning)
 
-| Rule ID | Mô tả | Ví dụ |
+| Rule ID | Description | Example |
 |---|---|---|
-| `NAMING_CONVENTION` | Tên class/method/const lệch convention | controller không suffix `Controller`, method động từ không bắt đầu `is/has/get/set`... |
-| `TODO_FIXME` | Còn TODO/FIXME/HACK trong code | `// TODO: fix later` |
-| `DEAD_CODE` | Method/param không dùng (heuristic) | `public function helper()` không được gọi trong toàn codebase |
-| `LARAVEL_PITFALL` | Anti-pattern Laravel | `DB::raw` ngoài migration, query trong view, `env()` ngoài config, `dd()`/`dump()` còn sót trong production code, sleep trong test |
+| `NAMING_CONVENTION` | Class/method/const names violating conventions | controller without `Controller` suffix, action method not starting with `is/has/get/set`... |
+| `TODO_FIXME` | Leftover TODO/FIXME/HACK in code | `// TODO: fix later` |
+| `DEAD_CODE` | Unused method/param (heuristic) | `public function helper()` never called in the whole codebase |
+| `LARAVEL_PITFALL` | Laravel anti-patterns | `DB::raw` outside migrations, queries in views, `env()` outside config, leftover `dd()`/`dump()` in production code, sleep in tests |
 
 ---
 
-## 6. Test coverage (tính tỷ lệ & threshold)
+## 6. Test coverage (ratio & threshold)
 
-- Chỉ chạy khi có `phpunit --coverage-*` (cần `xdebug`/`pcov` active) — gọi JUnit XML có chứa coverage nếu cấu hình.
-- Nếu không có extension coverage → checker này `skipped` + hint.
-- Config: `phpunit.coverageThreshold` (mặc định 60% line coverage) → dưới ngưỡng tạo `Issue` (warning).
+- Only runs with `phpunit --coverage-*` (requires active `xdebug`/`pcov`) — reads JUnit XML containing coverage if configured.
+- Without a coverage extension → this checker is `skipped` + hint.
+- Config: `phpunit.coverageThreshold` (default 60% line coverage) → below the threshold creates an `Issue` (warning).
 
 ---
 
@@ -292,16 +292,16 @@ interface ReporterInterface
 }
 ```
 
-### 7.2 Chi tiết từng reporter
+### 7.2 Reporter details
 
-| Reporter | Output | Dùng cho |
+| Reporter | Output | Used for |
 |---|---|---|
-| `ConsoleReporter` | Bảng tổng quan (Symfony Table): tên checker, status, số issue, duration, tổng điểm | Dev chạy tay |
+| `ConsoleReporter` | Summary table (Symfony Table): checker name, status, issue count, duration, total score | Manual dev runs |
 | `JsonReporter` | `quality-report.json`: `{ generated_at, version, exit_code, summary, checkers: [ ... ] }` | CI/machine |
-| `HtmlReporter` | `quality-report.html` (Blade template + inline CSS, tự đứng 1 file) | Share/archive |
-| `MarkdownReporter` | `quality-report.md` (bảng + danh sách issue theo file) | Docs/PR comment |
+| `HtmlReporter` | `quality-report.html` (Blade template + inline CSS, single self-contained file) | Share/archive |
+| `MarkdownReporter` | `quality-report.md` (table + issue list per file) | Docs/PR comment |
 
-### 7.3 JSON schema (trích đoạn)
+### 7.3 JSON schema (excerpt)
 
 ```json
 {
@@ -328,7 +328,7 @@ interface ReporterInterface
 
 ## 8. Artisan command — CLI
 
-### 8.1 Lệnh
+### 8.1 Command
 
 ```
 php artisan quality:check [options]
@@ -336,48 +336,48 @@ php artisan quality:check [options]
 
 ### 8.2 Options
 
-| Option | Mô tả | Mặc định |
+| Option | Description | Default |
 |---|---|---|
-| `--format=...` | `console` (mặc định), hoặc `console,json,html,md` cách nhau `,` để chạy nhiều | `console` |
-| `--only=...` | Chỉ chạy checker được chỉ định, vd `phpcs,phpstan,custom` | tất cả |
-| `--exclude=...` | Bỏ checker | — |
-| `--path=...` | Ghi đè path scan | config |
-| `--fail-on=severity` | Ngưỡng fail: `warning` | `error` | `critical` | `none` | `error` |
-| `--output=...` | Thư mục xuất file report (mặc định `reports/quality-checker/`) | như trên |
-| `--no-cache` | Bỏ cache kết quả analyzer | — |
-| `--quiet` | Chỉ in tóm tắt | — |
-| `--json` | Tương đương `--format=json` (shortcut) | — |
-| `--ci` | Mode CI: mặc định `--format=json`, `--fail-on=error`, `--no-progress` | — |
+| `--format=...` | `console` (default), or `console,json,html,md` separated by `,` to run several | `console` |
+| `--only=...` | Only run the specified checkers, e.g. `phpcs,phpstan,custom` | all |
+| `--exclude=...` | Skip checkers | — |
+| `--path=...` | Override scan paths | config |
+| `--fail-on=severity` | Fail threshold: `warning` | `error` | `critical` | `none` | `error` |
+| `--output=...` | Report output directory (defaults to `reports/quality-checker/`) | as above |
+| `--no-cache` | Skip analyzer result cache | — |
+| `--quiet` | Print summary only | — |
+| `--json` | Equivalent to `--format=json` (shortcut) | — |
+| `--ci` | CI mode: defaults to `--format=json`, `--fail-on=error`, `--no-progress` | — |
 
 ### 8.3 Exit code
 
-| Code | Ý nghĩa |
+| Code | Meaning |
 |---|---|
-| `0` | Pass (không issue nào vượt ngưỡng `--fail-on`) |
-| `1` | Có issue vượt ngưỡng (`error` trở lên mặc định) |
-| `2` | Lỗi môi trường (tool thiếu, config lỗi) |
-| `3` | Lỗi runtime của chính package |
+| `0` | Pass (no issue exceeds the `--fail-on` threshold) |
+| `1` | Has issues exceeding the threshold (`error` and above by default) |
+| `2` | Environment error (missing tool, bad config) |
+| `3` | Runtime error of the package itself |
 
 ---
 
-## 8.5 Auto-provisioning tool thiếu
+## 8.5 Auto-provisioning missing tools
 
-Khi checker không tìm thấy tool, package **tự giải quyết** thay vì chỉ báo `skipped`:
+When a checker cannot find its tool, the package **resolves it automatically** instead of just reporting `skipped`:
 
-| Tool | Cơ chế tự cài |
+| Tool | Auto-install mechanism |
 |---|---|
-| `phpcs` / `phpstan` / `phpunit` | `composer require --dev <package>` trong target project (qua `ToolInstaller`). |
-| `trivy` | Tải binary từ GitHub releases (`TrivyDownloader`) vào cache per-user `~/.quality-checker/trivy`, không đụng project. |
+| `phpcs` / `phpstan` / `phpunit` | `composer require --dev <package>` in the target project (via `ToolInstaller`). |
+| `trivy` | Downloads the binary from GitHub releases (`TrivyDownloader`) into the per-user cache `~/.quality-checker/trivy`, without touching the project. |
 
-Thứ tự ưu tiên khi tool thiếu:
-1. **Auto-install** (nếu `auto_install_tools=true` và không có `--no-auto-install`).
-2. **Fallback vendor package** — dùng tool đã có trong `vendor/bin` của chính package.
-3. Nếu vẫn thiếu → `skipped` kèm **lệnh cài thủ công chính xác** (không còn message chung chung).
+Priority order when a tool is missing:
+1. **Auto-install** (if `auto_install_tools=true` and no `--no-auto-install`).
+2. **Fallback vendor package** — uses the tool already in the package's own `vendor/bin`.
+3. If still missing → `skipped` with the **exact manual install command** (no more generic message).
 
-Quyết định:
-- `--no-auto-install` / `auto_install_tools => false` để tắt (project air-gapped/read-only).
-- Trivy version mặc định `0.74.0`, cấu hình qua `trivy.version`.
-- `composer audit` chạy `--no-interaction`, timeout 120s, báo `error` (không phải `passed`) khi chính lệnh fail (offline/rate-limit).
+Decisions:
+- `--no-auto-install` / `auto_install_tools => false` disables it (air-gapped/read-only projects).
+- Default Trivy version is `0.74.0`, configured via `trivy.version`.
+- `composer audit` runs with `--no-interaction`, 120s timeout, reports `error` (not `passed`) when the command itself fails (offline/rate-limit).
 
 ---
 
@@ -386,16 +386,16 @@ Quyết định:
 ```php
 // config/quality-checker.php
 return [
-    'paths' => ['app', 'routes', 'database', 'config', 'tests'], // đường dẫn scan mặc định
+    'paths' => ['app', 'routes', 'database', 'config', 'tests'], // default scan paths
     'exclude' => [],
 
-    // Tự cài tool thiếu: phpcs/phpstan/phpunit qua composer, trivy qua binary cached.
+    // Auto-install missing tools: phpcs/phpstan/phpunit via composer, trivy via cached binary.
     'auto_install_tools' => true,
 
-    // Cổng chất lượng: security | quality | all.
+    // Quality gate: security | quality | all.
     'tier' => 'quality',
 
-    // Ngưỡng confidence tối thiểu hiển thị: low | medium | high.
+    // Minimum confidence threshold to display: low | medium | high.
     'min_confidence' => 'low',
 
     'phpcs'   => ['standard' => 'PSR12', 'severity' => 0],
@@ -429,14 +429,14 @@ return [
             'migration' => true,
             'route_validation' => true,
         ],
-        'test_coverage' => [ // heuristic, mặc định TẮT
+        'test_coverage' => [ // heuristic, OFF by default
             'missing_controller_test' => false,
             'missing_service_test' => false,
             'missing_model_test' => false,
             'missing_feature_coverage' => false,
             'test_without_assert' => false,
         ],
-        'convention' => [ // heuristic, mặc định TẮT
+        'convention' => [ // heuristic, OFF by default
             'naming_convention' => false,
             'todo_fixme' => false,
             'dead_code' => false,
@@ -453,7 +453,7 @@ return [
 
 ---
 
-## 10. CI tích hợp (ví dụ)
+## 10. CI integration (example)
 
 ```yaml
 # .github/workflows/quality.yml
@@ -471,96 +471,96 @@ return [
 
 ## 11. Roadmap
 
-### Phase 1 — MVP (tháng 1)
-- [x] Cấu trúc package + ServiceProvider + command `quality:check`.
+### Phase 1 — MVP (month 1)
+- [x] Package structure + ServiceProvider + `quality:check` command.
 - [x] `PhpcsChecker`, `PhpstanChecker`, `PhpunitChecker`, `ComposerAuditChecker`.
 - [x] `ConsoleReporter` + `JsonReporter`.
 - [x] Exit code + `--only/--exclude/--fail-on`.
-- [x] 3 security analyzer đầu (SQL injection, eval, hardcoded secret).
-- [x] `MissingTestAnalyzer` cơ bản.
-- [ ] Unit test cho package, CI của package.
+- [x] First 3 security analyzers (SQL injection, eval, hardcoded secret).
+- [x] Basic `MissingTestAnalyzer`.
+- [ ] Unit tests for the package, package CI.
 
-### Phase 2 — Mở rộng (tháng 2)
+### Phase 2 — Expansion (month 2)
 - [ ] `HtmlReporter` + `MarkdownReporter` (Blade).
 - [ ] `TrivyChecker`.
-- [ ] Toàn bộ security + convention analyzers.
-- [ ] Cache kết quả (`--no-cache`), parallel runner (multi-process).
-- [ ] `--ci` mode, threshold config, coverage từ PHPUnit.
+- [ ] All security + convention analyzers.
+- [ ] Result cache (`--no-cache`), parallel runner (multi-process).
+- [ ] `--ci` mode, threshold config, coverage from PHPUnit.
 
-### Phase 3 — Nâng cao (tháng 3)
-- [ ] Taint data-flow thực sự (provenance map qua call graph).
-- [ ] Baseline (ghi nhận issue đã biết để chỉ báo issue mới).
-- [ ] Giao diện `--fix` cho những lỗi auto-fixable (delegate phpcs fixer, php-cs-fixer).
-- [ ] Hooks: pre-commit script, plugin cho IDE (PHPStorm/VS Code) nhúng report.
+### Phase 3 — Advanced (month 3)
+- [ ] Real taint data-flow (provenance map via call graph).
+- [ ] Baseline (record known issues to only report new issues).
+- [ ] `--fix` interface for auto-fixable errors (delegating to phpcs fixer, php-cs-fixer).
+- [ ] Hooks: pre-commit script, IDE plugins (PHPStorm/VS Code) embedding reports.
 
 ---
 
-## 12. Rủi ro & lưu ý
+## 12. Risks & notes
 
-| Rủi ro | Giảm thiểu |
+| Risk | Mitigation |
 |---|---|
-| Tool chưa cài trong project | `isAvailable()` + status `skipped` + hint lệnh cài |
-| Output tool thay đổi giữa version | Định vị bằng JSON schema chính thức (phpcs `--report=json`, phpstan `--error-format=json`), JUnit XML chuẩn |
-| False positive của analyzer | Mỗi rule có `--only/--exclude` riêng, severity thấp cho heuristic, baseline ở Phase 3 |
-| Perf khi scan codebase lớn | Parse theo file lazy, cache AST, parallel ở Phase 2 |
-| PHP version không tương thích | `ParserFactory::createForNewestSupportedVersion()` + fallback theo composer.json |
+| Tool not installed in the project | `isAvailable()` + `skipped` status + install command hint |
+| Tool output changes between versions | Pin to official JSON schemas (phpcs `--report=json`, phpstan `--error-format=json`), standard JUnit XML |
+| Analyzer false positives | Each rule has its own `--only/--exclude`, low severity for heuristics, baseline in Phase 3 |
+| Perf when scanning large codebases | Lazy per-file parsing, AST cache, parallel in Phase 2 |
+| Incompatible PHP version | `ParserFactory::createForNewestSupportedVersion()` + fallback per composer.json |
 
 ---
 
-## 13. Cần bạn xác nhận trước khi code
+## 13. To confirm before coding
 
-1. **Tên package / vendor namespace** — ví dụ `vietvang/quality-checker`?
-2. **PHP phiên bản tối thiểu** hỗ trợ (8.1 / 8.2 / 8.3)?
-3. **Laravel version range** hỗ trợ (10 / 11 / 12)?
-4. **Ngưỡng mặc định** cho `fail_on` (error hay warning)?
-5. Có cần **baseline** (bỏ qua issue cũ) ngay từ đầu không?
-6. Có muốn **`--fix`** (auto-sửa phpcs) trong MVP không?
+1. **Package name / vendor namespace** — e.g. `vietvang/quality-checker`?
+2. **Minimum supported PHP version** (8.1 / 8.2 / 8.3)?
+3. **Supported Laravel version range** (10 / 11 / 12)?
+4. **Default threshold** for `fail_on` (error or warning)?
+5. Is **baseline** (skipping old issues) needed from the start?
+6. Is **`--fix`** (phpcs auto-fix) wanted in the MVP?
 
 ---
 
-## 14. Confidence model & Tiering (giảm nhiễu)
+## 14. Confidence model & Tiering (noise reduction)
 
-Vấn đề: heuristic analyzer (dead code, missing test, naming, todo) tạo hàng nghìn
-info/warning nuốt chửng vài finding bảo mật thật. Giải pháp:
+Problem: heuristic analyzers (dead code, missing test, naming, todo) generate thousands of
+info/warning items drowning out a few real security findings. Solution:
 
 ### 14.1 Confidence
-Mỗi `Issue` mang `confidence: high | medium | low` (enum `Confidence`, thứ tự 3>2>1).
+Each `Issue` carries `confidence: high | medium | low` (enum `Confidence`, order 3>2>1).
 
-| Confidence | Ý nghĩa | Ví dụ |
+| Confidence | Meaning | Example |
 |---|---|---|
-| **high** | Chắc chắn, có thể fail CI | OWASP, taint dataflow, hardcoded secret, SQL injection, composer audit |
-| **medium** | Khá chắc, cảnh báo | `env()` ngoài config, `dd()` trong app, insecure hash |
-| **low** | Gợi ý heuristic, mặc định ẩn | dead code, missing test, naming, todo/fixme |
+| **high** | Certain, may fail CI | OWASP, taint dataflow, hardcoded secret, SQL injection, composer audit |
+| **medium** | Fairly certain, warning | `env()` outside config, `dd()` in app, insecure hash |
+| **low** | Heuristic hint, hidden by default | dead code, missing test, naming, todo/fixme |
 
-- `--min-confidence=low|medium|high` lọc issue theo ngưỡng (mặc định `low` = hiện tất cả).
-- `CheckRunner::shouldFail()` chỉ fail khi issue ≥ `min_confidence` và ≥ `fail_on` severity.
+- `--min-confidence=low|medium|high` filters issues by threshold (default `low` = show all).
+- `CheckRunner::shouldFail()` only fails when an issue is ≥ `min_confidence` and ≥ `fail_on` severity.
 
-### 14.2 Tier (cổng chất lượng)
-`--tier=security|quality|all` (mặc định `quality`, từ config `tier`).
+### 14.2 Tier (quality gate)
+`--tier=security|quality|all` (default `quality`, from config `tier`).
 
-| Tier | Fail khi | Dùng cho |
+| Tier | Fails when | Used for |
 |---|---|---|
-| `security` | Chỉ high-confidence issue bảo mật (OWASP/taint/secret/composer_audit) | CI gate bảo mật |
-| `quality` | high+medium error/critical (kể cả phpcs/phpstan/phpunit) | CI gate chất lượng (mặc định) |
-| `all` | Mọi thứ (gồm heuristic nếu bật) | Dev chạy tay |
+| `security` | Only high-confidence security issues (OWASP/taint/secret/composer_audit) | Security CI gate |
+| `quality` | high+medium error/critical (including phpcs/phpstan/phpunit) | Quality CI gate (default) |
+| `all` | Everything (including heuristics if enabled) | Manual dev runs |
 
-Ở tier `security`, `shouldFail()` bỏ qua issue không phải `composer_audit` và có
-confidence < high (tức chỉ fail trên finding bảo mật chắc chắn).
+In the `security` tier, `shouldFail()` ignores non-`composer_audit` issues with
+confidence < high (i.e. it only fails on certain security findings).
 
-### 14.3 Heuristic mặc định TẮT
-`analyzers.test_coverage.*` và `analyzers.convention.*` mặc định `false` (opt-in).
-Chỉ security + owasp + tool checkers bật sẵn → đầu ra gọn, ít nhiễu.
+### 14.3 Heuristics OFF by default
+`analyzers.test_coverage.*` and `analyzers.convention.*` default to `false` (opt-in).
+Only security + owasp + tool checkers are enabled out of the box → concise output, less noise.
 
 ### 14.4 Deduplicator
-`src/Analyzers/Deduplicator.php` — gom issue trùng theo signature `md5(rule|file|line|message)`,
-giữ bản confidence cao nhất. Giải quyết trùng lặp giữa `LaravelTaintAnalyzer` (heuristic)
-và `TaintEngine` (dataflow).
+`src/Analyzers/Deduplicator.php` — merges duplicate issues by signature `md5(rule|file|line|message)`,
+keeping the highest-confidence one. Resolves overlap between `LaravelTaintAnalyzer` (heuristic)
+and `TaintEngine` (dataflow).
 
 ---
 
 ## 15. OWASP Top 10 (2023) API mapping
 
-Module `src/Analyzers/Owasp/`, prefix rule `OWASP_`, confidence **high**.
+Module `src/Analyzers/Owasp/`, rule prefix `OWASP_`, confidence **high**.
 
 | Rule ID | Severity | OWASP | Analyzer |
 |---|---|---|---|
@@ -571,16 +571,16 @@ Module `src/Analyzers/Owasp/`, prefix rule `OWASP_`, confidence **high**.
 | `OWASP_COMMAND_INJECTION` | Critical | A03 Injection (Command) | `OwaspCommandInjectionAnalyzer` |
 | `OWASP_XXE` | Error | A05 XML External Entity | `OwaspXxeAnalyzer` |
 
-Cấu hình: `analyzers.owasp.{rule}` (mặc định `true`). Báo cáo thêm section OWASP:
+Config: `analyzers.owasp.{rule}` (default `true`). Reports add an OWASP section:
 - JSON: key `owasp` = `{ categories: {A01...: n}, total }`.
-- Console/Markdown/HTML: bảng OWASP theo rule khi có `OWASP_*` issue.
+- Console/Markdown/HTML: OWASP table per rule when there are `OWASP_*` issues.
 
-### Detection tóm tắt
-| Analyzer | Sink phát hiện | Bảo thủ |
+### Detection summary
+| Analyzer | Detected sink | Conservative rule |
 |---|---|---|
-| AccessControl | Controller method **mutating** (store/update/delete/... hoặc gọi save/delete/update/create) **không có** authorize/Gate/abort/middleware | Chỉ method mutating, bỏ magic/`__*` |
-| SSRF | `file_get_contents/fopen/curl/Http::*/Guzzle` với URL không phải literal | Chỉ non-literal URL |
-| SSTI | `Blade::render/compileString`, `view()->render()` với template không literal | Chỉ non-literal |
-| Misconfiguration | `'debug'=>true`, `APP_DEBUG=true`, CORS `*`, secret placeholder | Chỉ match cụ thể, không suy diễn header |
-| CommandInjection | `system/exec/shell_exec/passthru/proc_open/popen/Process` + input | Dùng `isTaintedExpr` |
-| XXE | `simplexml_load_*/DOMDocument/SimpleXMLElement/XMLReader` không guard `libxml_disable_entity_loader` | Skip file nếu có guard |
+| AccessControl | Mutating controller method (store/update/delete/... or calling save/delete/update/create) **without** authorize/Gate/abort/middleware | Mutating methods only, skipping magic/`__*` |
+| SSRF | `file_get_contents/fopen/curl/Http::*/Guzzle` with non-literal URL | Non-literal URLs only |
+| SSTI | `Blade::render/compileString`, `view()->render()` with non-literal template | Non-literal only |
+| Misconfiguration | `'debug'=>true`, `APP_DEBUG=true`, CORS `*`, secret placeholder | Specific matches only, no header inference |
+| CommandInjection | `system/exec/shell_exec/passthru/proc_open/popen/Process` + input | Uses `isTaintedExpr` |
+| XXE | `simplexml_load_*/DOMDocument/SimpleXMLElement/XMLReader` without a `libxml_disable_entity_loader` guard | Skips files with a guard |

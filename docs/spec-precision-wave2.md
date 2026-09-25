@@ -1,10 +1,10 @@
-# Spec — Precision Wave 2: 3 analyzer families mới
+# Spec — Precision Wave 2: 3 new analyzer families
 
-> Mục tiêu: đào sâu **static precision** (mảng Enlightn bỏ cuộc) — thêm 3 rule
-> families Laravel-specific, mỗi rule kèm corpus TP/FP để precision/recall
-> không tụt. Xem `docs/comparison-enlightn.md` §4.
+> Goal: go deeper on **static precision** (the area Enlightn gave up on) — add 3
+> Laravel-specific rule families, each with a TP/FP corpus so precision/recall
+> never regress. See `docs/comparison-enlightn.md` §4.
 
-## 1. Phân công (3 agents song song)
+## 1. Assignment (3 parallel agents)
 
 | Agent | Rule | Rule ID | Config key | Severity / Confidence |
 |---|---|---|---|---|
@@ -12,75 +12,75 @@
 | B | Path Traversal | `OWASP_PATH_TRAVERSAL` | `owasp.path_traversal` | Error / High |
 | C | Blade unescaped echo XSS | `OWASP_BLADE_XSS` | `owasp.blade_xss` | Error / High |
 
-## 2. Ngữ nghĩa từng rule (bắt buộc)
+## 2. Per-rule semantics (mandatory)
 
 ### Agent A — Open Redirect (`src/Analyzers/Owasp/OwaspOpenRedirectAnalyzer.php`)
 
-Flag khi target của redirect không phải literal và không chứng minh được an toàn:
+Flag when the redirect target is not a literal and cannot be proven safe:
 
 - Sinks: `redirect($target)`, `redirect()->away($t)`, `redirect()->to($t)`,
-  `Redirect::away($t)`, `Redirect::to($t)`, `Redirect::route(...)` — KHÔNG flag
-  (`route()` an toàn theo định nghĩa), `back()` / `redirect()->back()` — KHÔNG flag.
+  `Redirect::away($t)`, `Redirect::to($t)`, `Redirect::route(...)` — do NOT flag
+  (`route()` is safe by definition), `back()` / `redirect()->back()` — do NOT flag.
 - Safe (skip): string literal, `route(...)` / `back()` / `url()->previous()` calls,
   `config()` / `env()` lookups.
-- Flag: Variable, PropertyFetch, MethodCall, FuncCall khác, Concat/Interpolation
-  (trừ khi mọi leaf đều safe theo định nghĩa trên).
-- TP mẫu: `return redirect($request->input('next'));`
-- FP mẫu (phải im): `return redirect()->route('home');`,
+- Flag: Variable, PropertyFetch, MethodCall, other FuncCalls, Concat/Interpolation
+  (unless every leaf is safe per the definition above).
+- Sample TP: `return redirect($request->input('next'));`
+- Sample FPs (must stay silent): `return redirect()->route('home');`,
   `return redirect(config('app.url') . '/done');`
 
 ### Agent B — Path Traversal (`src/Analyzers/Owasp/OwaspPathTraversalAnalyzer.php`)
 
-Flag khi file sink nhận path tainted mà không qua `basename()`:
+Flag when a file sink receives a tainted path without going through `basename()`:
 
 - Sinks (arg 0): `file_get_contents`, `file_put_contents`, `fopen`, `file`,
-  `readfile`, `include`/`require`/`include_once`/`require_once` với expr động,
+  `readfile`, `include`/`require`/`include_once`/`require_once` with a dynamic expr,
   `Storage::get/put/delete/download`, `response()->download/file`.
 - Safe (skip): string literal, `basename(...)`-wrapped expr, `storage_path()`/
-  `base_path()` với args toàn literal, `env()/config()` (deploy-time).
-- Flag: Variable, PropertyFetch, MethodCall, Concat/Interpolation chứa phần động.
-- TP mẫu: `return response()->download(storage_path('docs/' . $request->file));`
-  (`basename()` không có → flag đúng).
-- FP mẫu (phải im): `file_get_contents(storage_path('app/' . basename($name)));`
+  `base_path()` with all-literal args, `env()/config()` (deploy-time).
+- Flag: Variable, PropertyFetch, MethodCall, Concat/Interpolation containing a dynamic part.
+- Sample TP: `return response()->download(storage_path('docs/' . $request->file));`
+  (no `basename()` → correctly flagged).
+- Sample FPs (must stay silent): `file_get_contents(storage_path('app/' . basename($name)));`
 
 ### Agent C — Blade XSS (`src/Analyzers/Owasp/OwaspBladeXssAnalyzer.php`)
 
-Flag `{!! ... !!}` chứa dữ liệu động trong file `.blade.php`:
+Flag `{!! ... !!}` containing dynamic data in `.blade.php` files:
 
-- Override `supports()` để nhận `*.blade.php` (KHÔNG sửa `collectFiles` —
-  phần đó do integrator làm).
-- Flag block `{!!` nào chứa ký tự `$` (biến) hoặc `request(`.
-- Skip block không có `$` (vd `{!! csrf_field() !!}` — pure function call)
-  và block chứa `e(` (đã escape thủ công).
-- Dùng regex/tokenizer trên raw content (blade không phải PHP hợp lệ,
-  KHÔNG dùng PHP-Parser cho file này).
-- TP mẫu: `<div>{!! $comment->body !!}</div>`
-- FP mẫu (phải im): `{!! csrf_field() !!}`, `{{ $name }}` (escaped syntax).
+- Override `supports()` to accept `*.blade.php` (do NOT modify `collectFiles` —
+  that is the integrator's job).
+- Flag any `{!!` block containing the `$` character (a variable) or `request(`.
+- Skip blocks without `$` (e.g. `{!! csrf_field() !!}` — pure function call)
+  and blocks containing `e(` (manually escaped).
+- Use a regex/tokenizer over the raw content (blade is not valid PHP,
+  do NOT use PHP-Parser for this file).
+- Sample TP: `<div>{!! $comment->body !!}</div>`
+- Sample FPs (must stay silent): `{!! csrf_field() !!}`, `{{ $name }}` (escaped syntax).
 
-## 3. Quy ước chung (bắt buộc cả 3)
+## 3. Shared conventions (mandatory for all 3)
 
-- Namespace/file theo mẫu `OwaspXxeAnalyzer`; class `final`, `extends AbstractAnalyzer`
-  (riêng agent C vẫn extends nhưng override `supports()`).
-- Class docblock ghi rõ Assumes + "Deliberately not flagged".
-- Issue qua `$this->makeIssue(RULE, msg, $file, $line, Severity::Error, ['sink' => ...])`.
-- Kiểu đầy đủ cho phpstan level 6 (xem `OwaspSsrfAnalyzer` làm mẫu).
-- PSR-12 (chạy `vendor/bin/phpcs` lên file mới trước khi xong).
+- Namespace/file follow the `OwaspXxeAnalyzer` pattern; class is `final`, `extends AbstractAnalyzer`
+  (agent C still extends but overrides `supports()`).
+- Class docblock clearly states Assumes + "Deliberately not flagged".
+- Report issues via `$this->makeIssue(RULE, msg, $file, $line, Severity::Error, ['sink' => ...])`.
+- Full types for phpstan level 6 (see `OwaspSsrfAnalyzer` as an example).
+- PSR-12 (run `vendor/bin/phpcs` on the new files before finishing).
 
-## 4. Ranh giới file (CHỐNG CONFLICT — tuân thủ tuyệt đối)
+## 4. File boundaries (ANTI-CONFLICT — follow strictly)
 
-- Mỗi agent CHỈ ĐƯỢC TẠO 2 file mới (tên trong §2 + `tests/Unit/<Rule>AnalyzerTest.php`,
-  vd `tests/Unit/OwaspOpenRedirectAnalyzerTest.php`, ≥ 6 tests TP/FP).
-- **CẤM** sửa file chung: `CustomAnalyzerChecker.php`, `config/*`,
+- Each agent MAY ONLY CREATE 2 new files (names in §2 + `tests/Unit/<Rule>AnalyzerTest.php`,
+  e.g. `tests/Unit/OwaspOpenRedirectAnalyzerTest.php`, ≥ 6 TP/FP tests).
+- **FORBIDDEN** to modify shared files: `CustomAnalyzerChecker.php`, `config/*`,
   `AnalyzerMetricsTest.php`, `docs/*`, `CHANGELOG.md`, `README.md`.
-- Verify bằng `vendor/bin/phpunit --filter <TenTestCuaMinh> --do-not-cache-result`
-  (KHÔNG chạy full `composer check` để tránh clash cache giữa agents).
-- Khi xong, trả về đúng 5 mục: (1) tóm tắt rule, (2) dòng wiring
-  `entry(...)` cho `buildAnalyzers()`, (3) dòng config cho `owasp` section,
-  (4) 4+ corpus cases theo format `AnalyzerMetricsTest::corpus()`
-  (string content dùng double-quote với `\$` escape), (5) 1 đoạn docs cho
-  `docs/false-positives.md` + 1 dòng CHANGELOG.
+- Verify with `vendor/bin/phpunit --filter <YourTestName> --do-not-cache-result`
+  (do NOT run full `composer check` to avoid cache clashes between agents).
+- When done, return exactly 5 items: (1) rule summary, (2) the
+  `entry(...)` wiring line for `buildAnalyzers()`, (3) the config line for the `owasp` section,
+  (4) 4+ corpus cases in `AnalyzerMetricsTest::corpus()`
+  format (string content uses double quotes with `\$` escaping), (5) 1 docs paragraph for
+  `docs/false-positives.md` + 1 CHANGELOG line.
 
-## 5. Integration (integrator làm sau, không phải việc agents)
+## 5. Integration (done later by the integrator, not the agents' job)
 
-Wire checker + config + corpus + docs + `collectFiles` hỗ trợ `*.blade.php`
-+ full `composer check` + re-scan pilot kiểm FP + commit + push.
+Wire checker + config + corpus + docs + `collectFiles` supporting `*.blade.php`
++ full `composer check` + pilot re-scan for FPs + commit + push.

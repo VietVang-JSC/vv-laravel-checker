@@ -34,7 +34,7 @@ final class MarkdownReporter implements ReporterInterface
         $lines[] = '- [Summary](#summary)';
         $lines[] = '- [Top Rules](#top-rules)';
         $lines[] = '- [OWASP](#owasp)';
-        $lines[] = '- [Remediation / Cách sửa theo rule](#remediation--cách-sửa-theo-rule)';
+        $lines[] = '- [Remediation](#remediation)';
         $lines[] = '- [Per-Checker](#per-checker)';
         $lines[] = '- [Issues](#issues)';
         foreach ($results as $result) {
@@ -60,7 +60,7 @@ final class MarkdownReporter implements ReporterInterface
 
         $rules = IssueGrouper::byRule($results);
         if (count($rules) > 0) {
-            $lines[] = '## Top Rules / Nhóm lỗi theo rule';
+            $lines[] = '## Top Rules';
             $lines[] = '';
             $lines[] = '| Rule | Source | Critical | Error | Warning | Info | Total |';
             $lines[] = '|---|---|---|---|---|---|---|';
@@ -276,7 +276,7 @@ final class MarkdownReporter implements ReporterInterface
             return [];
         }
 
-        $lines = ['## Remediation / Cách sửa theo rule', ''];
+        $lines = ['## Remediation', ''];
         foreach (array_keys($rules) as $rule) {
             $entry = RuleRemediation::for($rule);
             if ($entry === null) {
@@ -286,14 +286,12 @@ final class MarkdownReporter implements ReporterInterface
             $lines[] = '';
             $lines[] = $entry['why'];
             $lines[] = '';
-            $lines[] = '_' . $entry['why_vi'] . '_';
-            $lines[] = '';
             $lines[] = '```php';
             $lines[] = $entry['fix'];
             $lines[] = '```';
             $lines[] = '';
             if ($entry['docs'] !== null) {
-                $lines[] = 'Chi tiết: `docs/false-positives.md` (' . $entry['docs'] . ')';
+                $lines[] = '_See `docs/false-positives.md` (' . $entry['docs'] . ') for details._';
                 $lines[] = '';
             }
         }

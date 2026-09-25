@@ -1,252 +1,248 @@
-# False positives — xử lý cảnh báo sai / Handling false positives
+# False Positives
 
-Custom analyzers của package là **static heuristics**, không phải verifier có
-độ chính xác tuyệt đối. Tài liệu này giúp bạn phân biệt finding thật với cảnh
-báo sai, và xử lý đúng cách thay vì tắt cả nhóm rule.
-
-_The package's custom analyzers are static heuristics, not sound verifiers.
+The package's custom analyzers are **static heuristics**, not sound verifiers.
 This guide helps you tell real findings from noise and handle them properly
-instead of disabling whole rule groups._
+instead of disabling whole rule groups.
 
-## 1. Nguyên tắc / Principles
+## 1. Principles
 
-1. **Đọc finding trước, quyết định sau** — mỗi issue có file + line + rule +
-   message. Mở đúng dòng đó trước khi làm gì khác.
-2. **Sửa code trước, baseline sau** — nếu code có thể viết lại cho an toàn hơn
-   (binding tham số, validation, `$fillable`), hãy sửa code.
-3. **Baseline từng finding đã review** — chỉ `--baseline-generate`/`--update`
-   sau khi đã đọc hết báo cáo. Baseline mù = che cả lỗi thật.
-4. **Không tắt rule `high` confidence diện rộng** — nếu ồn, tăng
-   `--min-confidence` hoặc đổi `--tier` thay vì tắt `analyzers.security.*`.
-5. **Inline ignore cho trường hợp cá biệt đã review** — comment
-   `// quality-checker-ignore RULE` cùng dòng (hoặc
-   `// quality-checker-ignore-next-line RULE` ở dòng trên) để bỏ qua đúng
-   finding đó; `all` thay cho RULE để bỏ qua mọi rule trên dòng đó.
-   Tắt hẳn bằng `analyzers.inline_suppression => false`.
+1. **Read the finding first, decide later** — each issue has file + line + rule +
+   message. Open that exact line before doing anything else.
+2. **Fix code first, baseline later** — if the code can be rewritten more safely
+   (parameter binding, validation, `$fillable`), fix the code.
+3. **Baseline only reviewed findings** — run `--baseline-generate`/`--update`
+   only after reading the full report. A blind baseline also hides real bugs.
+4. **Do not broadly disable `high` confidence rules** — if there is noise, raise
+   `--min-confidence` or change `--tier` instead of disabling `analyzers.security.*`.
+5. **Inline ignore for reviewed one-off cases** — a
+   `// quality-checker-ignore RULE` comment on the same line (or
+   `// quality-checker-ignore-next-line RULE` on the line above) skips exactly
+   that finding; use `all` instead of RULE to skip all rules on that line.
+   Disable entirely with `analyzers.inline_suppression => false`.
 
-## 2. Mức tin cậy & hành động / Confidence & action
+## 2. Confidence & action
 
-| Confidence | Ví dụ | Hành động khuyên dùng |
+| Confidence | Example | Recommended action |
 |---|---|---|
-| `high` | `SQL_INJECTION`, `UNSAFE_EVAL`, `HARDCODED_SECRET`, `OWASP_*`, `TAINT_*`, `composer_audit` | Coi như lỗi thật cho tới khi chứng minh ngược lại. Sửa code, không baseline vội. |
-| `medium` | `INSECURE_HASH`, `LARAVEL_PITFALL` (`dd()`/`env()`), `MIGRATION_*`, `ROUTE_MISSING_VALIDATION` | Thường đúng. Kiểm tra ngữ cảnh (môi trường test? file config?) rồi sửa hoặc baseline. |
-| `low` | `DEAD_CODE`, `NAMING_CONVENTION`, `TODO_FIXME`, `MISSING_*_TEST` | Gợi ý heuristic. Bật opt-in khi dọn code, đừng gate CI bằng nhóm này. |
+| `high` | `SQL_INJECTION`, `UNSAFE_EVAL`, `HARDCODED_SECRET`, `OWASP_*`, `TAINT_*`, `composer_audit` | Treat as a real bug until proven otherwise. Fix the code, do not rush to baseline. |
+| `medium` | `INSECURE_HASH`, `LARAVEL_PITFALL` (`dd()`/`env()`), `MIGRATION_*`, `ROUTE_MISSING_VALIDATION` | Usually correct. Check the context (test environment? config file?) then fix or baseline. |
+| `low` | `DEAD_CODE`, `NAMING_CONVENTION`, `TODO_FIXME`, `MISSING_*_TEST` | Heuristic suggestions. Enable opt-in when cleaning up code, do not gate CI on this group. |
 
-Lọc nhanh khi review:
+Quick filters for review:
 
 ```bash
-# Chỉ xem finding chắc chắn (ít nhiễu nhất)
+# Only show high-confidence findings (least noise)
 php artisan quality:check --min-confidence=high --tier=security
 
-# Gate CI chất lượng chuẩn (mặc định của package)
+# Standard quality CI gate (package default)
 php artisan quality:check --tier=quality
 
-# Xem tất cả kể cả heuristic khi dọn code local
+# Show everything including heuristics for local cleanup
 php artisan quality:check --tier=all --fail-on=none
 ```
 
-## 3. Các cảnh báo sai thường gặp / Common false positives
+## 3. Common false positives
 
 ### `SQL_INJECTION` / `TAINT_SQL_INJECTION` / `LARAVEL_TAINT`
-- **Báo đúng khi**: input từ request (`$request->input()`, `$_GET`, ...) nối
-  chuỗi hoặc nội suy vào `DB::select`, `whereRaw`, `selectRaw`, ...
-- **Sai khi**: biến trùng tên với biến tainted nhưng đã được gán lại giá trị
-  sạch; query builder dùng binding (`where('id', $id)`) — analyzer bỏ qua
-  trường hợp này, nếu vẫn báo hãy kiểm tra kỹ vì có thể là taint thật qua
-  biến trung gian.
-- **Sửa đúng**: dùng binding/parameter thay vì nối chuỗi:
+- **True positive when**: input from the request (`$request->input()`, `$_GET`, ...) is
+  concatenated or interpolated into `DB::select`, `whereRaw`, `selectRaw`, ...
+- **False positive when**: a variable shares a name with a tainted variable but has
+  been reassigned a clean value; the query builder uses binding (`where('id', $id)`) — the
+  analyzer skips this case, so if it still reports, check carefully because it may be
+  real taint through an intermediate variable.
+- **Correct fix**: use binding/parameters instead of string concatenation:
   ```php
   DB::select('select * from users where id = ?', [$id]);
   ```
 
 ### `MASS_ASSIGNMENT`
-- **Báo đúng khi**: `Model::create($request->all())` mà model không có
+- **True positive when**: `Model::create($request->all())` while the model has no
   `$fillable`/`$guarded`.
-- **Sai khi**: model nằm ngoài đường dẫn scan (analyzer không resolve được
-  file model nên **không báo** — fail-open). Nếu project tách model ra khỏi
-  `app/`, hãy thêm path scan chứa model để rule này có tác dụng.
-- **Sửa đúng**: khai báo `$fillable` hoặc dùng FormRequest + `validated()`.
+- **False positive when**: the model is outside the scan paths (the analyzer cannot
+  resolve the model file so it stays silent — fail-open). If the project keeps models
+  outside `app/`, add the scan path containing the models so this rule takes effect.
+- **Correct fix**: declare `$fillable` or use a FormRequest + `validated()`.
 
 ### `OWASP_BROKEN_ACCESS_CONTROL`
-- **Báo đúng khi**: action mutating (`store`/`update`/`destroy`/...) không thấy
-  `authorize()`, `Gate::`, `$this->authorize()`, `abort()`, middleware trong
-  method, constructor — **và** không có route middleware bảo vệ.
-- **Tự động bỏ qua khi**: action được bảo vệ bởi route middleware. Analyzer đọc
-  các file route (`/routes/`, `/Routes/`, `web.php`/`api.php`) và hiểu:
+- **True positive when**: a mutating action (`store`/`update`/`destroy`/...) shows no
+  `authorize()`, `Gate::`, `$this->authorize()`, `abort()`, or middleware in the
+  method or constructor — **and** no protective route middleware.
+- **Automatically skipped when**: the action is protected by route middleware. The analyzer reads
+  route files (`/routes/`, `/Routes/`, `web.php`/`api.php`) and understands:
   `Route::middleware(...)` / `->middleware(...)` chains,
-  `Route::group(['middleware' => ...])` (kể cả group lồng nhau và group gọi
-  static trực tiếp), `Route::controller(X::class)` với action là bare string,
-  `Route::resource()`/`apiResource()`, và `require`/`include` file route trong
-  group closure (file được require kế thừa middleware stack, không parse standalone).
-  Cả syntax array cũ (`['as' => ..., 'uses' => 'FQCN@method']`) lẫn
-  `[Controller::class, 'method']` đều được resolve.
-  Tên middleware chứa `auth`/`can`/`permission`/`role`/`gate`/`admin`/`bouncer`/
-  `checklevel`/`login`/`apikey`/`sanctum`/`jwt`/`oauth`... được coi là bảo vệ;
-  `throttle` thì không; `guest*` không bao giờ được coi là bảo vệ
-  (guest = chưa đăng nhập, kể cả `guestAdmin` chứa chữ `admin`). Actions so khớp theo
-  FQCN (`use` imports được resolve) nên 2 controller trùng tên khác namespace
-  (Admin vs Shop API) không lẫn vào nhau. Tắt bằng
-  `analyzers.owasp.route_middleware => false` nếu muốn hành vi cũ (chỉ nhìn
-  trong method).
-- **Vẫn báo (review rồi baseline)**: route public by design (login, password
-  reset, 2FA verify, storefront, payment callback/IPN), action không có route
-  nào (dead code), và sample code trong thư mục tài liệu (ví dụ OpenAPI `Docs`
-  của một pilot — class ví dụ tên `*Controller` nhưng không bao giờ chạy).
-- **Case pilot**: HRM pilot 45 → 1 (còn action 2FA verify, public by
-  design); e-commerce pilot 453 → 150, trong đó 105 là `Docs` sample, còn lại là
-  storefront/auth/callback public và vài admin method không có route.
+  `Route::group(['middleware' => ...])` (including nested groups and groups called
+  directly as statics), `Route::controller(X::class)` with the action as a bare string,
+  `Route::resource()`/`apiResource()`, and `require`/`include` of route files inside
+  a group closure (a required file inherits the middleware stack, it is not parsed standalone).
+  Both the legacy array syntax (`['as' => ..., 'uses' => 'FQCN@method']`) and
+  `[Controller::class, 'method']` are resolved.
+  Middleware names containing `auth`/`can`/`permission`/`role`/`gate`/`admin`/`bouncer`/
+  `checklevel`/`login`/`apikey`/`sanctum`/`jwt`/`oauth`... count as protection;
+  `throttle` does not; `guest*` is never protection
+  (guest means unauthenticated, even `guestAdmin` containing `admin`). Actions are matched by
+  FQCN (`use` imports are resolved) so two same-named controllers in different namespaces
+  (Admin vs Shop API) are not mixed up. Disable with
+  `analyzers.owasp.route_middleware => false` for the legacy behavior (method-only
+  checks).
+- **Still reported (review then baseline)**: routes that are public by design (login,
+  password reset, 2FA verify, storefront, payment callback/IPN), actions with no route
+  (dead code), and sample code in documentation folders (for example the OpenAPI `Docs`
+  of one pilot — example classes named `*Controller` that never run).
+- **Pilot case**: HRM pilot 45 → 1 (the remaining action is 2FA verify, public by
+  design); e-commerce pilot 453 → 150, of which 105 are `Docs` samples and the rest are
+  public storefront/auth/callback plus a few admin methods with no route.
 
 ### `OWASP_SSRF` / `OWASP_COMMAND_INJECTION` / `OWASP_SSTI`
-- Engine chỉ báo khi URL/template/lệnh **không phải literal** và có dấu vết
-  input người dùng. Nếu giá trị đã qua allow-list/validate chặt, review rồi
-  baseline thay vì tắt rule.
-- **Tự động bỏ qua**:
-  - sink trong đường dẫn test (`tests/`, `Test.php`) — áp dụng cho SSRF,
+- The engine only reports when the URL/template/command is **not a literal** and shows
+  traces of user input. If the value has passed a strict allow-list/validation, review
+  then baseline instead of disabling the rule.
+- **Automatically skipped**:
+  - sinks in test paths (`tests/`, `Test.php`) — applies to SSRF,
     command injection, XXE;
-  - `fopen()` ở mode write/append (`w`, `a`, `x`, `c`, ...) — tạo file local,
-    không phải server-side request;
-  - đối số có dạng local path: tên biến/property gợi ý file
-    (`$path`, `$file`, `$source`, `$fullPath`, ...) mà không gợi ý remote
-    (`$url`, `$endpoint`, ...), hoặc built từ `storage_path()`/`base_path()`/
+  - `fopen()` in write/append mode (`w`, `a`, `x`, `c`, ...) — creates a local file,
+    not a server-side request;
+  - arguments shaped as a local path: a variable/property name suggesting a file
+    (`$path`, `$file`, `$source`, `$fullPath`, ...) with no remote hint
+    (`$url`, `$endpoint`, ...), or built from `storage_path()`/`base_path()`/
     `public_path()`/...
-  - command injection: đối số đã bọc `escapeshellarg()`/`escapeshellcmd()`,
-    và `new Process()` với command dạng array (không qua shell — kể cả khi
-    array nằm trong biến `$command = [...]` cùng function).
-  - command injection: chuỗi lệnh ghép toàn phần deploy-time — literal,
-    constant (`PHP_BINARY`, `DIRECTORY_SEPARATOR`), Laravel path helper
-    (`base_path()`...), `escapeshellarg()`-wrapped, và biến đã gán từ các
-    phần đó trong cùng function (vd `passthru(PHP_BINARY." $artisan ...")`
-    với `$artisan = base_path('artisan')` — biến gán từ method call
-    như `$v = $this->getVerbosity()` vẫn bị báo).
-  - command injection: `new Process()` với command là array — kể cả qua biến
-    type-hint `array`, docblock `@param array`, hoặc ternary chọn giữa các
-    array.
-  - command injection: tham số của function non-public mà mọi call-site cùng
-    file đều truyền literal/deploy-time-safe (helper private chỉ gọi với literal).
-  - command injection: biến lặp `foreach` trên array literal hoặc class const
+  - command injection: arguments already wrapped with `escapeshellarg()`/`escapeshellcmd()`,
+    and `new Process()` with an array command (no shell — even when
+    the array is in a `$command = [...]` variable in the same function).
+  - command injection: command strings composed entirely of deploy-time parts — literals,
+    constants (`PHP_BINARY`, `DIRECTORY_SEPARATOR`), Laravel path helpers
+    (`base_path()`...), `escapeshellarg()`-wrapped values, and variables assigned from
+    those parts in the same function (e.g. `passthru(PHP_BINARY." $artisan ...")`
+    with `$artisan = base_path('artisan')` — variables assigned from method calls
+    such as `$v = $this->getVerbosity()` are still reported).
+  - command injection: `new Process()` with an array command — including via an
+    `array` type-hint, `@param array` docblock, or a ternary choosing between
+    arrays.
+  - command injection: parameters of non-public functions where every same-file call
+    site passes a literal/deploy-time-safe value (a private helper only called with literals).
+  - command injection: `foreach` loop variables over an array literal or class constant
     (`foreach (self::LIST as $item)` — deploy-time values).
-  - SSRF: `new GuzzleHttp\Client([...])` không phải sink (constructor chỉ nhận
-    config array — request thật ở `->get()`/`->post()` sau đó đã được cover
-    riêng); với Guzzle `$client->request($method, $url)` thì URL là arg thứ 2;
+  - SSRF: `new GuzzleHttp\Client([...])` is not a sink (the constructor only takes
+    a config array — the real request at `->get()`/`->post()` is covered
+    separately); for Guzzle `$client->request($method, $url)` the URL is the 2nd argument;
     `->getRealPath()`/`->getPathname()` (UploadedFile/SplFileInfo)
-    luôn là local path; URL host cố định dạng literal
-    (`sprintf('https://example.com/...', $v)`, kể cả qua biến trung gian)
-    không phải SSRF; `env()`/`config()` là deploy-time,
-    kể cả khi bọc trong `rtrim()`/`sprintf()`/concat toàn deploy-time.
-  - SSRF/traversal dùng chung naming convention: biến/property tên gợi ý
-    local (`$file`, `$path`, `$source`, `$outputDir`...) được coi là local
-    path — trừ khi root là `$request`/`request()`; `include/require` động
-    luôn bị báo (LFI→RCE, không miễn).
-  - SSTI: biến template được gán string literal trong cùng function
-    (`$viewName = 'backend.page'; view($viewName)`), và
-    helper non-public mà mọi call site cùng file đều truyền literal cho tham
-    số template (public helper không được miễn vì có thể gọi từ file khác).
-- **Case pilot (HRM app)**: binary resolver dùng
-  `shell_exec('where ' . escapeshellarg($tool))`, `new Process($command)` với
-  array từ config, updater dùng `escapeshellarg(base_path())` —
-  cả 4 finding command injection đều đã tự hết; 9 SSRF (local file + test
-  fixture) cũng vậy.
+    are always local paths; fixed-literal-host URLs
+    (`sprintf('https://example.com/...', $v)`, including via intermediate variables)
+    are not SSRF; `env()`/`config()` are deploy-time,
+    even when wrapped in `rtrim()`/`sprintf()`/all-deploy-time concatenation.
+  - SSRF/traversal share a naming convention: variables/properties with local-suggesting
+    names (`$file`, `$path`, `$source`, `$outputDir`...) count as local
+    paths — unless the root is `$request`/`request()`; dynamic
+    `include`/`require` is always reported (LFI to RCE, no exemption).
+  - SSTI: template variables assigned a string literal in the same function
+    (`$viewName = 'backend.page'; view($viewName)`), and
+    non-public helpers where every same-file call site passes a literal for the
+    template parameter (public helpers are not exempted because they can be called from another file).
+- **Pilot case (HRM app)**: the binary resolver uses
+  `shell_exec('where ' . escapeshellarg($tool))`, `new Process($command)` with
+  an array from config, and the updater uses `escapeshellarg(base_path())` —
+  all 4 command injection findings resolved automatically; likewise for 9 SSRF findings
+  (local files + test fixtures).
 
 ### `INSECURE_HASH`
-- **Báo đúng khi**: `md5()`/`sha1()` trên password trong ngữ cảnh credential.
-- **Tự động bỏ qua**: file nhắc tới `pwnedpasswords` — HIBP k-anonymity chỉ gửi
-  5 ký tự đầu của SHA-1 lên API, không phải lưu password bằng SHA-1.
+- **True positive when**: `md5()`/`sha1()` on a password in a credential context.
+- **Automatically skipped**: files mentioning `pwnedpasswords` — HIBP k-anonymity only sends
+  the first 5 characters of the SHA-1 hash to the API, it does not store passwords with SHA-1.
 
 ### `MIGRATION_DESTRUCTIVE_UP`
-- **Báo đúng khi**: `up()` drop table/column mà `down()` không khôi phục.
-- **Tự động bỏ qua**: mọi tên table/column bị drop đều xuất hiện lại dưới dạng
-  string literal trong `down()` (ví dụ drop column có guard
-  `Schema::hasColumn` + `down()` tạo lại column).
-- **Không báo từ đầu**: drop index/constraint (`dropIndex`, `dropUnique`,
-  `dropForeign`, `dropPrimary`, `dropTimestamps`) — không mất row dữ liệu,
-  recover được từ schema.
+- **True positive when**: `up()` drops a table/column that `down()` does not restore.
+- **Automatically skipped**: every dropped table/column name reappears as a
+  string literal in `down()` (for example a dropped column guarded by
+  `Schema::hasColumn` + `down()` recreating the column).
+- **Never reported**: dropping indexes/constraints (`dropIndex`, `dropUnique`,
+  `dropForeign`, `dropPrimary`, `dropTimestamps`) — no data rows are lost,
+  recoverable from the schema.
 
 ### `OWASP_OPEN_REDIRECT`
-- **Báo đúng khi**: target của `redirect()` / `->away()` / `->to()` /
-  `Redirect::away()` là biến, call hoặc concat chứa phần động.
-- **Tự động bỏ qua**: `redirect()->route()` / `Redirect::route()`, `back()`,
-  string literal, `url()->previous()`, `config()`/`env()` (kể cả concat mà
-  mọi leaf đều safe, vd `redirect(config('app.url') . '/done')` — kể cả qua
-  biến trung gian `$url = config(...) . '/login'`),
-  `url()` với args toàn literal.
-- **Confidence**: biến thuần / `$request->input()` / concat động = High;
-  `redirect($page->getUrl())` (method/property/static — thường là internal
-  URL builder) = Medium. Chạy `--min-confidence=high` để chỉ thấy nhóm
-  nguy hiểm nhất.
-- **Sửa đúng**: dùng named route thay vì URL từ input:
-  `redirect()->route('home')` thay cho `redirect($request->input('next'))`.
+- **True positive when**: the target of `redirect()` / `->away()` / `->to()` /
+  `Redirect::away()` is a variable, call, or concatenation containing a dynamic part.
+- **Automatically skipped**: `redirect()->route()` / `Redirect::route()`, `back()`,
+  string literals, `url()->previous()`, `config()`/`env()` (including concatenation where
+  every leaf is safe, e.g. `redirect(config('app.url') . '/done')` — including via
+  an intermediate variable `$url = config(...) . '/login'`),
+  `url()` with all-literal arguments.
+- **Confidence**: plain variable / `$request->input()` / dynamic concatenation = High;
+  `redirect($page->getUrl())` (method/property/static — usually an internal
+  URL builder) = Medium. Run `--min-confidence=high` to see only the
+  most dangerous group.
+- **Correct fix**: use a named route instead of an input URL:
+  `redirect()->route('home')` instead of `redirect($request->input('next'))`.
 
 ### `OWASP_PATH_TRAVERSAL`
-- **Báo đúng khi**: file sink (`file_get_contents`, `Storage::get`,
+- **True positive when**: a file sink (`file_get_contents`, `Storage::get`,
   `File::get` (facade/Filesystem), `response()->download`, `include $var`, ...)
-  nhận path động.
-- **Tự động bỏ qua**: literal (kể cả `storage_path()` với args literal),
-  `basename()`-wrapped, `env()`/`config()`, biến tên local (`$file`, `$path`,
-  `$outputDir`...) trừ root `$request`, method `getRealPath()/getPathname()`.
-- **Không miễn write-mode**: `fopen($x, 'wb')` vẫn báo — ghi file sai chỗ là
-  vuln thật (khác SSRF chỉ đọc). Đã review thì inline-ignore.
-- **Sửa đúng**: `basename()` input hoặc resolve cứng thư mục gốc:
+  receives a dynamic path.
+- **Automatically skipped**: literals (including `storage_path()` with literal arguments),
+  `basename()`-wrapped values, `env()`/`config()`, local-named variables (`$file`, `$path`,
+  `$outputDir`...) except when rooted at `$request`, and `getRealPath()/getPathname()` methods.
+- **No write-mode exemption**: `fopen($x, 'wb')` is still reported — writing a file to the
+  wrong place is a real vulnerability (unlike read-only SSRF). Use an inline-ignore once reviewed.
+- **Correct fix**: apply `basename()` to the input or pin the base directory:
   `Storage::get('docs/' . basename($name))`.
 
 ### `OWASP_BLADE_XSS`
-- **Báo đúng khi**: `{!! ... !!}` chứa `$biến` hoặc `request(` trong
+- **True positive when**: `{!! ... !!}` contains a `$variable` or `request(` in
   `*.blade.php`.
-- **Tự động bỏ qua**: `{!! csrf_field() !!}` (không dữ liệu động),
-  sanitizer tường minh (`e()`, `sanitizeHtml()`, `strip_tags()`,
-  `htmlspecialchars()`, `purify()`, `clean()`), `json_encode()` với đủ 4
-  flags `JSON_HEX_*` (không flags vẫn báo — `</script>` breakout thật),
-  framework event-hook (`view_render_event(...)` — output từ listeners nội
-  bộ, 440 findings từ theme event hooks trong một pilot), paginator `->links()`, `{{ ... }}`
-  (escaped syntax), và convention HTML đã sanitize: biến
-  `*Html/*Rendered/*Sanitized` hoặc method/property `->getHtml()`/
-  `->renderedHTML` (render markdown đã purify ở tầng model).
-- **Sửa đúng**: chuyển sang `{{ ... }}`; chỉ dùng `{!! ... !!}` + inline
-  ignore cho HTML đã review.
+- **Automatically skipped**: `{!! csrf_field() !!}` (no dynamic data),
+  explicit sanitizers (`e()`, `sanitizeHtml()`, `strip_tags()`,
+  `htmlspecialchars()`, `purify()`, `clean()`), `json_encode()` with all 4
+  `JSON_HEX_*` flags (missing flags are still reported — `</script>` breakout is real),
+  framework event hooks (`view_render_event(...)` — output from internal
+  listeners, 440 findings from theme event hooks in one pilot), paginator `->links()`, `{{ ... }}`
+  (escaped syntax), and sanitized-HTML conventions: `*Html`/`*Rendered`/`*Sanitized`
+  variables or `->getHtml()`/`->renderedHTML` methods/properties
+  (markdown rendered and purified at the model layer).
+- **Correct fix**: switch to `{{ ... }}`; only use `{!! ... !!}` + an inline
+  ignore for reviewed HTML.
 
 ### `HARDCODED_SECRET`
-- Regex bắt `sk-`, `AIza`, `AKIA`, private key, ... **Chuỗi test/fixture cũng
-  bị bắt** — đó là hành vi có chủ ý. Với fixture test, hoặc dùng giá trị
-  giả rõ ràng không khớp pattern, hoặc loại trừ thư mục test khỏi path scan
-  security.
-- Placeholder như `xxx`, `changeme`, empty string trong file config được báo
-  bởi `OWASP_MISCONFIGURATION` (mức warning) — hãy thay bằng `env()`.
+- The regex matches `sk-`, `AIza`, `AKIA`, private keys, ... **Test/fixture strings
+  are also matched** — this is intentional. For test fixtures, either use clearly
+  fake values that do not match the pattern, or exclude the test directory from the
+  security scan paths.
+- Placeholders such as `xxx`, `changeme`, or empty strings in config files are reported
+  by `OWASP_MISCONFIGURATION` (warning level) — replace them with `env()`.
 
 ### `DISABLED_CSRF_EXCEPTION_STAR`
-- **Báo Critical khi**: `$except` chứa wildcard ngoài `api/*` (vd `*`,
-  `admin/*`) — tắt CSRF diện rộng.
-- **Báo Warning khi**: chỉ exclude đúng `api/*` — chấp nhận được cho API
-  stateless, nhưng phải xác minh không có route session-auth nào dưới `/api/`.
+- **Reported as Critical when**: `$except` contains a wildcard beyond `api/*` (e.g. `*`,
+  `admin/*`) — broadly disables CSRF.
+- **Reported as Warning when**: only exactly `api/*` is excluded — acceptable for a stateless
+  API, but verify that no session-authenticated route exists under `/api/`.
 
-### Nhóm heuristic `low` (`DEAD_CODE`, `NAMING_CONVENTION`, `TODO_FIXME`, `MISSING_*_TEST`)
-- Mặc định **TẮT** (`analyzers.test_coverage.*`, `analyzers.convention.*` =
-  `false`). Nếu bạn bật lên và thấy hàng loạt cảnh báo, đó là kỳ vọng —
-  đừng baseline hàng loạt, hãy tắt lại và chỉ bật khi dọn code theo chủ đề.
+### `low` heuristic group (`DEAD_CODE`, `NAMING_CONVENTION`, `TODO_FIXME`, `MISSING_*_TEST`)
+- Disabled by default (**OFF**) (`analyzers.test_coverage.*`, `analyzers.convention.*` =
+  `false`). If you enable them and see a flood of warnings, that is expected —
+  do not baseline them in bulk, turn them back off and only enable them for themed cleanup.
 
-## 4. Quy trình review đề xuất / Suggested review flow
+## 4. Suggested review flow
 
 ```bash
-# 1. Xem toàn cảnh, không fail
+# 1. See the full picture without failing
 php artisan quality:check --format=all --fail-on=none
 
-# 2. Tập trung finding chắc chắn trước
+# 2. Focus on high-confidence findings first
 php artisan quality:check --min-confidence=high --tier=security --fail-on=none
 
-# 3. Sửa code những gì sửa được (binding, fillable, validation, authorize)
+# 3. Fix what can be fixed in code (binding, fillable, validation, authorize)
 
-# 4. Chấp nhận phần còn lại đã review làm baseline
+# 4. Accept the reviewed remainder as baseline
 php artisan quality:check --baseline-generate
 
-# 5. Từ nay CI chỉ fail trên finding MỚI
+# 5. From now on CI only fails on NEW findings
 php artisan quality:check --ci --baseline-file=baseline.json
 ```
 
-Commit `baseline.json` để cả đội dùng chung ngưỡng. Chỉ chạy
-`--baseline-update` sau khi đã review lại toàn bộ báo cáo mới.
+Commit `baseline.json` so the whole team shares the same threshold. Only run
+`--baseline-update` after re-reviewing the full new report.
 
-## 5. Những điều không nên làm / Don'ts
+## 5. Don'ts
 
-- Đừng thêm `baseline.json` vào `.gitignore` **và đồng thời** than phiền CI
-  mỗi máy báo khác nhau — baseline không commit thì mỗi người một ngưỡng.
-- Đừng `--fail-on=none` trong CI để "cho xanh" — flag đó chỉ dùng khi review.
-- Đừng tắt `analyzers.security` / `analyzers.owasp` vì một finding sai —
-  baseline đúng finding đó, giữ rule lại để bắt lỗi mới.
+- Do not add `baseline.json` to `.gitignore` **while** complaining that CI
+  reports differ per machine — an uncommitted baseline means everyone has a different threshold.
+- Do not use `--fail-on=none` in CI just to keep it green — that flag is for review only.
+- Do not disable `analyzers.security` / `analyzers.owasp` because of one wrong finding —
+  baseline exactly that finding and keep the rule to catch new bugs.

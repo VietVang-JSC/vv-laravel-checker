@@ -79,11 +79,9 @@ final class RemediationTest extends TestCase
 
         foreach ($all as $rule => $entry) {
             self::assertArrayHasKey('why', $entry, $rule);
-            self::assertArrayHasKey('why_vi', $entry, $rule);
             self::assertArrayHasKey('fix', $entry, $rule);
             self::assertArrayHasKey('docs', $entry, $rule);
             self::assertNotSame('', trim($entry['why']), $rule);
-            self::assertNotSame('', trim($entry['why_vi']), $rule);
             self::assertNotSame('', trim($entry['fix']), $rule);
         }
     }
@@ -129,7 +127,7 @@ final class RemediationTest extends TestCase
         self::assertIsArray($issue['remediation']);
         self::assertStringContainsString('internal services', $issue['remediation']['why']);
         self::assertStringContainsString('allow-list', $issue['remediation']['fix']);
-        self::assertStringContainsString('attacker', $issue['remediation']['why_vi']);
+        self::assertArrayNotHasKey('why_vi', $issue['remediation']);
     }
 
     public function testMarkdownHasRemediationSection(): void
@@ -144,16 +142,16 @@ final class RemediationTest extends TestCase
         self::assertStringContainsString('attacker', $md);
     }
 
-    public function testConsolePrintsVietnameseFixGuidance(): void
+    public function testConsolePrintsFixGuidance(): void
     {
         $output = new BufferedOutput();
         (new ConsoleReporter($output))->render($this->sampleResults(), $this->context());
 
         $text = $output->fetch();
 
-        self::assertStringContainsString('Remediation (cách sửa theo rule):', $text);
+        self::assertStringContainsString('Remediation (how to fix per rule):', $text);
         self::assertStringContainsString('[OWASP_SSRF]', $text);
-        self::assertStringContainsString('quét dịch vụ nội bộ', $text);
+        self::assertStringContainsString('internal services', $text);
     }
 
     public function testHtmlRuleGroupContainsFixBox(): void
@@ -163,7 +161,7 @@ final class RemediationTest extends TestCase
         $html = (string) file_get_contents($this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.html');
 
         self::assertStringContainsString('fixbox', $html);
-        self::assertStringContainsString('Cách sửa / Fix:', $html);
+        self::assertStringContainsString('<strong>Fix:</strong>', $html);
         self::assertStringContainsString('allow-list', $html);
     }
 

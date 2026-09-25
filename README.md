@@ -2,7 +2,7 @@
 
 # VietVang Quality Checker
 
-**Một cổng kiểm tra chất lượng (quality gate) toàn diện cho Laravel** —
+**A comprehensive quality gate for Laravel** —
 _A comprehensive Laravel quality gate._
 
 Wraps `phpcs`, `phpstan`, `phpunit`, `composer audit` and `trivy` into a single
@@ -14,7 +14,7 @@ standardised exit codes for CI.
 
 ---
 
-## Overview / Tổng quan
+## Overview
 
 `quality:check` is a single Artisan command that runs the whole quality pipeline
 and produces one of: a console table, JSON, HTML or Markdown report. It returns
@@ -32,7 +32,7 @@ The package philosophy:
 
 ---
 
-## Features / Tính năng
+## Features
 
 - One command to rule them all: `php artisan quality:check`
 - Multiple report formats: `console`, `json`, `html`, `md`, `sarif` (or `all`)
@@ -50,7 +50,7 @@ The package philosophy:
 
 ---
 
-## Requirements / Yêu cầu
+## Requirements
 
 | Requirement | Version |
 |---|---|
@@ -63,7 +63,7 @@ Optional tools (skipped with a hint if missing): `squizlabs/php_codesniffer`,
 
 ---
 
-## Installation / Cài đặt
+## Installation
 
 Requirements: PHP `^8.1`, Laravel `10|11|12`, and Composer `2.4+`.
 
@@ -118,7 +118,7 @@ composer require vietvang/quality-checker
 
 ---
 
-## Quick Start (5 minutes) / Bắt đầu nhanh
+## Quick Start (5 minutes)
 
 Run the security scan first. It is the safest first run because it does not
 require every optional tool to be installed:
@@ -184,9 +184,9 @@ Missing optional tools are then reported as `skipped` instead of being installed
 
 ---
 
-## Options Reference / Bảng tham chiếu tuỳ chọn
+## Options Reference
 
-| Option | Description / Mô tả | Default / Mặc định |
+| Option | Description | Default |
 |---|---|---|
 | `--format=...` | Comma-separated report formats: `console`, `json`, `html`, `md`, `sarif`, or `all` (runs all five). | `console` |
 | `--only=...` | Only run these checkers (comma-separated): `phpcs`, `phpstan`, `phpunit`, `composer_audit`, `trivy`, `custom`. | all checkers |
@@ -212,9 +212,9 @@ Missing optional tools are then reported as `skipped` instead of being installed
 
 ---
 
-## Exit Codes / Mã thoát
+## Exit Codes
 
-| Code | Meaning / Ý nghĩa |
+| Code | Meaning |
 |---|---|
 | `0` | Pass — no issue exceeds the `--fail-on` threshold. |
 | `1` | Issues found that exceed the threshold (default `error` and above). |
@@ -223,7 +223,7 @@ Missing optional tools are then reported as `skipped` instead of being installed
 
 ---
 
-## Checkers / Bộ kiểm tra
+## Checkers
 
 | Checker | Command wrapped | Notes |
 |---|---|---|
@@ -239,11 +239,11 @@ When an optional tool is not installed, the corresponding checker reports
 
 ---
 
-## Custom Analyzer Rules / Bảng rule phân tích
+## Custom Analyzer Rules
 
 ### Security (analyzers/security)
 
-| Rule ID | Severity | What it detects / Phát hiện |
+| Rule ID | Severity | What it detects |
 |---|---|---|
 | `SQL_INJECTION` | Critical | Tainted request input flowing into raw queries (`DB::select`, `whereRaw`, ...). |
 | `UNSAFE_EVAL` | Critical | `eval()` / `assert()` with dynamic data. |
@@ -259,7 +259,7 @@ The `taint_engine` rule is disabled by default in the config.
 
 ### Test coverage (analyzers/test_coverage)
 
-| Rule ID | Severity | Confidence | What it detects / Phát hiện |
+| Rule ID | Severity | Confidence | What it detects |
 |---|---|---|---|
 | `MISSING_CONTROLLER_TEST` | Warning | low | Controller with no corresponding test (unit or feature). |
 | `MISSING_SERVICE_TEST` | Warning | low | Service with no corresponding test. |
@@ -275,7 +275,7 @@ Opt-in heuristics (off by default): `missing_feature_coverage` (route-level),
 
 ### Convention (analyzers/convention)
 
-| Rule ID | Severity | What it detects / Phát hiện |
+| Rule ID | Severity | What it detects |
 |---|---|---|
 | `NAMING_CONVENTION` | Info | Class/method/const names that deviate from conventions. |
 | `TODO_FIXME` | Info | Leftover `TODO` / `FIXME` / `HACK` markers. |
@@ -284,7 +284,7 @@ Opt-in heuristics (off by default): `missing_feature_coverage` (route-level),
 
 ### OWASP Top 10 (2023) — analyzers/owasp
 
-| Rule ID | Severity | Confidence | OWASP | What it detects / Phát hiện |
+| Rule ID | Severity | Confidence | OWASP | What it detects |
 |---|---|---|---|---|
 | `OWASP_BROKEN_ACCESS_CONTROL` | Error | high | A01 | Mutating controller method (`store/update/delete/...`) with no visible `authorize`/`Gate`/`abort`/middleware. |
 | `OWASP_SSRF` | Error | high | A10 | URL from user input flows into `file_get_contents`/`fopen`/`Http::`/Guzzle. |
@@ -297,7 +297,7 @@ All OWASP rules are on by default.
 
 ### Laravel-specific (analyzers/laravel)
 
-| Rule ID | Severity | Confidence | What it detects / Phát hiện |
+| Rule ID | Severity | Confidence | What it detects |
 |---|---|---|---|
 | `MIGRATION_MISSING_DOWN` | Warning | medium | Migration defines `up()` but no `down()` — not reversible. |
 | `MIGRATION_DESTRUCTIVE_UP` | Warning | medium | Destructive schema op (`dropTable`/`dropColumn`/...) in `up()` without re-creation. |
@@ -305,7 +305,7 @@ All OWASP rules are on by default.
 
 The `laravel` group is on by default (medium confidence).
 
-### Confidence & Tiering / Mức tin cậy & tầng chất lượng
+### Confidence & Tiering
 
 Every issue carries a **confidence**: `high` | `medium` | `low`.
 
@@ -368,7 +368,7 @@ serve stale results).
 
 ---
 
-## Auto-provisioning missing tools / Tự cài tool thiếu
+## Auto-provisioning missing tools
 
 By default the checker **self-provisions** missing tools instead of just skipping
 them:
@@ -388,7 +388,7 @@ projects.
 
 ---
 
-## Troubleshooting / Xử lý lỗi thường gặp
+## Troubleshooting
 
 ### PHPUnit exits with code 255 or runs out of memory
 
@@ -424,7 +424,7 @@ See [`docs/false-positives.md`](docs/false-positives.md) for a per-rule guide.
 
 ---
 
-## Baseline Workflow / Quy trình Baseline
+## Baseline Workflow
 
 Baseline lets you "accept" the issues currently present in a project, so that
 only **new** issues are reported from then on. This is useful when introducing
@@ -482,7 +482,7 @@ See [`docs/baseline.md`](docs/baseline.md) for more details.
 
 ---
 
-## Auto-fix / Tự sửa lỗi
+## Auto-fix
 
 ```bash
 php artisan quality:check --fix
@@ -494,7 +494,7 @@ issues are fixable; the custom analyzers are informational only.
 
 ---
 
-## CI Integration / Tích hợp CI (GitHub Actions)
+## CI Integration (GitHub Actions)
 
 The recommended CI workflow uses `--ci` (JSON output + `fail-on=error`) and
 uploads the report as an artifact.
@@ -549,7 +549,7 @@ severity, and OWASP/taint/security rules are tagged accordingly.
 
 ---
 
-## Pre-commit Hook / Hook trước khi commit
+## Pre-commit Hook
 
 Pre-commit hook stubs are provided at `resources/stubs/pre-commit` and
 `resources/stubs/pre-commit.ps1` (Unix and PowerShell respectively). Install the
@@ -559,7 +559,7 @@ commit.
 
 ---
 
-## Developing & Testing the Package / Phát triển & kiểm thử package
+## Developing & Testing the Package
 
 Clone the repository and install dependencies:
 
@@ -587,6 +587,6 @@ composer validate --no-check-publish
 
 ---
 
-## License / Giấy phép
+## License
 
 [MIT](LICENSE) © 2026 VietVang

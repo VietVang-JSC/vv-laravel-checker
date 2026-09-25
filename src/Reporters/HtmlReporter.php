@@ -343,8 +343,7 @@ final class HtmlReporter implements ReporterInterface
     pre.code .row.cur { background: var(--code-cur); border-radius: 4px; }
     pre.code .cl { color: var(--code-ln); user-select: none; display: inline-block; min-width: 4ch; text-align: right; margin-right: 12px; }
     .fixbox { margin: 0 0 10px; padding: 10px 14px; border-left: 3px solid var(--info); background: var(--page); border-radius: 0 6px 6px 0; font-size: 13px; }
-    .fixbox .fix-why { margin: 0 0 2px; }
-    .fixbox .fix-why-vi { margin: 0 0 8px; color: var(--muted); font-style: italic; }
+    .fixbox .fix-why { margin: 0 0 8px; }
     .fixbox pre.code { margin: 0 0 8px; }
     .fixbox .fix-docs { font-size: 12px; }
     .owasp-rule { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--bg); }
@@ -795,7 +794,7 @@ final class HtmlReporter implements ReporterInterface
     private function buildSidebar(array $checkers, array $summary, array $rules, array $hotFiles): string
     {
         $html = '<aside class="sidebar" id="sidebar">' . "\n"
-            . '<h3>Contents / Mục lục</h3>' . "\n"
+            . '<h3>Contents</h3>' . "\n"
             . '<nav aria-label="Report sections"><ul>' . "\n"
             . '<li><a href="#summary">Summary</a></li>' . "\n"
             . '<li><a href="#top-rules">Top Rules</a></li>' . "\n"
@@ -920,7 +919,7 @@ final class HtmlReporter implements ReporterInterface
     private function buildToolbar(): string
     {
         return '<div class="toolbar" role="search">' . "\n"
-            . '<input type="search" id="report-search" placeholder="Search rule, file, message… / Tìm rule, file…" aria-label="Search issues">' . "\n"
+            . '<input type="search" id="report-search" placeholder="Search rule, file, message…" aria-label="Search issues">' . "\n"
             . '<button type="button" class="chip" data-sev="critical" aria-pressed="true">Critical</button>' . "\n"
             . '<button type="button" class="chip" data-sev="error" aria-pressed="true">Error</button>' . "\n"
             . '<button type="button" class="chip" data-sev="warning" aria-pressed="true">Warning</button>' . "\n"
@@ -1044,7 +1043,7 @@ final class HtmlReporter implements ReporterInterface
         $rows .= '</tbody>';
 
         return '<div class="card" id="top-rules">' . "\n"
-            . '<h2>Top Rules / Nhóm lỗi theo rule</h2>' . "\n"
+            . '<h2>Top Rules</h2>' . "\n"
             . '<table>' . $rows . '</table>' . "\n"
             . '</div>' . "\n";
     }
@@ -1278,12 +1277,11 @@ final class HtmlReporter implements ReporterInterface
         }
 
         $html = '<div class="fixbox">' . "\n"
-            . '<p class="fix-why"><strong>Cách sửa / Fix:</strong> ' . $this->escape($entry['why']) . '</p>' . "\n"
-            . '<p class="fix-why-vi">' . $this->escape($entry['why_vi']) . '</p>' . "\n"
+            . '<p class="fix-why"><strong>Fix:</strong> ' . $this->escape($entry['why']) . '</p>' . "\n"
             . '<pre class="code">' . $this->escape($entry['fix']) . '</pre>' . "\n";
 
         if ($entry['docs'] !== null) {
-            $html .= '<p class="fix-docs">Chi tiết: <code>docs/false-positives.md</code> (' . $this->escape($entry['docs']) . ')</p>' . "\n";
+            $html .= '<p class="fix-docs">Details: <code>docs/false-positives.md</code> (' . $this->escape($entry['docs']) . ')</p>' . "\n";
         }
 
         return $html . '</div>' . "\n";

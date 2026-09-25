@@ -110,14 +110,14 @@ final class ReportersTest extends TestCase
     {
         $results = [
             new CheckResult('custom', 'failed', 0.1, [
-                new Issue('TODO_FIXME', 'Nhóm lỗi theo rule', 'app/X.php', 1, Severity::Info, 'custom'),
+                new Issue('TODO_FIXME', 'Grüße aus München', 'app/X.php', 1, Severity::Info, 'custom'),
             ], null, null),
         ];
 
         (new JsonReporter())->render($results, $this->context());
 
         $raw = (string) file_get_contents($this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.json');
-        self::assertStringContainsString('Nhóm lỗi theo rule', $raw);
+        self::assertStringContainsString('Grüße aus München', $raw);
     }
 
     /** MarkdownReporter */
