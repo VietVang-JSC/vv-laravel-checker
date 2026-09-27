@@ -482,6 +482,20 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertSame('OWASP_XXE', $this->rules($issues)[0] ?? null);
     }
 
+    public function testXxeStillFlagsNoentOption(): void
+    {
+        // LIBXML_NOENT substitutes entities — it enables XXE, so it must
+        // not count as protection the way LIBXML_NONET does.
+        $file = $this->temp(
+            "<?php\n\$xml = simplexml_load_string(\$raw, 'SimpleXMLElement', LIBXML_NOENT);\n",
+            'app/Services/FeedParser.php'
+        );
+
+        $issues = (new OwaspXxeAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_XXE', $this->rules($issues)[0] ?? null);
+    }
+
     public function testAccessControlSkipsRouteMiddlewareProtectedAction(): void
     {
         $controller = $this->temp(
@@ -1120,6 +1134,66 @@ final class OwaspAnalyzersTest extends TestCase
     {
         $file = $this->temp(
             "<?php\ncopy(\$request->input('src'), \$dest);\n",
+            'app/Services/ExternalService.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertContains('OWASP_SSRF', $this->rules($issues));
+    }
+
+    public function testSsrfFlagsReadfileSource(): void
+    {
+        $file = $this->temp(
+            "<?php\nreadfile(\$request->input('file'));\n",
+            'app/Services/ExternalService.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertContains('OWASP_SSRF', $this->rules($issues));
+    }
+
+    public function testSsrfSkipsFileWithLocalPath(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$lines = file(\$path);\n",
+            'app/Services/ExternalService.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSsrfFlagsFsockopenHost(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$fp = fsockopen(\$host, 80);\n",
+            'app/Services/ExternalService.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertContains('OWASP_SSRF', $this->rules($issues));
+    }
+
+    public function testSsrfSkipsFsockopenLiteralHost(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$fp = fsockopen('localhost', 80);\n",
+            'app/Services/ExternalService.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSsrfFlagsStreamSocketClient(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$fp = stream_socket_client('tcp://' . \$host . ':80');\n",
             'app/Services/ExternalService.php'
         );
 

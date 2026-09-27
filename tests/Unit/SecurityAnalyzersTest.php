@@ -348,6 +348,41 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertTrue($this->ruleMatches($issues[0], 'MASS_ASSIGNMENT', Severity::Error));
     }
 
+    public function testMassAssignmentFlagsForceFillWithRequestInput(): void
+    {
+        $controller = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\n" .
+            "class OrderController {\n    public function update(Request \$request, Order \$order) {\n        \$order->forceFill(\$request->all());\n        \$order->save();\n    }\n}\n",
+            'app/Http/Controllers/OrderController.php'
+        );
+        $model = $this->tempPhp(
+            "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {\n    protected \$fillable = ['name'];\n}\n",
+            'app/Models/Order.php'
+        );
+
+        $issues = (new MassAssignmentAnalyzer())->analyze([$controller, $model]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'MASS_ASSIGNMENT', Severity::Error));
+    }
+
+    public function testMassAssignmentSkipsForceFillWithLiterals(): void
+    {
+        $controller = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\n" .
+            "class OrderSeeder {\n    public function run(Order \$order): void {\n        \$order->forceFill(['role' => 'admin']);\n        \$order->save();\n    }\n}\n",
+            'database/seeders/OrderSeeder.php'
+        );
+        $model = $this->tempPhp(
+            "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            'app/Models/Order.php'
+        );
+
+        $issues = (new MassAssignmentAnalyzer())->analyze([$controller, $model]);
+
+        self::assertCount(0, $issues);
+    }
+
     /** UnsafeDeserializationAnalyzer */
 
     public function testUnsafeDeserializationFlagsNonLiteral(): void
@@ -448,6 +483,56 @@ final class SecurityAnalyzersTest extends TestCase
         $file = $this->tempPhp(
             "<?php\nnamespace App\\Services;\nclass TokenService {\n    public function fingerprint(string \$password): string {\n        return hash('sha256', \$password);\n    }\n}\n",
             'app/Services/TokenService.php'
+        );
+
+        $issues = (new InsecureHashAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testInsecureHashFlagsMtRandForOtp(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nclass OtpService {\n    public function generate(): int {\n        \$otp = mt_rand(100000, 999999);\n        return \$otp;\n    }\n}\n",
+            'app/Services/OtpService.php'
+        );
+
+        $issues = (new InsecureHashAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'INSECURE_HASH', Severity::Warning));
+    }
+
+    public function testInsecureHashFlagsUniqidForResetToken(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nclass PasswordResetService {\n    public function token(): string {\n        \$resetToken = uniqid('pwd_', true);\n        return \$resetToken;\n    }\n}\n",
+            'app/Services/PasswordResetService.php'
+        );
+
+        $issues = (new InsecureHashAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'INSECURE_HASH', Severity::Warning));
+    }
+
+    public function testInsecureHashSkipsMtRandForLoopCounter(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nclass RetryService {\n    public function attempts(): int {\n        \$tries = mt_rand(1, 5);\n        return \$tries;\n    }\n}\n",
+            'app/Services/RetryService.php'
+        );
+
+        $issues = (new InsecureHashAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testInsecureHashSkipsRandomIntForOtp(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nclass OtpService {\n    public function generate(): int {\n        \$otp = random_int(100000, 999999);\n        return \$otp;\n    }\n}\n",
+            'app/Services/OtpService.php'
         );
 
         $issues = (new InsecureHashAnalyzer())->analyze([$file]);

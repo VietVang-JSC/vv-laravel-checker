@@ -19,6 +19,16 @@ final class InsecureHashAnalyzer
     private const WEAK_HASH_ALGOS = ['md5', 'sha1', 'md4'];
 
     /**
+     * Not broken hashes but broken randomness: rand()/mt_rand() (Mersenne
+     * Twister, seed-recoverable) and uniqid() (microtime-derived) are
+     * predictable. Only flagged in token/secret context — counters,
+     * shuffles and filenames stay silent.
+     */
+    private const WEAK_RANDOM_FUNCS = ['rand', 'mt_rand', 'uniqid'];
+
+    private const TOKEN_NAME_PATTERN = '/token|otp|one[_-]?time|secret|passwd|password|api[_-]?key|private[_-]?key|verify|verification|reset|nonce|salt|auth[_-]?code|session[_-]?id/i';
+
+    /**
      * @param list<string> $files
      * @return list<Issue>
      */
@@ -70,11 +80,29 @@ final class InsecureHashAnalyzer
             }
             $name = strtolower($node->name->toString());
 
-            return in_array($name, self::WEAK_FUNCTIONS, true) || $name === 'hash';
+            return in_array($name, self::WEAK_FUNCTIONS, true)
+                || in_array($name, self::WEAK_RANDOM_FUNCS, true)
+                || $name === 'hash';
         });
 
         foreach ($calls as $call) {
             if (!$call instanceof Node\Expr\FuncCall) {
+                continue;
+            }
+            if ($this->isWeakRandomCall($call)) {
+                if (!$this->isTokenContext($call)) {
+                    continue;
+                }
+                $fnName = $call->name instanceof Node\Name ? $call->name->toString() : 'rand';
+                $issues[] = new Issue(
+                    self::RULE,
+                    sprintf('%s() is not cryptographically secure and must not generate tokens/OTPs/secrets; use random_int()/random_bytes().', $fnName),
+                    $file,
+                    $call->getStartLine(),
+                    Severity::Warning,
+                    'custom',
+                    ['function' => $fnName]
+                );
                 continue;
             }
             if (!$this->isWeakHashCall($call)) {
@@ -97,6 +125,61 @@ final class InsecureHashAnalyzer
         }
 
         return $issues;
+    }
+
+    /**
+     * md5()/sha1() always count; hash() only counts with a weak first
+     * algorithm argument (md5/sha1/md4 literal).
+     */
+    private function isWeakRandomCall(Node\Expr\FuncCall $call): bool
+    {
+        if (!$call->name instanceof Node\Name) {
+            return false;
+        }
+
+        return in_array(strtolower($call->name->toString()), self::WEAK_RANDOM_FUNCS, true);
+    }
+
+    /**
+     * Token context: assigned to a token/secret-named variable, stored under
+     * a token/secret-named array key (e.g. ['code' => mt_rand(...)]), or
+     * returned from a token/secret-named function. Everything else (loop
+     * counters, offsets, filenames) stays silent.
+     */
+    private function isTokenContext(Node\Expr\FuncCall $call): bool
+    {
+        $parent = $call->getAttribute('parent');
+        // Unwrap a single cast: $otp = (string) mt_rand(...).
+        if ($parent instanceof Node\Expr\Cast && $parent->getAttribute('parent') instanceof Node) {
+            $parent = $parent->getAttribute('parent');
+        }
+        if ($parent instanceof Node\Expr\Assign && $parent->var instanceof Node\Expr\Variable && is_string($parent->var->name)) {
+            return preg_match(self::TOKEN_NAME_PATTERN, $parent->var->name) === 1;
+        }
+
+        if (
+            $parent instanceof Node\Expr\ArrayItem
+            && $parent->key instanceof Node\Scalar\String_
+            && preg_match(self::TOKEN_NAME_PATTERN, $parent->key->value) === 1
+        ) {
+            return true;
+        }
+
+        if ($parent instanceof Node\Stmt\Return_) {
+            $owner = $parent->getAttribute('parent');
+            while ($owner !== null && !$owner instanceof Node\Stmt\Function_ && !$owner instanceof Node\Stmt\ClassMethod) {
+                $owner = $owner instanceof Node ? $owner->getAttribute('parent') : null;
+            }
+            if (
+                ($owner instanceof Node\Stmt\Function_ || $owner instanceof Node\Stmt\ClassMethod)
+                && $owner->name instanceof Node\Identifier
+                && preg_match(self::TOKEN_NAME_PATTERN, $owner->name->toString()) === 1
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

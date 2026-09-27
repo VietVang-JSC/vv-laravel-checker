@@ -237,4 +237,91 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
         self::assertCount(1, $issues);
         self::assertSame(3, $issues[0]->line);
     }
+
+    public function testFlagsDynamicInclude(): void
+    {
+        $file = $this->temp(
+            "@include(\$view)\n",
+            'resources/views/pages/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(1, $issues);
+        self::assertSame('OWASP_BLADE_XSS', $issues[0]->rule);
+        self::assertSame('dynamic-include', $issues[0]->metadata['kind'] ?? null);
+    }
+
+    public function testFlagsDynamicExtendsConcat(): void
+    {
+        $file = $this->temp(
+            "@extends('layouts.' . \$theme)\n",
+            'resources/views/pages/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(1, $issues);
+        self::assertSame('OWASP_BLADE_XSS', $issues[0]->rule);
+    }
+
+    public function testFlagsDynamicIncludeWhenView(): void
+    {
+        $file = $this->temp(
+            "@includeWhen(\$showBanner, \$bannerView)\n",
+            'resources/views/pages/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(1, $issues);
+    }
+
+    public function testSkipsLiteralInclude(): void
+    {
+        $file = $this->temp(
+            "@include('partials.header')\n",
+            'resources/views/pages/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsLiteralExtends(): void
+    {
+        $file = $this->temp(
+            "@extends('layouts.app')\n",
+            'resources/views/pages/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsIncludeWhenWithLiteralView(): void
+    {
+        $file = $this->temp(
+            "@includeWhen(\$showBanner, 'partials.banner')\n",
+            'resources/views/pages/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsLiteralIncludeFirstList(): void
+    {
+        $file = $this->temp(
+            "@includeFirst(['custom.header', 'partials.header'])\n",
+            'resources/views/pages/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
 }

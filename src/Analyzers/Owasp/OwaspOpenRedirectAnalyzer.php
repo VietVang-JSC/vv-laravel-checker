@@ -14,7 +14,8 @@ use VietVang\QualityChecker\Result\Severity;
  * A01 Open Redirect.
  *
  * Sinks: redirect($target), redirect()->away($t), redirect()->to($t),
- * redirect()->intended($default), and the Redirect::away()/to() facades.
+ * redirect()->intended($default), the Redirect::away()/to()/intended()
+ * facades, and response(...)->header('Location', $t).
  * Assumes: the target of a redirect sink is attacker-controlled unless it is a
  * string literal/constant, a named-route/back call, a url()->previous() lookup,
  * or a deploy-time config()/env() lookup. Concatenated or interpolated targets
@@ -255,7 +256,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
             if ($method === 'route' || $method === 'back') {
                 return null;
             }
-            if ($method !== 'away' && $method !== 'to') {
+            if ($method !== 'away' && $method !== 'to' && $method !== 'intended') {
                 return null;
             }
             if (!$node->class instanceof Node\Name || !$this->isRedirectClass($node->class->toString())) {

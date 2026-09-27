@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace VietVang\QualityChecker\Analyzers\Owasp;
 
 use VietVang\QualityChecker\Analyzers\AbstractAnalyzer;
+use VietVang\QualityChecker\Result\Confidence;
 use VietVang\QualityChecker\Result\Issue;
 use VietVang\QualityChecker\Result\Severity;
 
@@ -50,6 +51,13 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
      */
     private const EVENT_FUNCS = ['view_render_event', 'form::', 'html::'];
 
+    /**
+     * View-name directives whose argument selects a template file. The
+     * extends/include/includeIf/each family takes the view as the first
+     * argument; includeWhen takes it as the second (after the condition).
+     */
+    private const VIEW_DIRECTIVES = ['extends', 'include', 'includeif', 'includewhen', 'includefirst', 'each'];
+
     public function supports(string $path): bool
     {
         return str_ends_with(strtolower($path), '.blade.php');
@@ -87,7 +95,14 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
             return [];
         }
 
-        $matches = [];
+        return array_merge($this->analyzeEchoes($file, $content), $this->analyzeViewDirectives($file, $content));
+    }
+
+    /**
+     * @return Issue[]
+     */
+    private function analyzeEchoes(string $file, string $content): array
+    {
         if (preg_match_all('/\{!!(.*?)!!\}/s', $content, $matches, PREG_OFFSET_CAPTURE) === false) {
             return [];
         }
@@ -151,6 +166,132 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
         }
 
         return $issues;
+    }
+
+    /**
+     * Dynamic view names (@include($view), @extends('dir.' . $theme), ...):
+     * the resolved template executes embedded PHP, so a user-steerable name
+     * is a local file inclusion vector. String literals (including arrays of
+     * literals for @includeFirst) stay silent — Blade has no data-flow
+     * analysis, so anything else is Medium confidence.
+     *
+     * @return Issue[]
+     */
+    private function analyzeViewDirectives(string $file, string $content): array
+    {
+        $matches = [];
+        $alternation = implode('|', self::VIEW_DIRECTIVES);
+        if (preg_match_all('/@(' . $alternation . ')\s*(\((?:[^()]|(?2))*\))/i', $content, $matches, PREG_OFFSET_CAPTURE) === false) {
+            return [];
+        }
+
+        $issues = [];
+        foreach ($matches[1] as $index => $directive) {
+            $name = strtolower((string) $directive[0]);
+            $paren = (string) $matches[2][$index][0];
+            $offset = (int) $matches[0][$index][1];
+            $view = $this->viewArgument($name, $paren);
+            if ($view === null || !$this->isDynamicView($view)) {
+                continue;
+            }
+
+            $line = substr_count(substr($content, 0, $offset), "\n") + 1;
+            $sink = '@' . $name . $paren;
+            if (strlen($sink) > 120) {
+                $sink = substr($sink, 0, 117) . '...';
+            }
+
+            $issues[] = $this->makeIssue(
+                self::RULE,
+                'Potential Blade LFI: dynamic view name in @' . $name . ' can load an unintended template — pin it to a string literal or an allow-list.',
+                $file,
+                $line,
+                Severity::Error,
+                ['sink' => $sink, 'kind' => 'dynamic-include'],
+                Confidence::Medium
+            );
+        }
+
+        return $issues;
+    }
+
+    /**
+     * The template-selecting argument: second for @includeWhen (the first is
+     * the condition), first otherwise.
+     */
+    private function viewArgument(string $directive, string $paren): ?string
+    {
+        $inner = trim($paren);
+        if (!str_starts_with($inner, '(') || !str_ends_with($inner, ')')) {
+            return null;
+        }
+        $args = $this->splitTopLevel(substr($inner, 1, -1));
+        if ($directive === 'includewhen') {
+            return isset($args[1]) ? trim($args[1]) : null;
+        }
+
+        return isset($args[0]) && trim($args[0]) !== '' ? trim($args[0]) : null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function splitTopLevel(string $args): array
+    {
+        $parts = [];
+        $depth = 0;
+        $quote = null;
+        $current = '';
+        $length = strlen($args);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $args[$i];
+            if ($quote !== null) {
+                $current .= $char;
+                if ($char === $quote && ($i === 0 || $args[$i - 1] !== '\\')) {
+                    $quote = null;
+                }
+                continue;
+            }
+            if ($char === "'" || $char === '"') {
+                $quote = $char;
+                $current .= $char;
+                continue;
+            }
+            if ($char === '(' || $char === '[' || $char === '{') {
+                $depth++;
+            } elseif ($char === ')' || $char === ']' || $char === '}') {
+                $depth = max(0, $depth - 1);
+            }
+            if ($char === ',' && $depth === 0) {
+                $parts[] = $current;
+                $current = '';
+                continue;
+            }
+            $current .= $char;
+        }
+        $parts[] = $current;
+
+        return $parts;
+    }
+
+    private function isDynamicView(string $view): bool
+    {
+        $trimmed = trim($view);
+        if ($trimmed === '') {
+            return false;
+        }
+        // Any $ variable makes the name steerable — including a concat like
+        // 'layouts.' . $theme that merely starts with a literal.
+        if (str_contains($view, '$')) {
+            return true;
+        }
+        // A bare call (viewName(), ...) cannot be resolved statically, except
+        // deploy-time config()/env() lookups which are safe by convention.
+        if (str_contains($view, '(')) {
+            return preg_match('/^\s*(config|env)\s*\(/i', $trimmed) !== 1;
+        }
+
+        return false;
     }
 
     private function isSanitized(string $inner): bool

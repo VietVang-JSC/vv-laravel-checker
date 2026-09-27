@@ -49,6 +49,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Path traversal: `File::`/`Storage::delete()` skipped (deletion cannot
   exfiltrate or include file contents).
 - XXE: `XMLReader::open($uri)` / `$reader->open($uri)` covered as sinks.
+- Open redirect: `Redirect::intended()` facade covered as a sink.
+- XXE: `LIBXML_NOENT` no longer counts as protection (it substitutes
+  entities, which enables XXE); only `LIBXML_NONET` /
+  `libxml_disable_entity_loader(true)` silence a file.
+- Migration: raw `ALTER TABLE ... DROP COLUMN` via `DB::statement()` /
+  `DB::unprepared()` participates in the down() restore check.
+- Mass assignment: `->forceFill($request->all())` flagged (bypasses
+  `$fillable`/`$guarded` by design, even when declared).
+- Insecure hash: `rand()`/`mt_rand()`/`uniqid()` for tokens/OTPs/secrets
+  flagged (use `random_int()`/`random_bytes()`); non-token uses stay silent.
+- Blade: dynamic view names in `@include`/`@extends`/`@includeWhen`/
+  `@includeFirst`/`@each` flagged as LFI (literals and `config()` stay silent).
+- SSRF: `readfile()`/`file()`/`fsockopen()`/`pfsockopen()`/
+  `stream_socket_client()` added as sinks (local-path and literal hosts
+  stay silent).
 
 ### Fixed (new public pilots audit)
 

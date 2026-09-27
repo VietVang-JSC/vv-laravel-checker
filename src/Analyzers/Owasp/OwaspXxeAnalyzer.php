@@ -174,10 +174,13 @@ final class OwaspXxeAnalyzer extends AbstractAnalyzer
                 return true;
             }
 
+            // LIBXML_NONET disables network access (a real guard).
+            // LIBXML_NOENT is deliberately NOT a guard: it substitutes
+            // entities, which is exactly what enables XXE.
             if (
                 $node instanceof Node\Expr\ConstFetch
                 && $node->name instanceof Node\Name
-                && in_array($node->name->toString(), ['LIBXML_NONET', 'LIBXML_NOENT'], true)
+                && $node->name->toString() === 'LIBXML_NONET'
             ) {
                 return true;
             }

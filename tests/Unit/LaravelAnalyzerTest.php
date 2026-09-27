@@ -137,6 +137,38 @@ final class LaravelAnalyzerTest extends TestCase
         self::assertNotContains('MIGRATION_DESTRUCTIVE_UP', $rules);
     }
 
+    public function testMigrationRawAlterDropColumnFlagged(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn new class extends Migration {\n" .
+            "    public function up(): void { DB::statement('ALTER TABLE users DROP COLUMN ssn'); }\n" .
+            "    public function down(): void { }\n" .
+            "};\n",
+            'database/migrations/2026_01_01_h.php'
+        );
+
+        $issues = (new MigrationAnalyzer())->analyze([$file]);
+        $rules = array_map(static fn ($i) => $i->rule, $issues);
+
+        self::assertContains('MIGRATION_DESTRUCTIVE_UP', $rules);
+    }
+
+    public function testMigrationRawAlterDropColumnRestoredPasses(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn new class extends Migration {\n" .
+            "    public function up(): void { DB::statement('ALTER TABLE users DROP COLUMN ssn'); }\n" .
+            "    public function down(): void { Schema::table('users', function (Blueprint \$t) { \$t->string('ssn')->nullable(); }); }\n" .
+            "};\n",
+            'database/migrations/2026_01_01_i.php'
+        );
+
+        $issues = (new MigrationAnalyzer())->analyze([$file]);
+        $rules = array_map(static fn ($i) => $i->rule, $issues);
+
+        self::assertNotContains('MIGRATION_DESTRUCTIVE_UP', $rules);
+    }
+
     public function testRouteValidationFlagsMutatingWithoutValidation(): void
     {
         $file = $this->temp(

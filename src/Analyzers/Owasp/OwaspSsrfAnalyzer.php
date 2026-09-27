@@ -12,9 +12,11 @@ use VietVang\QualityChecker\Result\Severity;
 /**
  * A10/A09 Server-Side Request Forgery.
  *
- * Sinks: file_get_contents()/fopen()/curl_init()/get_headers()/copy(), HTTP client
- * get/post/put/patch/delete/head/request/send (including `?->` nullsafe
- * calls), curl_setopt($ch, CURLOPT_URL, $url), and Http/Client static calls.
+ * Sinks: file_get_contents()/fopen()/curl_init()/get_headers()/copy()/
+ * readfile()/file()/fsockopen()/pfsockopen()/stream_socket_client(), HTTP
+ * client get/post/put/patch/delete/head/request/send (including `?->`
+ * nullsafe calls), curl_setopt($ch, CURLOPT_URL, $url), and Http/Client
+ * static calls.
  * Assumes: SSRF sinks are flagged when their URL argument is a variable, a property/method call, or
  * a concat/interpolation that resolves to user input. For Guzzle-style
  * `request($method, $url)` the URL is read from the second argument; named
@@ -30,7 +32,7 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'OWASP_SSRF';
 
-    private const FUNC_SINKS = ['file_get_contents', 'fopen', 'curl_init', 'get_headers', 'copy'];
+    private const FUNC_SINKS = ['file_get_contents', 'fopen', 'curl_init', 'get_headers', 'copy', 'readfile', 'file', 'fsockopen', 'pfsockopen', 'stream_socket_client'];
 
     private const METHOD_SINKS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'request', 'send'];
 

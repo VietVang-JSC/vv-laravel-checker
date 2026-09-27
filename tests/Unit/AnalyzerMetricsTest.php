@@ -239,6 +239,26 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Services/ExternalService.php' => "<?php\ncopy(\$request->input('src'), \$dest);\n"],
             'OWASP_SSRF',
         ];
+        yield 'ssrf_tp_readfile_url' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Services/ExternalService.php' => "<?php\nreadfile(\$request->input('file'));\n"],
+            'OWASP_SSRF',
+        ];
+        yield 'ssrf_fp_file_local_path' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Services/ExternalService.php' => "<?php\n\$lines = file(\$path);\n"],
+            null,
+        ];
+        yield 'ssrf_tp_fsockopen_host' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Services/ExternalService.php' => "<?php\n\$fp = fsockopen(\$host, 80);\n"],
+            'OWASP_SSRF',
+        ];
+        yield 'ssrf_fp_fsockopen_literal' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Services/ExternalService.php' => "<?php\n\$fp = fsockopen('localhost', 80);\n"],
+            null,
+        ];
 
         // --- SSTI ---
         yield 'ssti_tp_input_var' => [
@@ -308,6 +328,11 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Services/FeedParser.php' => "<?php\n\$reader = new XMLReader();\n\$reader->open(\$path);\n"],
             'OWASP_XXE',
         ];
+        yield 'xxe_tp_noent_option' => [
+            static fn (): AbstractAnalyzer => new OwaspXxeAnalyzer(),
+            ['app/Services/FeedParser.php' => "<?php\n\$xml = simplexml_load_string(\$raw, 'SimpleXMLElement', LIBXML_NOENT);\n"],
+            'OWASP_XXE',
+        ];
 
         // --- Insecure hash ---
         yield 'hash_tp_md5_password' => [
@@ -328,6 +353,21 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'hash_fp_strong_hash_fn' => [
             static fn (): InsecureHashAnalyzer => new InsecureHashAnalyzer(),
             ['app/Services/TokenService.php' => "<?php\nnamespace App\\Services;\nclass TokenService {\n    public function fingerprint(string \$password): string {\n        return hash('sha256', \$password);\n    }\n}\n"],
+            null,
+        ];
+        yield 'hash_tp_mtrand_otp' => [
+            static fn (): InsecureHashAnalyzer => new InsecureHashAnalyzer(),
+            ['app/Services/OtpService.php' => "<?php\nnamespace App\\Services;\nclass OtpService {\n    public function generate(): int {\n        \$otp = mt_rand(100000, 999999);\n        return \$otp;\n    }\n}\n"],
+            'INSECURE_HASH',
+        ];
+        yield 'hash_fp_mtrand_counter' => [
+            static fn (): InsecureHashAnalyzer => new InsecureHashAnalyzer(),
+            ['app/Services/RetryService.php' => "<?php\nnamespace App\\Services;\nclass RetryService {\n    public function attempts(): int {\n        \$tries = mt_rand(1, 5);\n        return \$tries;\n    }\n}\n"],
+            null,
+        ];
+        yield 'hash_fp_random_int_otp' => [
+            static fn (): InsecureHashAnalyzer => new InsecureHashAnalyzer(),
+            ['app/Services/OtpService.php' => "<?php\nnamespace App\\Services;\nclass OtpService {\n    public function generate(): int {\n        \$otp = random_int(100000, 999999);\n        return \$otp;\n    }\n}\n"],
             null,
         ];
         yield 'eval_fp_preg_guarded' => [
@@ -422,6 +462,22 @@ final class AnalyzerMetricsTest extends TestCase
             ],
             null,
         ];
+        yield 'mass_tp_forcefill_request' => [
+            static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(),
+            [
+                'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController {\n    public function update(Request \$request, Order \$order) {\n        \$order->forceFill(\$request->all());\n    }\n}\n",
+                'app/Models/Order.php' => "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {\n    protected \$fillable = ['name'];\n}\n",
+            ],
+            'MASS_ASSIGNMENT',
+        ];
+        yield 'mass_fp_forcefill_literal' => [
+            static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(),
+            [
+                'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nclass OrderController {\n    public function update(Order \$order) {\n        \$order->forceFill(['role' => 'admin']);\n    }\n}\n",
+                'app/Models/Order.php' => "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            ],
+            null,
+        ];
 
         // --- Migration ---
         yield 'mig_tp_dropcolumn_no_restore' => [
@@ -447,6 +503,16 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'mig_fp_raw_truncate_restored' => [
             static fn (): AbstractAnalyzer => new MigrationAnalyzer(),
             ['database/migrations/2026_01_01_v.php' => "<?php\nreturn new class extends Migration {\n    public function up(): void { DB::unprepared('TRUNCATE TABLE temp_import'); }\n    public function down(): void { Schema::create('temp_import', function (Blueprint \$t) { \$t->id(); }); }\n};\n"],
+            null,
+        ];
+        yield 'mig_tp_raw_alter_drop_column' => [
+            static fn (): AbstractAnalyzer => new MigrationAnalyzer(),
+            ['database/migrations/2026_01_01_u.php' => "<?php\nreturn new class extends Migration {\n    public function up(): void { DB::statement('ALTER TABLE users DROP COLUMN ssn'); }\n    public function down(): void { }\n};\n"],
+            'MIGRATION_DESTRUCTIVE_UP',
+        ];
+        yield 'mig_fp_raw_alter_drop_restored' => [
+            static fn (): AbstractAnalyzer => new MigrationAnalyzer(),
+            ['database/migrations/2026_01_01_t.php' => "<?php\nreturn new class extends Migration {\n    public function up(): void { DB::statement('ALTER TABLE users DROP COLUMN ssn'); }\n    public function down(): void { Schema::table('users', function (Blueprint \$t) { \$t->string('ssn')->nullable(); }); }\n};\n"],
             null,
         ];
 
@@ -494,6 +560,16 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'openredirect_fp_intended_literal' => [
             static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
             ['app/Http/Controllers/AuthController.php' => "<?php\nreturn redirect()->intended('/home');\n"],
+            null,
+        ];
+        yield 'openredirect_tp_facade_intended_var' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nuse Illuminate\\Support\\Facades\\Redirect;\nreturn Redirect::intended(\$url);\n"],
+            'OWASP_OPEN_REDIRECT',
+        ];
+        yield 'openredirect_fp_facade_intended_literal' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nuse Illuminate\\Support\\Facades\\Redirect;\nreturn Redirect::intended('/home');\n"],
             null,
         ];
         yield 'openredirect_tp_header_location' => [
@@ -654,6 +730,26 @@ final class AnalyzerMetricsTest extends TestCase
             static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
             ['resources/views/pos/index.blade.php' => "<script>var C = {!! json_encode(\$cfg) !!};</script>\n"],
             'OWASP_BLADE_XSS',
+        ];
+        yield 'bladexss_tp_dynamic_include' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/pages/show.blade.php' => "@include(\$view)\n"],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'bladexss_tp_dynamic_extends' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/pages/show.blade.php' => "@extends('layouts.' . \$theme)\n"],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'bladexss_fp_literal_include' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/pages/show.blade.php' => "@include('partials.header')\n"],
+            null,
+        ];
+        yield 'bladexss_fp_includewhen_literal_view' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/pages/show.blade.php' => "@includeWhen(\$showBanner, 'partials.banner')\n"],
+            null,
         ];
 
         // --- Misconfiguration ---

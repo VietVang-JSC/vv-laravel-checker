@@ -285,4 +285,28 @@ final class OwaspOpenRedirectAnalyzerTest extends TestCase
 
         self::assertCount(0, $issues);
     }
+
+    public function testFlagsFacadeIntendedWithVariable(): void
+    {
+        $file = $this->temp(
+            "<?php\nuse Illuminate\\Support\\Facades\\Redirect;\nreturn Redirect::intended(\$url);\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_OPEN_REDIRECT', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testSkipsFacadeIntendedWithLiteral(): void
+    {
+        $file = $this->temp(
+            "<?php\nuse Illuminate\\Support\\Facades\\Redirect;\nreturn Redirect::intended('/home');\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
 }

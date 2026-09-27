@@ -71,6 +71,9 @@ php artisan quality:check --tier=all --fail-on=none
   mass-assignable), and `Model::unguard()` / `User::unguard()` (global unguard —
   every attribute of every model becomes fillable; the called class is resolved
   through `use` imports against the scanned model files).
+- **Also covered**: `->forceFill($request->all())` — bypasses `$fillable`/`$guarded`
+  by design, so it is flagged even when the model declares `$fillable`
+  (seeder-style `forceFill([...literals...])` stays silent).
 - **Automatically skipped**: `Model::unguard(false)` (explicit re-guard intent).
 - **False positive when**: the model is outside the scan paths (the analyzer cannot
   resolve the model file so it stays silent — fail-open). If the project keeps models
@@ -156,9 +159,14 @@ php artisan quality:check --tier=all --fail-on=none
   - SSRF/traversal share a naming convention: variables/properties with local-suggesting
     names (`$file`, `$path`, `$source`, `$outputDir`...) count as local
     paths — unless the root is `$request`/`request()`; `?->` nullsafe chains
-    follow the same rules; `copy()` counts as a read sink; `curl_setopt($ch,
-    CURLOPT_URL, $url)` reads the URL from the third argument; dynamic
-    `include`/`require` is always reported (LFI to RCE, no exemption).
+    follow the same rules; `copy()`/`readfile()`/`file()` count as read sinks;
+    `fsockopen()`/`pfsockopen()`/`stream_socket_client()` read the host from
+    the first argument (literals like `'localhost'` stay silent);
+    `curl_setopt($ch, CURLOPT_URL, $url)` reads the URL from the third argument;
+    dynamic `include`/`require` is always reported (LFI to RCE, no exemption).
+  - XXE: `LIBXML_NOENT` is not protection — it substitutes entities (enables
+    XXE). Only `LIBXML_NONET` / `libxml_disable_entity_loader(true)` silence
+    a file.
   - SSTI: template variables assigned a string literal — or a concatenation
     composed solely of literals, numbers, class constants and known variables
     (`$viewName = 'front.pos_' . $industry`, `Blade::render('...' . Color::Gray[400])`),
@@ -179,12 +187,18 @@ php artisan quality:check --tier=all --fail-on=none
 ### `INSECURE_HASH`
 - **True positive when**: `md5()`/`sha1()` — or `hash('md5'|'sha1'|'md4', ...)` —
   on a password in a credential context.
+- **Also covered**: `rand()`/`mt_rand()`/`uniqid()` assigned to a token/secret
+  variable (`$otp`, `$resetToken`, `['verification_code' => ...]`, returned from
+  a `generate*Token()` function) — predictable RNG for security tokens; use
+  `random_int()`/`random_bytes()`. Counters, offsets and filenames stay silent,
+  and `random_int()`/`random_bytes()` never flag.
 - **Automatically skipped**: files mentioning `pwnedpasswords` — HIBP k-anonymity only sends
   the first 5 characters of the SHA-1 hash to the API, it does not store passwords with SHA-1.
 
 ### `MIGRATION_DESTRUCTIVE_UP`
 - **True positive when**: `up()` drops a table/column that `down()` does not restore —
-  including raw `DROP TABLE/DATABASE` and `TRUNCATE` via `DB::statement()`/`DB::unprepared()`.
+  including raw `DROP TABLE/DATABASE`, `TRUNCATE`, and `ALTER TABLE ... DROP COLUMN`
+  via `DB::statement()`/`DB::unprepared()`.
 - **Automatically skipped**: every dropped table/column name reappears as a
   string literal in `down()` (for example a dropped column guarded by
   `Schema::hasColumn` + `down()` recreating the column).
@@ -194,8 +208,9 @@ php artisan quality:check --tier=all --fail-on=none
 
 ### `OWASP_OPEN_REDIRECT`
 - **True positive when**: the target of `redirect()` / `->away()` / `->to()` /
-  `->intended()` / `Redirect::away()` / `response(...)->header('Location', ...)`
-  is a variable, call, or concatenation containing a dynamic part.
+  `->intended()` / `Redirect::away()` / `Redirect::intended()` /
+  `response(...)->header('Location', ...)` is a variable, call, or concatenation
+  containing a dynamic part.
 - **Automatically skipped**: `redirect()->route()` / `Redirect::route()`, `back()`,
   string literals, `url()->previous()`, `config()`/`env()` (including concatenation where
   every leaf is safe, e.g. `redirect(config('app.url') . '/done')` — including via
@@ -223,7 +238,11 @@ php artisan quality:check --tier=all --fail-on=none
 
 ### `OWASP_BLADE_XSS`
 - **True positive when**: `{!! ... !!}` contains a `$variable` or `request(` in
-  `*.blade.php`.
+  `*.blade.php` — or a view directive (`@include`/`@extends`/`@includeWhen`/
+  `@includeFirst`/`@each`) takes a dynamic view name (`@include($view)`,
+  `@extends('layouts.' . $theme)`). A steerable template name loads and
+  executes unintended PHP, so it is reported with Medium confidence (Blade has
+  no data-flow analysis — string literals and `config()`/`env()` stay silent).
 - **Automatically skipped**: `{!! csrf_field() !!}` (no dynamic data),
   explicit sanitizers (`e()`, `sanitizeHtml()`, `strip_tags()`,
   `htmlspecialchars()`, `purify()`, `clean()`), `json_encode()` with all 4

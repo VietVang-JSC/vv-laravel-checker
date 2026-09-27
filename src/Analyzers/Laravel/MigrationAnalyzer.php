@@ -16,8 +16,8 @@ use VietVang\QualityChecker\Result\Severity;
  * Flags:
  *  - migrations that declare an `up()` but no `down()` (not reversible)
  *  - data-destructive schema operations in `up()` (dropTable, dropColumn, delete
- *    of a whole table, or raw `DROP TABLE/DATABASE` / `TRUNCATE` statements,
- *    without a re-creation path). A drop is not flagged when
+ *    of a whole table, or raw `DROP TABLE/DATABASE` / `TRUNCATE` / `ALTER TABLE
+ *    ... DROP COLUMN` statements, without a re-creation path). A drop is not flagged when
  *    every dropped table/column name re-appears as a string literal in `down()`
  *    (best-effort restore detection).
  *
@@ -135,9 +135,9 @@ final class MigrationAnalyzer extends AbstractAnalyzer
     }
 
     /**
-     * Raw DROP TABLE/DATABASE and TRUNCATE statements issued via
-     * DB::statement()/DB::unprepared(). Returns the affected identifiers so
-     * the down() restore check applies to them as well.
+     * Raw DROP TABLE/DATABASE, TRUNCATE, and ALTER TABLE ... DROP COLUMN
+     * statements issued via DB::statement()/DB::unprepared(). Returns the
+     * affected identifiers so the down() restore check applies to them as well.
      *
      * @param array<Node\Stmt> $stmts
      * @return list<string>
@@ -171,6 +171,13 @@ final class MigrationAnalyzer extends AbstractAnalyzer
             }
             if (preg_match('/^\s*truncate(\s+table)?\s+[`"\']?([A-Za-z0-9_]+)/i', $sql, $m) === 1) {
                 $names[] = $m[2];
+                continue;
+            }
+            // Raw ALTER TABLE t DROP [COLUMN] c loses the column's data like
+            // $table->dropColumn('c'); the tracked identifier is the column so
+            // a down() that re-adds it counts as a restore.
+            if (preg_match('/^\s*alter\s+table\s+[`"\']?[A-Za-z0-9_]+[`"\']?\s+drop\s+(?:column\s+)?[`"\']?([A-Za-z0-9_]+)/i', $sql, $m) === 1) {
+                $names[] = $m[1];
             }
         }
 

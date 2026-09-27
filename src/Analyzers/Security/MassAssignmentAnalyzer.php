@@ -79,7 +79,7 @@ final class MassAssignmentAnalyzer
 
             $method = $node->name instanceof Node\Identifier ? $node->name->toString() : null;
 
-            return $method !== null && ($method === 'unguard' || in_array($method, self::SOURCE_METHODS, true));
+            return $method !== null && ($method === 'unguard' || $method === 'forceFill' || in_array($method, self::SOURCE_METHODS, true));
         });
 
         foreach ($calls as $call) {
@@ -105,6 +105,26 @@ final class MassAssignmentAnalyzer
                     'custom',
                     ['method' => $method]
                 );
+                continue;
+            }
+
+            // forceFill() bypasses $fillable/$guarded by design — with request
+            // input it is unguarded mass assignment no matter what the model
+            // declares, so no model resolution is needed. Seeder-style
+            // forceFill([...literals...]) stays silent.
+            if ($method === 'forceFill') {
+                $firstArg = $args[0] ?? null;
+                if ($firstArg instanceof Node\Arg && $this->isRequestInput($firstArg->value)) {
+                    $issues[] = new Issue(
+                        self::RULE,
+                        'forceFill() with untrusted request input bypasses mass assignment protection ($fillable/$guarded are ignored) — use fill() with $fillable or validated().',
+                        $file,
+                        $call->getStartLine(),
+                        Severity::Error,
+                        'custom',
+                        ['method' => $method]
+                    );
+                }
                 continue;
             }
 
