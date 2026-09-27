@@ -116,6 +116,44 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
     }
 
     /**
+     * header('Location: ...') performs a redirect. Only Location headers count —
+     * other headers (Content-Type, X-...) cannot redirect.
+     */
+    private function isLocationHeader(Node\Expr $expr): bool
+    {
+        if ($expr instanceof Node\Scalar\String_) {
+            return (bool) preg_match('/^\s*location\s*:/i', $expr->value);
+        }
+
+        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
+            return $this->isLocationHeader($expr->left) || $this->containsLocationPrefix($expr);
+        }
+
+        if ($expr instanceof Node\Scalar\InterpolatedString) {
+            foreach ($expr->parts as $part) {
+                if ($part instanceof Node\Scalar\String_ && preg_match('/location\s*:/i', $part->value) === 1) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return false;
+    }
+
+    private function containsLocationPrefix(Node\Expr\BinaryOp\Concat $expr): bool
+    {
+        $left = $expr->left;
+        while ($left instanceof Node\Expr\BinaryOp\Concat) {
+            $left = $left->left;
+        }
+
+        return $left instanceof Node\Scalar\String_
+            && preg_match('/^\s*location\s*:/i', $left->value) === 1;
+    }
+
+    /**
      * Bare variables, function calls and dynamic strings are typically request
      * return-urls (High); method/property/static targets are usually internal
      * URL builders (Medium) — unless they read the request directly, e.g.
@@ -168,6 +206,14 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
     {
         if ($node instanceof Node\Expr\FuncCall && $node->name instanceof Node\Name) {
             if (strtolower($node->name->toString()) !== 'redirect') {
+                if (strtolower($node->name->toString()) === 'header') {
+                    $arg = $node->args[0] ?? null;
+                    $target = $arg instanceof Node\Arg ? $arg->value : null;
+                    if ($target !== null && $this->isLocationHeader($target)) {
+                        return ['header()', $target];
+                    }
+                }
+
                 return null;
             }
             $arg = $node->args[0] ?? null;
@@ -177,6 +223,19 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
 
         if ($node instanceof Node\Expr\MethodCall && $node->name instanceof Node\Identifier) {
             $method = strtolower($node->name->toString());
+            // response('', 302)->header('Location', $url): only the Location
+            // header performs a redirect — other headers cannot redirect.
+            if ($method === 'header' && $this->isResponseReceiver($node->var)) {
+                $nameArg = $node->args[0] ?? null;
+                $targetArg = $node->args[1] ?? null;
+                $name = $nameArg instanceof Node\Arg ? $nameArg->value : null;
+                $target = $targetArg instanceof Node\Arg ? $targetArg->value : null;
+                if ($name instanceof Node\Scalar\String_ && strtolower($name->value) === 'location' && $target !== null) {
+                    return ["->header('Location')", $target];
+                }
+
+                return null;
+            }
             if ($method === 'route' || $method === 'back') {
                 return null;
             }
@@ -208,6 +267,23 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
         }
 
         return null;
+    }
+
+    /**
+     * Receiver of a ->header() call that yields an HTTP response:
+     * response(...)/redirect(...) helpers (possibly chained).
+     */
+    private function isResponseReceiver(Node\Expr $expr): bool
+    {
+        if ($expr instanceof Node\Expr\FuncCall && $expr->name instanceof Node\Name) {
+            return in_array(strtolower($expr->name->toString()), ['response', 'redirect'], true);
+        }
+
+        if ($expr instanceof Node\Expr\MethodCall) {
+            return $this->isResponseReceiver($expr->var);
+        }
+
+        return false;
     }
 
     private function isRedirectReceiver(Node\Expr $expr): bool

@@ -33,7 +33,7 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
     ];
 
     private const METHOD_SINKS = [
-        'render', 'renderComponent', 'make', 'compileString',
+        'render', 'renderComponent', 'make', 'compileString', 'composer', 'creator',
     ];
 
     private const STATIC_COMPILE = 'compileString';

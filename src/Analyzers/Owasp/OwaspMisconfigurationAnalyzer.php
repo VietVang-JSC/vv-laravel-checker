@@ -29,6 +29,16 @@ final class OwaspMisconfigurationAnalyzer extends AbstractAnalyzer
         'changeme', 'your-password', 'your_secret', 'replace_me', 'changeme123',
     ];
 
+    public function supports(string $path): bool
+    {
+        $basename = strtolower((string) pathinfo($path, PATHINFO_BASENAME));
+        if (in_array($basename, ['.env', '.env.example'], true)) {
+            return true;
+        }
+
+        return parent::supports($path);
+    }
+
     public function analyze(array $files): array
     {
         $issues = [];

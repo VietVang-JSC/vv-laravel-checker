@@ -64,6 +64,9 @@ final class UnsafeDeserializationAnalyzer
                 if ($this->isLiteralOrConstant($arg->value)) {
                     continue;
                 }
+                if ($this->disallowsClasses($call)) {
+                    continue;
+                }
                 $issues[] = new Issue(
                     self::RULE,
                     'unserialize() is called with a non-literal (potentially untrusted) argument.',
@@ -123,6 +126,35 @@ final class UnsafeDeserializationAnalyzer
         return $expr instanceof Node\Scalar
             || $expr instanceof Node\Expr\ClassConstFetch
             || $expr instanceof Node\Expr\ConstFetch;
+    }
+
+    /**
+     * unserialize($data, ['allowed_classes' => false]) cannot instantiate
+     * objects — the object-injection vector is closed.
+     */
+    private function disallowsClasses(Node\Expr\FuncCall $call): bool
+    {
+        $options = $call->args[1] ?? null;
+        if (!$options instanceof Node\Arg || !$options->value instanceof Node\Expr\Array_) {
+            return false;
+        }
+
+        foreach ($options->value->items as $item) {
+            if (!$item instanceof Node\Expr\ArrayItem || !$item->key instanceof Node\Scalar\String_) {
+                continue;
+            }
+            if (strtolower($item->key->value) !== 'allowed_classes') {
+                continue;
+            }
+            $value = $item->value;
+            if ($value instanceof Node\Expr\ConstFetch && $value->name instanceof Node\Name) {
+                return strtolower($value->name->toString()) === 'false';
+            }
+
+            return false;
+        }
+
+        return false;
     }
 
     private function argLiteralString(Node\Expr $expr): ?string

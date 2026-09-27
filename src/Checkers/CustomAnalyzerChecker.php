@@ -71,7 +71,11 @@ final class CustomAnalyzerChecker implements CheckerInterface
     {
         $start = microtime(true);
         $files = $this->collectFiles($ctx);
-        $files = array_values(array_unique(array_merge($files, $this->collectBladeFiles($ctx))));
+        $files = array_values(array_unique(array_merge(
+            $files,
+            $this->collectBladeFiles($ctx),
+            $this->collectEnvFiles($ctx)
+        )));
         $issues = [];
 
         foreach ($this->buildAnalyzers($ctx) as $entry) {
@@ -269,6 +273,25 @@ final class CustomAnalyzerChecker implements CheckerInterface
         }
 
         return array_values(array_unique($files));
+    }
+
+    /**
+     * Root-level `.env` files, collected separately (like blade views) so only
+     * env-aware analyzers consume them.
+     *
+     * @return list<string>
+     */
+    private function collectEnvFiles(CheckContext $ctx): array
+    {
+        $files = [];
+        foreach (['.env', '.env.example'] as $name) {
+            $abs = $ctx->resolvePath($name);
+            if (is_file($abs)) {
+                $files[] = $abs;
+            }
+        }
+
+        return $files;
     }
 
     /**

@@ -261,4 +261,28 @@ final class OwaspOpenRedirectAnalyzerTest extends TestCase
 
         self::assertCount(0, $issues);
     }
+
+    public function testFlagsHeaderLocationWithRequestInput(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn response('', 302)->header('Location', \$request->input('next'));\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_OPEN_REDIRECT', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testSkipsHeaderLocationWithLiteral(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn response('', 302)->header('Location', '/home');\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
 }

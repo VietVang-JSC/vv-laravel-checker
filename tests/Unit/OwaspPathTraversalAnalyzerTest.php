@@ -181,4 +181,17 @@ final class OwaspPathTraversalAnalyzerTest extends TestCase
 
         self::assertCount(0, $issues);
     }
+
+    public function testSkipsFileDeleteWithRequestName(): void
+    {
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\File;\n" .
+            "class TempFileController extends Controller {\n    public function destroy(\\Illuminate\\Http\\Request \$request): void {\n        File::delete(storage_path('tmp/' . \$request->name));\n    }\n}\n",
+            'app/Http/Controllers/TempFileController.php'
+        );
+
+        $issues = (new OwaspPathTraversalAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
 }

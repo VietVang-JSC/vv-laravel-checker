@@ -12,6 +12,9 @@ use VietVang\QualityChecker\Result\Severity;
 /**
  * A03/A04 XML External Entity (XXE).
  *
+ * Sinks: simplexml_load_string/file, DOMDocument::load/loadXML, new
+ * SimpleXMLElement/XMLReader, and XMLReader::open() (static on the XMLReader
+ * class, or ->open() on a reader-named variable).
  * Assumes: any XXE-capable XML sink in a file is reported unless that file also contains a call to
  * libxml_disable_entity_loader(true) or uses the LIBXML_NONET constant. File-level guard detection is
  * a deliberate simplification of the secure-processing intent. Sinks inside test paths are skipped.
@@ -60,7 +63,9 @@ final class OwaspXxeAnalyzer extends AbstractAnalyzer
         $issues = [];
         $calls = $this->finder()->find($ast, function (Node $node): bool {
             return $node instanceof Node\Expr\FuncCall
-                || $node instanceof Node\Expr\New_;
+                || $node instanceof Node\Expr\New_
+                || $node instanceof Node\Expr\StaticCall
+                || $node instanceof Node\Expr\MethodCall;
         });
 
         foreach ($calls as $call) {
@@ -111,7 +116,38 @@ final class OwaspXxeAnalyzer extends AbstractAnalyzer
             }
         }
 
+        // XMLReader::open($uri) / $reader->open($uri): the URI may point at a
+        // remote entity source. Receiver-agnostic `->open()` alone is too
+        // generic, so method calls require a reader-named variable.
+        if (
+            $node instanceof Node\Expr\StaticCall
+            && $node->class instanceof Node\Name
+            && $node->name instanceof Node\Identifier
+            && strtolower($node->name->toString()) === 'open'
+            && $this->isXmlReaderClass($node->class->toString())
+        ) {
+            return $node->class->toString() . '::open()';
+        }
+
+        if (
+            $node instanceof Node\Expr\MethodCall
+            && $node->name instanceof Node\Identifier
+            && strtolower($node->name->toString()) === 'open'
+            && $node->var instanceof Node\Expr\Variable
+            && is_string($node->var->name)
+            && in_array(strtolower($node->var->name), ['reader', 'xmlreader', 'xml_reader', 'xml'], true)
+        ) {
+            return 'XMLReader->open()';
+        }
+
         return null;
+    }
+
+    private function isXmlReaderClass(string $class): bool
+    {
+        $normalized = ltrim($class, '\\');
+
+        return $normalized === 'XMLReader' || str_ends_with($normalized, '\\XMLReader');
     }
 
     private function isDomDocumentTarget(Node\Expr $expr): bool

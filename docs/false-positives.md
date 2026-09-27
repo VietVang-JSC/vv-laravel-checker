@@ -66,9 +66,12 @@ php artisan quality:check --tier=all --fail-on=none
 ### `MASS_ASSIGNMENT`
 - **True positive when**: `Model::create($request->all())` while the model has no
   `$fillable`/`$guarded`. Also covered: `updateOrCreate()`/`firstOrCreate()`/
-  `updateOrInsert()`/`firstOrNew()` with tainted data in either argument, and models
+  `updateOrInsert()`/`firstOrNew()` with tainted data in either argument, models
   whose `$guarded = []` is explicitly empty (that guards nothing — everything stays
-  mass-assignable).
+  mass-assignable), and `Model::unguard()` / `User::unguard()` (global unguard —
+  every attribute of every model becomes fillable; the called class is resolved
+  through `use` imports against the scanned model files).
+- **Automatically skipped**: `Model::unguard(false)` (explicit re-guard intent).
 - **False positive when**: the model is outside the scan paths (the analyzer cannot
   resolve the model file so it stays silent — fail-open). If the project keeps models
   outside `app/`, add the scan path containing the models so this rule takes effect.
@@ -135,6 +138,9 @@ php artisan quality:check --tier=all --fail-on=none
   - command injection: `new Process()` with an array command — including via an
     `array` type-hint, `@param array` docblock, or a ternary choosing between
     arrays.
+  - command injection: `mail()` is only reported when the 5th argument
+    (`$additional_parameters`, passed to sendmail as CLI flags) is present —
+    recipient/subject/body/headers alone cannot inject shell flags.
   - command injection: parameters of non-public functions where every same-file call
     site passes a literal/deploy-time-safe value (a private helper only called with literals).
   - command injection: `foreach` loop variables over an array literal or class constant
@@ -162,6 +168,8 @@ php artisan quality:check --tier=all --fail-on=none
   - SSTI sinks include `View::make()/composer()/creator()` in addition to
     `view()`/`Blade::render()`; named `url:`/`uri:`/`path:` arguments are read
     as the SSRF target instead of the first positional argument.
+  - XXE sinks include `XMLReader::open($uri)` / `$reader->open($uri)` in
+    addition to `simplexml_load_*` / `DOMDocument::load*` / `new SimpleXMLElement`.
 - **Pilot case (HRM app)**: the binary resolver uses
   `shell_exec('where ' . escapeshellarg($tool))`, `new Process($command)` with
   an array from config, and the updater uses `escapeshellarg(base_path())` —
@@ -186,7 +194,8 @@ php artisan quality:check --tier=all --fail-on=none
 
 ### `OWASP_OPEN_REDIRECT`
 - **True positive when**: the target of `redirect()` / `->away()` / `->to()` /
-  `->intended()` / `Redirect::away()` is a variable, call, or concatenation containing a dynamic part.
+  `->intended()` / `Redirect::away()` / `response(...)->header('Location', ...)`
+  is a variable, call, or concatenation containing a dynamic part.
 - **Automatically skipped**: `redirect()->route()` / `Redirect::route()`, `back()`,
   string literals, `url()->previous()`, `config()`/`env()` (including concatenation where
   every leaf is safe, e.g. `redirect(config('app.url') . '/done')` — including via
@@ -205,7 +214,8 @@ php artisan quality:check --tier=all --fail-on=none
   `include $var`, ...) receives a dynamic path.
 - **Automatically skipped**: literals (including `storage_path()` with literal arguments),
   `basename()`-wrapped values, `env()`/`config()`, local-named variables (`$file`, `$path`,
-  `$outputDir`...) except when rooted at `$request`, and `getRealPath()/getPathname()` methods.
+  `$outputDir`...) except when rooted at `$request`, `getRealPath()/getPathname()` methods,
+  and `File::`/`Storage::delete()` (deleting a file cannot exfiltrate or include its contents).
 - **No write-mode exemption**: `fopen($x, 'wb')` is still reported — writing a file to the
   wrong place is a real vulnerability (unlike read-only SSRF). Use an inline-ignore once reviewed.
 - **Correct fix**: apply `basename()` to the input or pin the base directory:
@@ -252,6 +262,13 @@ php artisan quality:check --tier=all --fail-on=none
   was validated by `preg_match()`/`preg_match_all()` in the same function
   (e.g. a math expression allow-listed before eval). Filter strength itself is
   not verified — review the regex.
+
+### `UNSAFE_UNSERIALIZE`
+- **Reported when**: `unserialize()` / `yaml_parse()` / `yaml_parse_file()` /
+  `yaml_parse_url()` receive a non-literal argument (YAML tags can instantiate
+  PHP objects). Literals (including class constants) are skipped.
+- **Automatically skipped**: `unserialize($data, ['allowed_classes' => false])` —
+  with object instantiation disabled the object-injection vector is closed.
 
 ### `DISABLED_CSRF_EXCEPTION_STAR`
 - **Reported as Critical when**: `$except` contains a wildcard beyond `api/*` (e.g. `*`,

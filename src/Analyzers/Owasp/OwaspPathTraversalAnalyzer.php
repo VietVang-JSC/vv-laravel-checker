@@ -150,6 +150,11 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
                 $method = strtolower($node->name->toString());
                 $class = $node->class->toString();
                 $label = null;
+                // File::/Storage::delete($path) removes a file — it cannot
+                // exfiltrate or include contents (no read primitive).
+                if ($method === 'delete' && ($this->isFileClass($class) || $this->isStorageClass($class))) {
+                    continue;
+                }
                 if (in_array($method, self::STORAGE_METHODS, true) && $this->isStorageClass($class)) {
                     $label = 'Storage::' . $node->name->toString() . '()';
                 } elseif (in_array($method, self::FILE_METHODS, true) && $this->isFileClass($class)) {

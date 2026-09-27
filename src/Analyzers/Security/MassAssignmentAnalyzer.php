@@ -79,12 +79,35 @@ final class MassAssignmentAnalyzer
 
             $method = $node->name instanceof Node\Identifier ? $node->name->toString() : null;
 
-            return $method !== null && in_array($method, self::SOURCE_METHODS, true);
+            return $method !== null && ($method === 'unguard' || in_array($method, self::SOURCE_METHODS, true));
         });
 
         foreach ($calls as $call) {
             $method = $call->name instanceof Node\Identifier ? $call->name->toString() : '';
             $args = is_array($call->args ?? null) ? $call->args : [];
+
+            if ($method === 'unguard' && $call instanceof Node\Expr\StaticCall && $this->isUnguardedModel($call, $ast, $modelClassFiles)) {
+                $state = $call->args[0] ?? null;
+                if (
+                    $state instanceof Node\Arg
+                    && $state->value instanceof Node\Expr\ConstFetch
+                    && $state->value->name instanceof Node\Name
+                    && strtolower($state->value->name->toString()) === 'false'
+                ) {
+                    continue;
+                }
+                $issues[] = new Issue(
+                    self::RULE,
+                    'Mass assignment protection is disabled globally via Model::unguard() — every attribute becomes fillable.',
+                    $file,
+                    $call->getStartLine(),
+                    Severity::Error,
+                    'custom',
+                    ['method' => $method]
+                );
+                continue;
+            }
+
             if (count($args) === 0) {
                 continue;
             }
@@ -146,6 +169,47 @@ final class MassAssignmentAnalyzer
         }
 
         return null;
+    }
+
+    /**
+     * Model::unguard() (or User::unguard() on a known Eloquent model)
+     * disables mass-assignment protection globally. Resolves the called
+     * class through use-statements against the scanned model files, so a
+     * short name like User still matches app/Models/User.php.
+     *
+     * @param list<Node> $ast
+     * @param array<string, string> $modelClassFiles
+     */
+    private function isUnguardedModel(Node\Expr\StaticCall $call, array $ast, array $modelClassFiles): bool
+    {
+        if (!$call->class instanceof Node\Name) {
+            return false;
+        }
+        $class = ltrim($call->class->toString(), '\\');
+
+        if ($class === 'Model' || str_ends_with($class, '\\Model')) {
+            return true;
+        }
+
+        if (isset($modelClassFiles[$class])) {
+            return true;
+        }
+
+        $finder = new NodeFinder();
+        /** @var list<Node\Stmt\Use_> $uses */
+        $uses = $finder->findInstanceOf($ast, Node\Stmt\Use_::class);
+        foreach ($uses as $use) {
+            foreach ($use->uses as $useUse) {
+                $alias = $useUse->alias !== null
+                    ? $useUse->alias->toString()
+                    : $useUse->name->getLast();
+                if ($alias === $class && isset($modelClassFiles[$useUse->name->toString()])) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function modelExists(string $model, array $modelClassFiles): bool

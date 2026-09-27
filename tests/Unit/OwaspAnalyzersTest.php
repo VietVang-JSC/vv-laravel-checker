@@ -319,6 +319,47 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testMisconfigFlagsInsecureCookieFlags(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn [\n    'secure' => false,\n    'http_only' => false,\n    'same_site' => 'none',\n];\n",
+            'config/session.php'
+        );
+
+        $issues = (new OwaspMisconfigurationAnalyzer())->analyze([$file]);
+
+        self::assertCount(3, $issues);
+        foreach ($issues as $issue) {
+            self::assertSame('OWASP_MISCONFIGURATION', $issue->rule);
+            self::assertSame('cookie', $issue->metadata['kind'] ?? null);
+        }
+    }
+
+    public function testMisconfigFlagsSessionSecureCookieEnv(): void
+    {
+        $file = $this->temp(
+            "SESSION_SECURE_COOKIE=false\n",
+            '.env'
+        );
+
+        $issues = (new OwaspMisconfigurationAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_MISCONFIGURATION', $this->rules($issues)[0] ?? null);
+        self::assertSame('cookie', $issues[0]->metadata['kind'] ?? null);
+    }
+
+    public function testMisconfigSkipsSecureCookieFlags(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn [\n    'secure' => true,\n    'http_only' => true,\n    'same_site' => 'lax',\n];\n",
+            'config/session.php'
+        );
+
+        $issues = (new OwaspMisconfigurationAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testCommandInjectionFlagsTaintedSystemCall(): void
     {
         $file = $this->temp(
@@ -327,7 +368,6 @@ final class OwaspAnalyzersTest extends TestCase
         );
 
         $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
-
         self::assertSame('OWASP_COMMAND_INJECTION', $this->rules($issues)[0] ?? null);
         self::assertSame(Severity::Critical, $issues[0]->severity ?? null);
     }
@@ -350,6 +390,30 @@ final class OwaspAnalyzersTest extends TestCase
         $file = $this->temp(
             "<?php\n\$out = shell_exec('ls -la');\n",
             'app/Console/Commands/RunCommand.php'
+        );
+
+        $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testCommandInjectionFlagsMailFifthArg(): void
+    {
+        $file = $this->temp(
+            "<?php\nmail(\$to, \$subject, \$message, \$headers, \$extra);\n",
+            'app/Services/MailService.php'
+        );
+
+        $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_COMMAND_INJECTION', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testCommandInjectionSkipsMailWithoutFifthArg(): void
+    {
+        $file = $this->temp(
+            "<?php\nmail(\$to, \$subject, \$message, \$headers);\n",
+            'app/Services/MailService.php'
         );
 
         $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
@@ -392,6 +456,30 @@ final class OwaspAnalyzersTest extends TestCase
         $issues = (new OwaspXxeAnalyzer())->analyze([$file]);
 
         self::assertCount(0, $issues);
+    }
+
+    public function testXxeFlagsXmlReaderOpen(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$xml = XMLReader::open(\$uri);\n",
+            'app/Services/FeedParser.php'
+        );
+
+        $issues = (new OwaspXxeAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_XXE', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testXxeFlagsReaderOpenMethod(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$reader = new XMLReader();\n\$reader->open(\$path);\n",
+            'app/Services/FeedParser.php'
+        );
+
+        $issues = (new OwaspXxeAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_XXE', $this->rules($issues)[0] ?? null);
     }
 
     public function testAccessControlSkipsRouteMiddlewareProtectedAction(): void
@@ -1016,6 +1104,30 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertContains('OWASP_SSRF', $this->rules($issues));
     }
 
+    public function testSsrfFlagsCurlSetoptUrl(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$ch = curl_init();\ncurl_setopt(\$ch, CURLOPT_URL, \$request->input('target'));\n",
+            'app/Services/ExternalService.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertContains('OWASP_SSRF', $this->rules($issues));
+    }
+
+    public function testSsrfFlagsCopySource(): void
+    {
+        $file = $this->temp(
+            "<?php\ncopy(\$request->input('src'), \$dest);\n",
+            'app/Services/ExternalService.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertContains('OWASP_SSRF', $this->rules($issues));
+    }
+
     public function testSstiFlagsViewFacadeMake(): void
     {
         $file = $this->temp(
@@ -1033,6 +1145,30 @@ final class OwaspAnalyzersTest extends TestCase
         $file = $this->temp(
             "<?php\nreturn \\Illuminate\\Support\\Facades\\View::make('pages.home');\n",
             'app/Http/Controllers/PageController.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSstiFlagsViewComposerVariable(): void
+    {
+        $file = $this->temp(
+            "<?php\n\\View::composer(\$view, function (\$v) {});\n",
+            'app/Providers/ViewServiceProvider.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_SSTI', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testSstiSkipsViewComposerLiteral(): void
+    {
+        $file = $this->temp(
+            "<?php\n\\View::composer('admin.*', function (\$v) {});\n",
+            'app/Providers/ViewServiceProvider.php'
         );
 
         $issues = (new OwaspSstiAnalyzer())->analyze([$file]);

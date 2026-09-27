@@ -91,6 +91,33 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testSqlInjectionFlagsOrderByWithTaintedColumn(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nuse Illuminate\\Http\\Request;\n" .
+            "class ProductController {\n    public function index(Request \$request) {\n        return DB::table('products')->orderBy(\$request->input('sort'))->get();\n    }\n}\n",
+            'app/Http/Controllers/ProductController.php'
+        );
+
+        $issues = (new SqlInjectionAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertSame('SQL_INJECTION', $issues[0]->rule);
+    }
+
+    public function testSqlInjectionSkipsOrderByWithLiteralColumn(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\n" .
+            "class ProductController {\n    public function index() {\n        return DB::table('products')->orderBy('created_at')->get();\n    }\n}\n",
+            'app/Http/Controllers/ProductController.php'
+        );
+
+        $issues = (new SqlInjectionAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     /** UnsafeEvalAnalyzer */
 
     public function testUnsafeEvalFlagsRequestInput(): void
@@ -126,6 +153,33 @@ final class SecurityAnalyzersTest extends TestCase
             "        if (!preg_match('/^[0-9,+\\-*\\/().\\s]+\$/', \$quantity)) {\n            throw new \\InvalidArgumentException('bad');\n        }\n" .
             "        \$result = eval('return ' . \$quantity . ';');\n        return (float) \$result;\n    }\n}\n",
             'app/Services/MathService.php'
+        );
+
+        $issues = (new UnsafeEvalAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testUnsafeEvalFlagsCallUserFuncWithInput(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\n" .
+            "class ActionService {\n    public function run(Request \$request): void {\n        call_user_func(\$request->input('action'));\n    }\n}\n",
+            'app/Services/ActionService.php'
+        );
+
+        $issues = (new UnsafeEvalAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'UNSAFE_EVAL', Severity::Critical));
+    }
+
+    public function testUnsafeEvalSkipsCallUserFuncWithLiteralCallable(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\n" .
+            "class ActionService {\n    public function run(Request \$request): void {\n        call_user_func([\$this, 'handle'], \$request->input('x'));\n    }\n    private function handle(string \$x): void {}\n}\n",
+            'app/Services/ActionService.php'
         );
 
         $issues = (new UnsafeEvalAnalyzer())->analyze([$file]);
@@ -322,6 +376,33 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testUnsafeDeserializationFlagsYamlParse(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\n" .
+            "class ImportService {\n    public function run(Request \$request): array {\n        return yaml_parse(\$request->input('doc'));\n    }\n}\n",
+            'app/Services/ImportService.php'
+        );
+
+        $issues = (new UnsafeDeserializationAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'UNSAFE_UNSERIALIZE', Severity::Critical));
+    }
+
+    public function testUnsafeDeserializationSkipsAllowedClassesFalse(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\n" .
+            "class SessionService {\n    public function hydrate(Request \$request): array {\n        return unserialize(\$request->input('data'), ['allowed_classes' => false]);\n    }\n}\n",
+            'app/Services/SessionService.php'
+        );
+
+        $issues = (new UnsafeDeserializationAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     /** InsecureHashAnalyzer */
 
     public function testInsecureHashFlagsPasswordContext(): void
@@ -342,6 +423,31 @@ final class SecurityAnalyzersTest extends TestCase
         $file = $this->tempPhp(
             "<?php\nnamespace App\\Services;\nclass CacheService {\n    public function fingerprint(string \$payload): string {\n        return md5(\$payload);\n    }\n}\n",
             'app/Services/CacheService.php'
+        );
+
+        $issues = (new InsecureHashAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testInsecureHashFlagsWeakHashFunction(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nclass AuthService {\n    public function verify(string \$password): bool {\n        return hash('md5', \$password) === \$this->storedHash;\n    }\n}\n",
+            'app/Services/AuthService.php'
+        );
+
+        $issues = (new InsecureHashAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'INSECURE_HASH', Severity::Warning));
+    }
+
+    public function testInsecureHashSkipsStrongHashFunction(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nclass TokenService {\n    public function fingerprint(string \$password): string {\n        return hash('sha256', \$password);\n    }\n}\n",
+            'app/Services/TokenService.php'
         );
 
         $issues = (new InsecureHashAnalyzer())->analyze([$file]);

@@ -32,6 +32,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (which guards nothing).
 - Misconfiguration: insecure session cookie flags (`'secure'/'http_only' =>
   false`, `SESSION_SECURE_COOKIE=false`, `same_site => 'none'`).
+- Command injection: `mail()` only flags the dangerous 5th argument
+  (`$additional_parameters`, passed to sendmail as CLI flags).
+- Unsafe eval: only the callable position of `call_user_func()`/
+  `call_user_func_array()` is checked — tainted arguments to a fixed callable
+  such as `[$this, 'handle']` are the callee's business.
+- Unsafe deserialization: `yaml_parse()`/`yaml_parse_file()`/`yaml_parse_url()`
+  added as sinks; `unserialize($data, ['allowed_classes' => false])` skipped.
+- Insecure hash: `hash('md5'|'sha1'|'md4', ...)` covered as weak algorithms
+  (strong algorithms such as `sha256` stay silent).
+- Mass assignment: `Model::unguard()` / `User::unguard()` (resolved through
+  `use` imports against scanned models) flagged as global unguard;
+  `Model::unguard(false)` skipped as re-guard intent.
+- Open redirect: `response(...)->header('Location', $url)` covered as a sink
+  (only the `Location` header can redirect).
+- Path traversal: `File::`/`Storage::delete()` skipped (deletion cannot
+  exfiltrate or include file contents).
+- XXE: `XMLReader::open($uri)` / `$reader->open($uri)` covered as sinks.
 
 ### Fixed (new public pilots audit)
 

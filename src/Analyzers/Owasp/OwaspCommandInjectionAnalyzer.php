@@ -25,7 +25,7 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'OWASP_COMMAND_INJECTION';
 
-    private const FUNC_SINKS = ['system', 'exec', 'shell_exec', 'passthru', 'proc_open', 'popen', 'pcntl_exec'];
+    private const FUNC_SINKS = ['system', 'exec', 'shell_exec', 'passthru', 'proc_open', 'popen', 'pcntl_exec', 'mail'];
 
     private const ESCAPE_FUNCS = ['escapeshellarg', 'escapeshellcmd'];
 
@@ -114,7 +114,10 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
                     continue;
                 }
 
-                $arg = $call->args[0] ?? null;
+                // mail() passes its 5th argument to the sendmail shell — the
+                // first four (to/subject/body/headers) never reach a shell.
+                $argIndex = $fn === 'mail' ? 4 : 0;
+                $arg = $call->args[$argIndex] ?? null;
                 if (!$arg instanceof Node\Arg) {
                     continue;
                 }

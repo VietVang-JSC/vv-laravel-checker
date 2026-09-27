@@ -11,6 +11,7 @@ use VietVang\QualityChecker\Analyzers\Laravel\MigrationAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspAccessControlAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer;
+use VietVang\QualityChecker\Analyzers\Owasp\OwaspMisconfigurationAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspOpenRedirectAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspPathTraversalAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer;
@@ -19,6 +20,8 @@ use VietVang\QualityChecker\Analyzers\Owasp\OwaspXxeAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\HardcodedSecretAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\InsecureHashAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\MassAssignmentAnalyzer;
+use VietVang\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer;
+use VietVang\QualityChecker\Analyzers\Security\UnsafeDeserializationAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\UnsafeEvalAnalyzer;
 use VietVang\QualityChecker\Result\Issue;
 
@@ -35,7 +38,7 @@ use VietVang\QualityChecker\Result\Issue;
 final class AnalyzerMetricsTest extends TestCase
 {
     /**
-     * @return iterable<string, array{Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer|MassAssignmentAnalyzer), array<string, string>, string|null}>
+     * @return iterable<string, array{Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|UnsafeDeserializationAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer|MassAssignmentAnalyzer), array<string, string>, string|null}>
      */
     public static function corpus(): iterable
     {
@@ -149,6 +152,16 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Services/PdfService.php' => "<?php\nclass PdfService {\n    public function render(string \$pdfPath): void {\n        \$input = escapeshellarg(\$pdfPath);\n        \$bin = env('IMAGE_MAGICK_CLI', 'convert');\n        exec(\"deny 203 {\$input}\", \$o, \$s);\n    }\n}\n"],
             null,
         ];
+        yield 'cmd_tp_mail_fifth_arg' => [
+            static fn (): AbstractAnalyzer => new OwaspCommandInjectionAnalyzer(),
+            ['app/Services/MailService.php' => "<?php\nmail(\$to, \$subject, \$message, \$headers, \$extra);\n"],
+            'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'cmd_fp_mail_no_fifth_arg' => [
+            static fn (): AbstractAnalyzer => new OwaspCommandInjectionAnalyzer(),
+            ['app/Services/MailService.php' => "<?php\nmail(\$to, \$subject, \$message, \$headers);\n"],
+            null,
+        ];
 
         // --- SSRF ---
         yield 'ssrf_tp_request_input' => [
@@ -216,6 +229,16 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Services/ExternalService.php' => "<?php\n\$response = \$client->get(url: \$request->input('target'));\n"],
             'OWASP_SSRF',
         ];
+        yield 'ssrf_tp_curl_setopt_url' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Services/ExternalService.php' => "<?php\n\$ch = curl_init();\ncurl_setopt(\$ch, CURLOPT_URL, \$request->input('target'));\n"],
+            'OWASP_SSRF',
+        ];
+        yield 'ssrf_tp_copy_url' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Services/ExternalService.php' => "<?php\ncopy(\$request->input('src'), \$dest);\n"],
+            'OWASP_SSRF',
+        ];
 
         // --- SSTI ---
         yield 'ssti_tp_input_var' => [
@@ -253,6 +276,16 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/PageController.php' => "<?php\nreturn \\Illuminate\\Support\\Facades\\View::make('pages.home');\n"],
             null,
         ];
+        yield 'ssti_tp_view_composer_tainted' => [
+            static fn (): AbstractAnalyzer => new OwaspSstiAnalyzer(),
+            ['app/Providers/ViewServiceProvider.php' => "<?php\n\\View::composer(\$view, function (\$v) {});\n"],
+            'OWASP_SSTI',
+        ];
+        yield 'ssti_fp_view_composer_literal' => [
+            static fn (): AbstractAnalyzer => new OwaspSstiAnalyzer(),
+            ['app/Providers/ViewServiceProvider.php' => "<?php\n\\View::composer('admin.*', function (\$v) {});\n"],
+            null,
+        ];
 
         // --- XXE ---
         yield 'xxe_tp_sink' => [
@@ -264,6 +297,16 @@ final class AnalyzerMetricsTest extends TestCase
             static fn (): AbstractAnalyzer => new OwaspXxeAnalyzer(),
             ['tests/Unit/GovEfileTest.php' => "<?php\n\$xml = simplexml_load_string(\$raw);\n"],
             null,
+        ];
+        yield 'xxe_tp_xmlreader_open' => [
+            static fn (): AbstractAnalyzer => new OwaspXxeAnalyzer(),
+            ['app/Services/FeedParser.php' => "<?php\n\$xml = XMLReader::open(\$uri);\n"],
+            'OWASP_XXE',
+        ];
+        yield 'xxe_tp_reader_open_method' => [
+            static fn (): AbstractAnalyzer => new OwaspXxeAnalyzer(),
+            ['app/Services/FeedParser.php' => "<?php\n\$reader = new XMLReader();\n\$reader->open(\$path);\n"],
+            'OWASP_XXE',
         ];
 
         // --- Insecure hash ---
@@ -277,9 +320,49 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Services/PasswordBreachService.php' => "<?php\nnamespace App\\Services;\nclass PasswordBreachService {\n    public function breached(string \$password): bool {\n        \$prefix = strtoupper(substr(sha1(\$password), 0, 5));\n        \$body = file_get_contents('https://api.pwnedpasswords.com/range/' . \$prefix);\n        return str_contains((string) \$body, 'suffix');\n    }\n}\n"],
             null,
         ];
+        yield 'hash_tp_weak_hash_fn' => [
+            static fn (): InsecureHashAnalyzer => new InsecureHashAnalyzer(),
+            ['app/Services/AuthService.php' => "<?php\nnamespace App\\Services;\nclass AuthService {\n    public function verify(string \$password): bool {\n        return hash('md5', \$password) === \$this->storedHash;\n    }\n}\n"],
+            'INSECURE_HASH',
+        ];
+        yield 'hash_fp_strong_hash_fn' => [
+            static fn (): InsecureHashAnalyzer => new InsecureHashAnalyzer(),
+            ['app/Services/TokenService.php' => "<?php\nnamespace App\\Services;\nclass TokenService {\n    public function fingerprint(string \$password): string {\n        return hash('sha256', \$password);\n    }\n}\n"],
+            null,
+        ];
         yield 'eval_fp_preg_guarded' => [
             static fn (): UnsafeEvalAnalyzer => new UnsafeEvalAnalyzer(),
             ['app/Services/MathService.php' => "<?php\nnamespace App\\Services;\nclass MathService {\n    public function calc(string \$quantity): float {\n        if (!preg_match('/^[0-9]+$/', \$quantity)) {\n            throw new \\InvalidArgumentException('bad');\n        }\n        return (float) eval('return ' . \$quantity . ';');\n    }\n}\n"],
+            null,
+        ];
+        yield 'eval_tp_call_user_func_input' => [
+            static fn (): UnsafeEvalAnalyzer => new UnsafeEvalAnalyzer(),
+            ['app/Services/ActionService.php' => "<?php\nnamespace App\\Services;\nclass ActionService {\n    public function run(\\Illuminate\\Http\\Request \$request): void {\n        call_user_func(\$request->input('action'));\n    }\n}\n"],
+            'UNSAFE_EVAL',
+        ];
+        yield 'eval_fp_call_user_func_literal' => [
+            static fn (): UnsafeEvalAnalyzer => new UnsafeEvalAnalyzer(),
+            ['app/Services/ActionService.php' => "<?php\nnamespace App\\Services;\nclass ActionService {\n    public function run(\\Illuminate\\Http\\Request \$request): void {\n        call_user_func([\$this, 'handle'], \$request->input('x'));\n    }\n}\n"],
+            null,
+        ];
+        yield 'deser_tp_yaml_parse_input' => [
+            static fn (): UnsafeDeserializationAnalyzer => new UnsafeDeserializationAnalyzer(),
+            ['app/Services/ImportService.php' => "<?php\nnamespace App\\Services;\nclass ImportService {\n    public function run(\\Illuminate\\Http\\Request \$request): array {\n        return yaml_parse(\$request->input('doc'));\n    }\n}\n"],
+            'UNSAFE_UNSERIALIZE',
+        ];
+        yield 'deser_fp_allowed_classes_false' => [
+            static fn (): UnsafeDeserializationAnalyzer => new UnsafeDeserializationAnalyzer(),
+            ['app/Services/SessionService.php' => "<?php\nnamespace App\\Services;\nclass SessionService {\n    public function hydrate(\\Illuminate\\Http\\Request \$request): array {\n        return unserialize(\$request->input('data'), ['allowed_classes' => false]);\n    }\n}\n"],
+            null,
+        ];
+        yield 'sqli_tp_orderby_request' => [
+            static fn (): AbstractAnalyzer => new SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/ProductController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass ProductController {\n    public function index(\\Illuminate\\Http\\Request \$request) {\n        return DB::table('products')->orderBy(\$request->input('sort'))->get();\n    }\n}\n"],
+            'SQL_INJECTION',
+        ];
+        yield 'sqli_fp_orderby_literal' => [
+            static fn (): AbstractAnalyzer => new SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/ProductController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass ProductController {\n    public function index() {\n        return DB::table('products')->orderBy('created_at')->get();\n    }\n}\n"],
             null,
         ];
         yield 'secret_fp_option_const' => [
@@ -320,6 +403,22 @@ final class AnalyzerMetricsTest extends TestCase
             [
                 'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController extends Controller {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
                 'app/Models/Order.php' => "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {\n    protected \$guarded = ['id'];\n}\n",
+            ],
+            null,
+        ];
+        yield 'mass_tp_unguard' => [
+            static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(),
+            [
+                'app/Providers/AppServiceProvider.php' => "<?php\nnamespace App\\Providers;\nuse App\\Models\\User;\nclass AppServiceProvider {\n    public function boot(): void {\n        User::unguard();\n    }\n}\n",
+                'app/Models/User.php' => "<?php\nnamespace App\\Models;\nclass User extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            ],
+            'MASS_ASSIGNMENT',
+        ];
+        yield 'mass_fp_reguard' => [
+            static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(),
+            [
+                'app/Providers/AppServiceProvider.php' => "<?php\nnamespace App\\Providers;\nuse App\\Models\\User;\nclass AppServiceProvider {\n    public function boot(): void {\n        User::unguard(false);\n    }\n}\n",
+                'app/Models/User.php' => "<?php\nnamespace App\\Models;\nclass User extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
             ],
             null,
         ];
@@ -395,6 +494,16 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'openredirect_fp_intended_literal' => [
             static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
             ['app/Http/Controllers/AuthController.php' => "<?php\nreturn redirect()->intended('/home');\n"],
+            null,
+        ];
+        yield 'openredirect_tp_header_location' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nreturn response('', 302)->header('Location', \$request->input('next'));\n"],
+            'OWASP_OPEN_REDIRECT',
+        ];
+        yield 'openredirect_fp_header_location_literal' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nreturn response('', 302)->header('Location', '/home');\n"],
             null,
         ];
 
@@ -474,6 +583,11 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Uploads/ImageService.php' => "<?php\nclass ImageService {\n    public function store(\$file): string {\n        return (string) file_get_contents(\$file?->getRealPath());\n    }\n}\n"],
             null,
         ];
+        yield 'traversal_fp_file_delete' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Http/Controllers/TempFileController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\File;\nclass TempFileController extends Controller {\n    public function destroy(\\Illuminate\\Http\\Request \$request): void {\n        File::delete(storage_path('tmp/' . \$request->name));\n    }\n}\n"],
+            null,
+        ];
 
         // --- Blade XSS ---
         yield 'bladexss_tp_variable' => [
@@ -541,10 +655,27 @@ final class AnalyzerMetricsTest extends TestCase
             ['resources/views/pos/index.blade.php' => "<script>var C = {!! json_encode(\$cfg) !!};</script>\n"],
             'OWASP_BLADE_XSS',
         ];
+
+        // --- Misconfiguration ---
+        yield 'misconfig_tp_cookie_secure_false' => [
+            static fn (): AbstractAnalyzer => new OwaspMisconfigurationAnalyzer(),
+            ['config/session.php' => "<?php\nreturn [\n    'secure' => false,\n];\n"],
+            'OWASP_MISCONFIGURATION',
+        ];
+        yield 'misconfig_tp_env_secure_cookie' => [
+            static fn (): AbstractAnalyzer => new OwaspMisconfigurationAnalyzer(),
+            ['.env' => "SESSION_SECURE_COOKIE=false\n"],
+            'OWASP_MISCONFIGURATION',
+        ];
+        yield 'misconfig_fp_secure_cookie_true' => [
+            static fn (): AbstractAnalyzer => new OwaspMisconfigurationAnalyzer(),
+            ['config/session.php' => "<?php\nreturn [\n    'secure' => true,\n    'http_only' => true,\n];\n"],
+            null,
+        ];
     }
 
     /**
-     * @param Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer|MassAssignmentAnalyzer) $factory
+     * @param Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|UnsafeDeserializationAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer|MassAssignmentAnalyzer) $factory
      * @param array<string, string> $files
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('corpus')]

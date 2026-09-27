@@ -80,6 +80,16 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
             if ($this->isStaticValue($firstArg)) {
                 continue;
             }
+            // call_user_func([$this, 'handle'], $userInput) passes user data
+            // as an argument to a fixed method — the callable itself is not
+            // attacker-controlled, so this is not code injection. Only the
+            // callable position (first arg) matters.
+            if (
+                in_array($name, ['call_user_func', 'call_user_func_array'], true)
+                && $this->isFixedCallable($firstArg)
+            ) {
+                continue;
+            }
             if ($this->isValidatedExpression($firstArg, $call, $nodes)) {
                 continue;
             }
@@ -127,6 +137,50 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
         }
 
         return false;
+    }
+
+    /**
+     * A callable that cannot be influenced by input: string literal,
+     * constant, closure, or an array of static parts such as
+     * [$this, 'handle'] or ['Class', 'method']. A dynamic element
+     * (e.g. [$this, $method]) stays flaggable.
+     */
+    private function isFixedCallable(Node\Expr $expr): bool
+    {
+        if (
+            $expr instanceof Node\Scalar\String_
+            || $expr instanceof Node\Expr\ConstFetch
+            || $expr instanceof Node\Expr\ClassConstFetch
+            || $expr instanceof Node\Expr\Closure
+            || $expr instanceof Node\Expr\ArrowFunction
+        ) {
+            return true;
+        }
+
+        if (!$expr instanceof Node\Expr\Array_ || $expr->items === []) {
+            return false;
+        }
+
+        foreach ($expr->items as $item) {
+            if (!$item instanceof Node\Expr\ArrayItem) {
+                return false;
+            }
+            $value = $item->value;
+            if (
+                $value instanceof Node\Scalar\String_
+                || $value instanceof Node\Expr\ConstFetch
+                || $value instanceof Node\Expr\ClassConstFetch
+            ) {
+                continue;
+            }
+            if ($value instanceof Node\Expr\Variable && $value->name === 'this') {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
