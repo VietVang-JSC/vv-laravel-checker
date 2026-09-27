@@ -12,6 +12,8 @@ use VietVang\QualityChecker\Result\Severity;
 /**
  * A03 Injection - Server-Side Template Injection.
  *
+ * Sinks: view()/Blade()/view()->make(), Blade::render()/compileString(),
+ * View::make()/composer()/creator(), and ->make()/renderComponent() on view objects.
  * Assumes: SSTI is reported when a Blade/view rendering call receives a template argument that is not
  * a plain string literal, i.e. a variable, method call, concatenation, or interpolation that could
  * contain user input. Safe dynamic rendering with a whitelisted template key is not tracked.
@@ -125,6 +127,11 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
 
             $isBlade = $class === 'Blade' || $class === 'Illuminate\\Support\\Facades\\Blade' || str_ends_with($class, '\\Blade');
             if ($isBlade && ($method === 'render' || $method === self::STATIC_COMPILE)) {
+                return $class . '::' . $method;
+            }
+
+            $isView = $class === 'View' || $class === 'Illuminate\\Support\\Facades\\View' || str_ends_with($class, '\\View');
+            if ($isView && in_array($method, ['make', 'composer', 'creator'], true)) {
                 return $class . '::' . $method;
             }
         }
@@ -272,6 +279,10 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
 
         if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
             return isset($known[$expr->name]);
+        }
+
+        if ($expr instanceof Node\Expr\ArrayDimFetch) {
+            return $this->isLiteralValue($expr->var, $known);
         }
 
         if ($expr instanceof Node\Expr\BinaryOp\Concat) {

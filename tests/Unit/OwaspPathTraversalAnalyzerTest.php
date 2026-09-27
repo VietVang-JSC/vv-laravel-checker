@@ -169,4 +169,16 @@ final class OwaspPathTraversalAnalyzerTest extends TestCase
 
         self::assertCount(0, $issues);
     }
+
+    public function testSkipsNullsafeRealPath(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass ImageService {\n    public function store(\$file): string {\n        return (string) file_get_contents(\$file?->getRealPath());\n    }\n}\n",
+            'app/Uploads/ImageService.php'
+        );
+
+        $issues = (new OwaspPathTraversalAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
 }

@@ -90,7 +90,9 @@ abstract class AbstractAnalyzer
         if (
             $expr instanceof Node\Expr\Variable
             || $expr instanceof Node\Expr\PropertyFetch
+            || $expr instanceof Node\Expr\NullsafePropertyFetch
             || $expr instanceof Node\Expr\MethodCall
+            || $expr instanceof Node\Expr\NullsafeMethodCall
             || $expr instanceof Node\Expr\FuncCall
             || $expr instanceof Node\Expr\ArrayDimFetch
         ) {

@@ -16,7 +16,8 @@ use VietVang\QualityChecker\Result\Severity;
  * Flags:
  *  - migrations that declare an `up()` but no `down()` (not reversible)
  *  - data-destructive schema operations in `up()` (dropTable, dropColumn, delete
- *    of a whole table without a re-creation path). A drop is not flagged when
+ *    of a whole table, or raw `DROP TABLE/DATABASE` / `TRUNCATE` statements,
+ *    without a re-creation path). A drop is not flagged when
  *    every dropped table/column name re-appears as a string literal in `down()`
  *    (best-effort restore detection).
  *
@@ -112,9 +113,68 @@ final class MigrationAnalyzer extends AbstractAnalyzer
                     );
                 }
             }
+
+            $rawDrops = $this->rawDropStatements($up->stmts);
+            if ($rawDrops !== []) {
+                $dropped = array_values(array_unique($rawDrops));
+                if (!$this->isRestoredInDown($down, $dropped)) {
+                    $issues[] = $this->makeIssue(
+                        self::RULE_DESTRUCTIVE_UP,
+                        'Destructive raw SQL in up(): DROP/TRUNCATE of (' . implode(', ', $dropped) . ') with no re-creation in down().',
+                        $file,
+                        $up->getStartLine(),
+                        Severity::Warning,
+                        ['kind' => 'destructive_raw_sql'],
+                        Confidence::Medium
+                    );
+                }
+            }
         }
 
         return $issues;
+    }
+
+    /**
+     * Raw DROP TABLE/DATABASE and TRUNCATE statements issued via
+     * DB::statement()/DB::unprepared(). Returns the affected identifiers so
+     * the down() restore check applies to them as well.
+     *
+     * @param array<Node\Stmt> $stmts
+     * @return list<string>
+     */
+    private function rawDropStatements(array $stmts): array
+    {
+        $names = [];
+        $calls = $this->finder()->find($stmts, function (Node $node): bool {
+            return $node instanceof Node\Expr\StaticCall
+                && $node->class instanceof Node\Name
+                && $node->name instanceof Node\Identifier
+                && in_array(strtolower($node->name->toString()), ['statement', 'unprepared'], true);
+        });
+
+        foreach ($calls as $call) {
+            if (!$call instanceof Node\Expr\StaticCall) {
+                continue;
+            }
+            $class = strtolower(ltrim($call->class->toString(), '\\'));
+            if ($class !== 'db' && !str_ends_with($class, '\\db')) {
+                continue;
+            }
+            $arg = $call->args[0] ?? null;
+            if (!$arg instanceof Node\Arg || !$arg->value instanceof Node\Scalar\String_) {
+                continue;
+            }
+            $sql = $arg->value->value;
+            if (preg_match('/^\s*drop\s+(?:table\s+(?:if\s+exists\s+)?|database\s+(?:if\s+exists\s+)?)[`"\']?([A-Za-z0-9_]+)/i', $sql, $m) === 1) {
+                $names[] = $m[1];
+                continue;
+            }
+            if (preg_match('/^\s*truncate(\s+table)?\s+[`"\']?([A-Za-z0-9_]+)/i', $sql, $m) === 1) {
+                $names[] = $m[2];
+            }
+        }
+
+        return array_values(array_unique($names));
     }
 
     /**

@@ -33,6 +33,9 @@ use VietVang\QualityChecker\Result\Severity;
  * resolved through the route file's `use` imports), so same-named controllers in
  * different namespaces (e.g. Admin vs Shop API) never share entries. References
  * that cannot be qualified fall back to short-name matching.
+ *
+ * In-body authorization covers `authorize*()`, `middleware()`, `abort*()`,
+ * and exact `can()`/`cannot()` calls (e.g. `$request->user()->can(...)`).
  */
 final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
 {
@@ -219,7 +222,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
                 if (
                     $node instanceof Node\Expr\MethodCall
                     && $node->name instanceof Node\Identifier
-                    && in_array($node->name->toString(), ['authorize', 'authorizeResource', 'middleware', 'abort', 'abortIf', 'abortUnless'], true)
+                    && in_array($node->name->toString(), ['authorize', 'authorizeResource', 'middleware', 'abort', 'abortIf', 'abortUnless', 'can', 'cannot'], true)
                 ) {
                     return true;
                 }

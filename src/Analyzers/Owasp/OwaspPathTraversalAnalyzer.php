@@ -291,7 +291,7 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
         }
 
         if (
-            $expr instanceof Node\Expr\MethodCall
+            ($expr instanceof Node\Expr\MethodCall || $expr instanceof Node\Expr\NullsafeMethodCall)
             && $expr->name instanceof Node\Identifier
             && $this->rootVariableName($expr) !== 'request'
             && $this->isLocalPathName($expr->name->toString())

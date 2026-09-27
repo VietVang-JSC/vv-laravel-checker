@@ -198,6 +198,21 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testSstiSkipsClassConstArrayConcat(): void
+    {
+        $file = $this->temp(
+            "<?php\nuse Filament\\Support\\Facades\\Blade;\nclass OrderItemsTable {\n" .
+            "    public static function cols(): array {\n" .
+            "        return [Blade::render('<x-filament::icon style=\"color:rgb(' . \\App\\Color::Gray[400] . ');\"/>')];\n" .
+            "    }\n}\n",
+            'app/Filament/OrderItemsTable.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testSstiSkipsViewRegistryProperty(): void
     {
         $file = $this->temp(
@@ -934,6 +949,93 @@ final class OwaspAnalyzersTest extends TestCase
         );
 
         $issues = (new OwaspXxeAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testCommandInjectionFlagsBacktickWithInput(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$out = `ls \$dir`;\n",
+            'app/Services/ListingService.php'
+        );
+
+        $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_COMMAND_INJECTION', $this->rules($issues)[0] ?? null);
+        self::assertSame(Severity::Critical, $issues[0]->severity ?? null);
+    }
+
+    public function testCommandInjectionSkipsBacktickLiteral(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$out = `ls -la`;\n",
+            'app/Services/ListingService.php'
+        );
+
+        $issues = (new OwaspCommandInjectionAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testAccessControlSkipsCanAuthorizedMethod(): void
+    {
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Http\\Request;\n" .
+            "class PostController extends Controller {\n    public function update(Request \$request, \$id) {\n" .
+            "        \$post = Post::findOrFail(\$id);\n        \$request->user()->can('update', \$post);\n        \$post->save();\n    }\n}\n",
+            'app/Http/Controllers/PostController.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSsrfFlagsNullsafeClientCall(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$response = \$client?->get(\$request->input('target'));\n",
+            'app/Services/ExternalService.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertContains('OWASP_SSRF', $this->rules($issues));
+    }
+
+    public function testSsrfReadsNamedUrlArgument(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$response = \$client->get(url: \$request->input('target'));\n",
+            'app/Services/ExternalService.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertContains('OWASP_SSRF', $this->rules($issues));
+    }
+
+    public function testSstiFlagsViewFacadeMake(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn \\Illuminate\\Support\\Facades\\View::make(\$template);\n",
+            'app/Http/Controllers/PageController.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_SSTI', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testSstiSkipsViewFacadeMakeLiteral(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn \\Illuminate\\Support\\Facades\\View::make('pages.home');\n",
+            'app/Http/Controllers/PageController.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
 
         self::assertCount(0, $issues);
     }

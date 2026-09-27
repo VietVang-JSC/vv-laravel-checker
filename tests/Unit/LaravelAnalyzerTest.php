@@ -105,6 +105,38 @@ final class LaravelAnalyzerTest extends TestCase
         self::assertNotContains('MIGRATION_DESTRUCTIVE_UP', $rules);
     }
 
+    public function testMigrationRawDropTableFlagged(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn new class extends Migration {\n" .
+            "    public function up(): void { DB::statement('DROP TABLE IF EXISTS sessions'); }\n" .
+            "    public function down(): void { }\n" .
+            "};\n",
+            'database/migrations/2026_01_01_f.php'
+        );
+
+        $issues = (new MigrationAnalyzer())->analyze([$file]);
+        $rules = array_map(static fn ($i) => $i->rule, $issues);
+
+        self::assertContains('MIGRATION_DESTRUCTIVE_UP', $rules);
+    }
+
+    public function testMigrationRawTruncateRestoredPasses(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn new class extends Migration {\n" .
+            "    public function up(): void { DB::unprepared('TRUNCATE TABLE temp_import'); }\n" .
+            "    public function down(): void { Schema::create('temp_import', function (Blueprint \$t) { \$t->id(); }); }\n" .
+            "};\n",
+            'database/migrations/2026_01_01_g.php'
+        );
+
+        $issues = (new MigrationAnalyzer())->analyze([$file]);
+        $rules = array_map(static fn ($i) => $i->rule, $issues);
+
+        self::assertNotContains('MIGRATION_DESTRUCTIVE_UP', $rules);
+    }
+
     public function testRouteValidationFlagsMutatingWithoutValidation(): void
     {
         $file = $this->temp(

@@ -12,8 +12,13 @@ use VietVang\QualityChecker\Result\Severity;
 /**
  * A10/A09 Server-Side Request Forgery.
  *
+ * Sinks: file_get_contents()/fopen()/curl_init()/get_headers(), HTTP client
+ * get/post/put/patch/delete/head/request/send (including `?->` nullsafe
+ * calls), and Http/Client static calls.
  * Assumes: SSRF sinks are flagged when their URL argument is a variable, a property/method call, or
- * a concat/interpolation that resolves to user input. URL variables not conclusively user-derived are
+ * a concat/interpolation that resolves to user input. For Guzzle-style
+ * `request($method, $url)` the URL is read from the second argument; named
+ * `url:`/`uri:`/`path:` arguments win over position. URL variables not conclusively user-derived are
  * flagged when the sink receives a non-literal argument. This is a heuristic, not a full data-flow analysis.
  *
  * Deliberately not flagged: sinks inside test paths, `fopen()` in a write/append
@@ -80,6 +85,7 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         $calls = $this->finder()->find($nodes, function (Node $node): bool {
             return $node instanceof Node\Expr\FuncCall
                 || $node instanceof Node\Expr\MethodCall
+                || $node instanceof Node\Expr\NullsafeMethodCall
                 || $node instanceof Node\Expr\StaticCall
                 || $node instanceof Node\Expr\New_;
         });
@@ -128,7 +134,13 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             }
         }
 
-        if ($node instanceof Node\Expr\MethodCall && $node->name instanceof Node\Identifier) {
+        if (
+            $node instanceof Node\Expr\MethodCall
+            || $node instanceof Node\Expr\NullsafeMethodCall
+        ) {
+            if (!$node->name instanceof Node\Identifier) {
+                return null;
+            }
             $method = $node->name->toString();
             if (!in_array($method, self::METHOD_SINKS, true)) {
                 return null;
@@ -179,11 +191,24 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
     {
         $args = $node->args;
 
+        // Named arguments win: $client->get(url: $u).
+        foreach ($args as $arg) {
+            if (
+                $arg instanceof Node\Arg
+                && $arg->name instanceof Node\Identifier
+                && in_array(strtolower($arg->name->toString()), ['url', 'uri', 'path'], true)
+            ) {
+                return $arg->value;
+            }
+        }
+
         // Guzzle-style request(method, url, options): the URL is the second
         // argument, not the first.
         if (
             $sink === 'request()'
-            && ($node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall)
+            && ($node instanceof Node\Expr\MethodCall
+                || $node instanceof Node\Expr\NullsafeMethodCall
+                || $node instanceof Node\Expr\StaticCall)
         ) {
             $arg = $args[1] ?? $args[0] ?? null;
 

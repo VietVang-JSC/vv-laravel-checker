@@ -67,6 +67,17 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
             if ($this->isFieldNameDeclaration($line)) {
                 continue;
             }
+            if ($this->isEnvDefaultSecret($line)) {
+                $issues[] = $this->makeIssue(
+                    self::RULE,
+                    'Possible hardcoded secret detected: default secret in env().',
+                    $file,
+                    $index + 1,
+                    Severity::Critical,
+                    ['kind' => 'env default secret', 'hint' => mb_substr(trim($line), 0, 120)]
+                );
+                break;
+            }
             foreach (self::PATTERNS as $pattern => $label) {
                 if (preg_match($pattern, $line, $m) === 1) {
                     $issues[] = $this->makeIssue(
@@ -94,5 +105,23 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
         }
 
         return false;
+    }
+
+    /**
+     * Catches real secrets hiding as env() defaults, e.g.
+     * env('PAYMENT_API_KEY', 'aB3x9...'). Skips obvious placeholders.
+     */
+    private function isEnvDefaultSecret(string $line): bool
+    {
+        if (preg_match('/\benv\(\s*[\'"]([^\'"]*(?:KEY|SECRET|PASSWORD|TOKEN|PASSWD)[^\'"]*)[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]\s*\)/i', $line, $m) !== 1) {
+            return false;
+        }
+
+        $value = $m[2];
+        if (preg_match('/^[A-Za-z0-9_\-]{16,}$/', $value) !== 1) {
+            return false;
+        }
+
+        return preg_match('/^(xxx|changeme|password|secret|test|testing|local|dev|example|null|none|default)/i', $value) !== 1;
     }
 }

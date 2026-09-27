@@ -18,7 +18,8 @@ use VietVang\QualityChecker\Result\Severity;
  *
  * Deliberately not flagged: arguments wrapped in escapeshellarg()/escapeshellcmd()
  * (explicit escaping), Symfony Process constructed with an argument array (no shell
- * interpretation), and sinks inside test paths.
+ * interpretation), and sinks inside test paths. Backtick shell execution with a
+ * dynamic part is always flagged.
  */
 final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
 {
@@ -81,10 +82,28 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
         $issues = [];
         $calls = $this->finder()->find($ast, function (Node $node): bool {
             return $node instanceof Node\Expr\FuncCall
-                || $node instanceof Node\Expr\New_;
+                || $node instanceof Node\Expr\New_
+                || $node instanceof Node\Expr\ShellExec;
         });
 
         foreach ($calls as $call) {
+            if ($call instanceof Node\Expr\ShellExec) {
+                foreach ($call->parts as $part) {
+                    if ($part instanceof Node\Expr && $this->isUserInput($part, $call, $safeScopes, $nodes)) {
+                        $issues[] = $this->makeIssue(
+                            self::RULE,
+                            'Potential command injection: user input flows into backtick shell execution.',
+                            $file,
+                            $call->getStartLine(),
+                            Severity::Critical,
+                            ['sink' => '``']
+                        );
+                        break;
+                    }
+                }
+                continue;
+            }
+
             if ($call instanceof Node\Expr\FuncCall) {
                 if (!$call->name instanceof Node\Name) {
                     continue;

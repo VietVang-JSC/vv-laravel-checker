@@ -172,6 +172,38 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testHardcodedSecretFlagsEnvDefaultSecret(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\n\$key = env('PAYMENT_API_KEY', 'aB3x9QwE7rT2yU4iO6p');\n",
+            'config/services.php'
+        );
+
+        $issues = (new HardcodedSecretAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'HARDCODED_SECRET', Severity::Critical));
+    }
+
+    public function testHardcodedSecretSkipsEnvPlaceholderDefault(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\n'url' => env('APP_URL', 'http://localhost'),\n'key' => env('APP_KEY', ''),\n",
+            'config/app.php'
+        );
+
+        $issues = (new HardcodedSecretAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+
+        $file2 = $this->tempPhp(
+            "<?php\n'key' => env('SERVICE_API_KEY', 'changeme12345678'),\n",
+            'config/services.php'
+        );
+
+        self::assertCount(0, (new HardcodedSecretAnalyzer())->analyze([$file2]));
+    }
+
     /** MassAssignmentAnalyzer */
 
     public function testMassAssignmentFlagsUnprotectedModel(): void

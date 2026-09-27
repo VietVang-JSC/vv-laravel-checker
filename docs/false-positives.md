@@ -65,7 +65,8 @@ php artisan quality:check --tier=all --fail-on=none
 
 ### `OWASP_BROKEN_ACCESS_CONTROL`
 - **True positive when**: a mutating action (`store`/`update`/`destroy`/...) shows no
-  `authorize()`, `Gate::`, `$this->authorize()`, `abort()`, or middleware in the
+  `authorize()`, `Gate::`, `$this->authorize()`, `abort()`, `$user->can()`/`cannot()`,
+  or middleware in the
   method or constructor — **and** no protective route middleware.
 - **Automatically skipped when**: the action is protected by route middleware. The analyzer reads
   route files (`/routes/`, `/Routes/`, `web.php`/`api.php`) and understands:
@@ -96,6 +97,8 @@ php artisan quality:check --tier=all --fail-on=none
 - The engine only reports when the URL/template/command is **not a literal** and shows
   traces of user input. If the value has passed a strict allow-list/validation, review
   then baseline instead of disabling the rule.
+- Backtick shell execution (`` `...` ``) with any dynamic part is always reported
+  as command injection — there is no escaping mechanism for backticks, so no exemption applies.
 - **Automatically skipped**:
   - sinks in test paths (`tests/`, `Test.php`) — applies to SSRF,
     command injection, XXE;
@@ -131,14 +134,18 @@ php artisan quality:check --tier=all --fail-on=none
     even when wrapped in `rtrim()`/`sprintf()`/all-deploy-time concatenation.
   - SSRF/traversal share a naming convention: variables/properties with local-suggesting
     names (`$file`, `$path`, `$source`, `$outputDir`...) count as local
-    paths — unless the root is `$request`/`request()`; dynamic
+    paths — unless the root is `$request`/`request()`; `?->` nullsafe chains
+    follow the same rules; dynamic
     `include`/`require` is always reported (LFI to RCE, no exemption).
   - SSTI: template variables assigned a string literal — or a concatenation
-    composed solely of literals — in the same function
-    (`$viewName = 'front.pos_' . $industry` with `$industry = 2`), template
-    registry properties (`$this->views['show']`, `$this->template`), and
+    composed solely of literals, numbers, class constants and known variables
+    (`$viewName = 'front.pos_' . $industry`, `Blade::render('...' . Color::Gray[400])`),
+    template registry properties (`$this->views['show']`, `$this->template`), and
     non-public helpers where every same-file call site passes a literal for the
     template parameter (public helpers are not exempted because they can be called from another file).
+  - SSTI sinks include `View::make()/composer()/creator()` in addition to
+    `view()`/`Blade::render()`; named `url:`/`uri:`/`path:` arguments are read
+    as the SSRF target instead of the first positional argument.
 - **Pilot case (HRM app)**: the binary resolver uses
   `shell_exec('where ' . escapeshellarg($tool))`, `new Process($command)` with
   an array from config, and the updater uses `escapeshellarg(base_path())` —
@@ -161,7 +168,7 @@ php artisan quality:check --tier=all --fail-on=none
 
 ### `OWASP_OPEN_REDIRECT`
 - **True positive when**: the target of `redirect()` / `->away()` / `->to()` /
-  `Redirect::away()` is a variable, call, or concatenation containing a dynamic part.
+  `->intended()` / `Redirect::away()` is a variable, call, or concatenation containing a dynamic part.
 - **Automatically skipped**: `redirect()->route()` / `Redirect::route()`, `back()`,
   string literals, `url()->previous()`, `config()`/`env()` (including concatenation where
   every leaf is safe, e.g. `redirect(config('app.url') . '/done')` — including via

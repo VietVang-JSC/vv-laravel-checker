@@ -84,6 +84,13 @@ final class AnalyzerMetricsTest extends TestCase
             ],
             'OWASP_BROKEN_ACCESS_CONTROL',
         ];
+        yield 'bac_fp_can_method' => [
+            static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
+            [
+                'app/Http/Controllers/PostController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Http\\Request;\nclass PostController extends Controller {\n    public function update(Request \$request, \$id) {\n        \$post = Post::findOrFail(\$id);\n        \$request->user()->can('update', \$post);\n        \$post->save();\n    }\n}\n",
+            ],
+            null,
+        ];
 
         // --- Command injection ---
         yield 'cmd_tp_system_request' => [
@@ -115,6 +122,16 @@ final class AnalyzerMetricsTest extends TestCase
             static fn (): AbstractAnalyzer => new OwaspCommandInjectionAnalyzer(),
             ['app/Helpers/helpers.php' => "<?php\nfunction readVersion(string \$gitCommand): string {\n    \$command = \\Illuminate\\Support\\Str::of(\$gitCommand)->start('git ');\n    return trim(exec(\"\$command 2>/dev/null\"));\n}\n"],
             'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'cmd_tp_backtick_input' => [
+            static fn (): AbstractAnalyzer => new OwaspCommandInjectionAnalyzer(),
+            ['app/Services/ListingService.php' => "<?php\n\$out = `ls \$dir`;\n"],
+            'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'cmd_fp_backtick_literal' => [
+            static fn (): AbstractAnalyzer => new OwaspCommandInjectionAnalyzer(),
+            ['app/Services/ListingService.php' => "<?php\n\$out = `ls -la`;\n"],
+            null,
         ];
         yield 'cmd_fp_private_helper_literal' => [
             static fn (): AbstractAnalyzer => new OwaspCommandInjectionAnalyzer(),
@@ -188,6 +205,16 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/PrinterController.php' => "<?php\nclass PrinterController extends Controller {\n    public function list() {\n        \$res = \$client->request('GET', rtrim(env('API_URL'), '/') . '/api/x', []);\n        return [];\n    }\n}\n"],
             null,
         ];
+        yield 'ssrf_tp_nullsafe_client_call' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Services/ExternalService.php' => "<?php\n\$response = \$client?->get(\$request->input('target'));\n"],
+            'OWASP_SSRF',
+        ];
+        yield 'ssrf_tp_named_url_argument' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Services/ExternalService.php' => "<?php\n\$response = \$client->get(url: \$request->input('target'));\n"],
+            'OWASP_SSRF',
+        ];
 
         // --- SSTI ---
         yield 'ssti_tp_input_var' => [
@@ -205,9 +232,24 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/PosController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass PosController extends Controller {\n    public function index() {\n        \$industry = 2;\n        \$viewName = 'front.pos.pos_type_' . \$industry . '.pos_new';\n        return view(\$viewName);\n    }\n}\n"],
             null,
         ];
+        yield 'ssti_fp_class_const_concat' => [
+            static fn (): AbstractAnalyzer => new OwaspSstiAnalyzer(),
+            ['app/Filament/OrderItemsTable.php' => "<?php\nuse Filament\\Support\\Facades\\Blade;\nclass OrderItemsTable {\n    public static function cols(): array {\n        return [Blade::render('<x-icon style=\"' . \\App\\Color::Gray[400] . '\"/>')];\n    }\n}\n"],
+            null,
+        ];
         yield 'ssti_fp_view_registry' => [
             static fn (): AbstractAnalyzer => new OwaspSstiAnalyzer(),
             ['app/Abstracts/Report.php' => "<?php\nnamespace App;\nclass Report {\n    protected \$views = ['show' => 'reports.show'];\n    public function show() {\n        return view(\$this->views['show']);\n    }\n}\n"],
+            null,
+        ];
+        yield 'ssti_tp_view_facade_make' => [
+            static fn (): AbstractAnalyzer => new OwaspSstiAnalyzer(),
+            ['app/Http/Controllers/PageController.php' => "<?php\nreturn \\Illuminate\\Support\\Facades\\View::make(\$template);\n"],
+            'OWASP_SSTI',
+        ];
+        yield 'ssti_fp_view_facade_make_literal' => [
+            static fn (): AbstractAnalyzer => new OwaspSstiAnalyzer(),
+            ['app/Http/Controllers/PageController.php' => "<?php\nreturn \\Illuminate\\Support\\Facades\\View::make('pages.home');\n"],
             null,
         ];
 
@@ -244,6 +286,16 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Console/Commands/Install.php' => "<?php\nnamespace App\\Console\\Commands;\nclass Install {\n    const OPT_DB_PASSWORD = 'db-password';\n}\n"],
             null,
         ];
+        yield 'secret_tp_env_default' => [
+            static fn (): HardcodedSecretAnalyzer => new HardcodedSecretAnalyzer(),
+            ['config/services.php' => "<?php\nreturn ['key' => env('PAYMENT_API_KEY', 'aB3x9QwE7rT2yU4iO6p')];\n"],
+            'HARDCODED_SECRET',
+        ];
+        yield 'secret_fp_env_placeholder_default' => [
+            static fn (): HardcodedSecretAnalyzer => new HardcodedSecretAnalyzer(),
+            ['config/app.php' => "<?php\nreturn ['url' => env('APP_URL', 'http://localhost'), 'key' => env('APP_KEY', '')];\n"],
+            null,
+        ];
 
         // --- Migration ---
         yield 'mig_tp_dropcolumn_no_restore' => [
@@ -259,6 +311,16 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'mig_fp_dropindex' => [
             static fn (): AbstractAnalyzer => new MigrationAnalyzer(),
             ['database/migrations/2026_01_01_z.php' => "<?php\nreturn new class extends Migration {\n    public function up(): void { Schema::table('pages', function (Blueprint \$t) { \$t->dropIndex('search'); }); }\n    public function down(): void { }\n};\n"],
+            null,
+        ];
+        yield 'mig_tp_raw_drop_table' => [
+            static fn (): AbstractAnalyzer => new MigrationAnalyzer(),
+            ['database/migrations/2026_01_01_w.php' => "<?php\nreturn new class extends Migration {\n    public function up(): void { DB::statement('DROP TABLE IF EXISTS sessions'); }\n    public function down(): void { }\n};\n"],
+            'MIGRATION_DESTRUCTIVE_UP',
+        ];
+        yield 'mig_fp_raw_truncate_restored' => [
+            static fn (): AbstractAnalyzer => new MigrationAnalyzer(),
+            ['database/migrations/2026_01_01_v.php' => "<?php\nreturn new class extends Migration {\n    public function up(): void { DB::unprepared('TRUNCATE TABLE temp_import'); }\n    public function down(): void { Schema::create('temp_import', function (Blueprint \$t) { \$t->id(); }); }\n};\n"],
             null,
         ];
 
@@ -296,6 +358,16 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'openredirect_fp_config_var' => [
             static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
             ['app/Http/Controllers/Admin/LoginCuserController.php' => "<?php\nnamespace App\\Http\\Controllers\\Admin;\nclass LoginCuserController extends Controller {\n    public function corporate() {\n        \$webALoginUrl = config('app.url_course') . '/login';\n        return redirect()->away(\$webALoginUrl);\n    }\n}\n"],
+            null,
+        ];
+        yield 'openredirect_tp_intended_input' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nreturn redirect()->intended(\$request->input('next'));\n"],
+            'OWASP_OPEN_REDIRECT',
+        ];
+        yield 'openredirect_fp_intended_literal' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nreturn redirect()->intended('/home');\n"],
             null,
         ];
 
@@ -369,6 +441,11 @@ final class AnalyzerMetricsTest extends TestCase
             static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
             ['app/Http/Controllers/LogController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\File;\nuse Illuminate\\Http\\Request;\nclass LogController extends Controller {\n    public function show(Request \$request) {\n        return File::get(storage_path('logs/laravel-' . \$request->date . '.log'));\n    }\n}\n"],
             'OWASP_PATH_TRAVERSAL',
+        ];
+        yield 'traversal_fp_nullsafe_realpath' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Uploads/ImageService.php' => "<?php\nclass ImageService {\n    public function store(\$file): string {\n        return (string) file_get_contents(\$file?->getRealPath());\n    }\n}\n"],
+            null,
         ];
 
         // --- Blade XSS ---
