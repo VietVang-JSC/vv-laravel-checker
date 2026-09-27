@@ -12,9 +12,9 @@ use VietVang\QualityChecker\Result\Severity;
 /**
  * A10/A09 Server-Side Request Forgery.
  *
- * Sinks: file_get_contents()/fopen()/curl_init()/get_headers(), HTTP client
+ * Sinks: file_get_contents()/fopen()/curl_init()/get_headers()/copy(), HTTP client
  * get/post/put/patch/delete/head/request/send (including `?->` nullsafe
- * calls), and Http/Client static calls.
+ * calls), curl_setopt($ch, CURLOPT_URL, $url), and Http/Client static calls.
  * Assumes: SSRF sinks are flagged when their URL argument is a variable, a property/method call, or
  * a concat/interpolation that resolves to user input. For Guzzle-style
  * `request($method, $url)` the URL is read from the second argument; named
@@ -30,7 +30,7 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'OWASP_SSRF';
 
-    private const FUNC_SINKS = ['file_get_contents', 'fopen', 'curl_init', 'get_headers'];
+    private const FUNC_SINKS = ['file_get_contents', 'fopen', 'curl_init', 'get_headers', 'copy'];
 
     private const METHOD_SINKS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'request', 'send'];
 
@@ -132,6 +132,9 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             if (in_array($fn, self::FUNC_SINKS, true)) {
                 return $fn . '()';
             }
+            if ($fn === 'curl_setopt') {
+                return 'curl_setopt()';
+            }
         }
 
         if (
@@ -211,6 +214,25 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
                 || $node instanceof Node\Expr\StaticCall)
         ) {
             $arg = $args[1] ?? $args[0] ?? null;
+
+            return $arg instanceof Node\Arg ? $arg->value : null;
+        }
+
+        // curl_setopt($ch, CURLOPT_URL, $url): only the URL option is a sink.
+        if (
+            $sink === 'curl_setopt()'
+            && $node instanceof Node\Expr\FuncCall
+        ) {
+            $option = $args[1] ?? null;
+            if (
+                !$option instanceof Node\Arg
+                || !$option->value instanceof Node\Expr\ConstFetch
+                || !$option->value->name instanceof Node\Name
+                || $option->value->name->toString() !== 'CURLOPT_URL'
+            ) {
+                return null;
+            }
+            $arg = $args[2] ?? null;
 
             return $arg instanceof Node\Arg ? $arg->value : null;
         }

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (proactive edge-case review)
+
+- Command injection: backtick shell execution with any dynamic part is always
+  reported; `pcntl_exec()` added as a sink; `Process::fromShellCommandline()`
+  with user input is flagged (unlike array-form `new Process()`).
+- Broken access control: exact `$user->can()`/`cannot()` calls count as
+  in-body authorization (non-enforcing `Gate::allows()` still does not).
+- Open redirect: `redirect()->intended($default)` covered as a sink.
+- SSTI: `View::make()/composer()/creator()` covered as sinks.
+- Secrets: high-entropy defaults in `env('KEY', ...)` are flagged (placeholder
+  denylist included); field-name declarations stay skipped.
+- Migration: raw `DROP TABLE/DATABASE` and `TRUNCATE` via `DB::statement()` /
+  `DB::unprepared()` participate in the down() restore check.
+- SSRF: `?->` nullsafe client calls covered; named `url:`/`uri:`/`path:`
+  arguments win over position; `curl_setopt($ch, CURLOPT_URL, $url)` and
+  `copy()` added as sinks.
+- Path traversal: `Storage::putFile()/putFileAs()`, `unlink()`, `rename()`
+  added as sinks.
+- SQL injection: column-name injection via `orderBy()`/`orderByDesc()`/`groupBy()`
+  with tainted input.
+- Mass assignment: `updateOrCreate()`/`firstOrCreate()`/`updateOrInsert()`/
+  `firstOrNew()` (both arguments checked) and explicitly empty `$guarded = []`
+  (which guards nothing).
+- Misconfiguration: insecure session cookie flags (`'secure'/'http_only' =>
+  false`, `SESSION_SECURE_COOKIE=false`, `same_site => 'none'`).
+
 ### Fixed (new public pilots audit)
 
 - Secret skips field-name declarations (`OPT_* = '...'`); eval skips

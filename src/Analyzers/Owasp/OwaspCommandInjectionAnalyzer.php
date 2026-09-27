@@ -25,7 +25,7 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'OWASP_COMMAND_INJECTION';
 
-    private const FUNC_SINKS = ['system', 'exec', 'shell_exec', 'passthru', 'proc_open', 'popen'];
+    private const FUNC_SINKS = ['system', 'exec', 'shell_exec', 'passthru', 'proc_open', 'popen', 'pcntl_exec'];
 
     private const ESCAPE_FUNCS = ['escapeshellarg', 'escapeshellcmd'];
 
@@ -83,6 +83,7 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
         $calls = $this->finder()->find($ast, function (Node $node): bool {
             return $node instanceof Node\Expr\FuncCall
                 || $node instanceof Node\Expr\New_
+                || $node instanceof Node\Expr\StaticCall
                 || $node instanceof Node\Expr\ShellExec;
         });
 
@@ -129,6 +130,29 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
                     Severity::Critical,
                     ['sink' => $fn . '()']
                 );
+                continue;
+            }
+
+            if (
+                $call instanceof Node\Expr\StaticCall
+                && $call->class instanceof Node\Name
+                && $call->name instanceof Node\Identifier
+                && strtolower($call->name->toString()) === 'fromshellcommandline'
+                && in_array($call->class->toString(), [self::PROCESS_CLASS, '\\' . self::PROCESS_CLASS, 'Process'], true)
+            ) {
+                foreach ($call->args as $arg) {
+                    if ($arg instanceof Node\Arg && $this->isUserInput($arg->value, $call, $safeScopes, $nodes)) {
+                        $issues[] = $this->makeIssue(
+                            self::RULE,
+                            'Potential command injection: user input flows into Process::fromShellCommandline().',
+                            $file,
+                            $call->getStartLine(),
+                            Severity::Critical,
+                            ['sink' => 'Process::fromShellCommandline()']
+                        );
+                        break;
+                    }
+                }
                 continue;
             }
 

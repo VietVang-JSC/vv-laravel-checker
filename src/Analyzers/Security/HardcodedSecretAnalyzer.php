@@ -53,6 +53,9 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
         return $issues;
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file): array
     {
         $code = $this->readFile($file);

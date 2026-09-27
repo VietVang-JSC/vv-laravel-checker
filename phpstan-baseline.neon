@@ -206,57 +206,12 @@ parameters:
 			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
 
 		-
-			message: "#^Result of \\|\\| is always false\\.$#"
-			count: 1
-			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
-
-		-
-			message: "#^Strict comparison using \\=\\=\\= between PhpParser\\\\Node\\\\ArrayItem and null will always evaluate to false\\.$#"
-			count: 1
-			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
-
-		-
-			message: "#^Strict comparison using \\=\\=\\= between PhpParser\\\\Node\\\\Expr and null will always evaluate to false\\.$#"
-			count: 1
-			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
-
-		-
-			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\HardcodedSecretAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Analyzers/Security/HardcodedSecretAnalyzer.php
-
-		-
-			message: "#^Access to an undefined property PhpParser\\\\Node\\:\\:\\$name\\.$#"
-			count: 1
-			path: src/Analyzers/Security/InsecureHashAnalyzer.php
-
-		-
-			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\InsecureHashAnalyzer\\:\\:analyze\\(\\) has parameter \\$files with no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Analyzers/Security/InsecureHashAnalyzer.php
-
-		-
-			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\InsecureHashAnalyzer\\:\\:analyze\\(\\) return type has no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Analyzers/Security/InsecureHashAnalyzer.php
-
-		-
-			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\InsecureHashAnalyzer\\:\\:analyzeFile\\(\\) return type has no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Analyzers/Security/InsecureHashAnalyzer.php
-
-		-
 			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\InsecureHashAnalyzer\\:\\:isCredentialContext\\(\\) has parameter \\$ast with no value type specified in iterable type array\\.$#"
 			count: 1
 			path: src/Analyzers/Security/InsecureHashAnalyzer.php
 
 		-
 			message: "#^Method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\InsecureHashAnalyzer\\:\\:parse\\(\\) return type has no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Analyzers/Security/InsecureHashAnalyzer.php
-
-		-
-			message: "#^Parameter \\#1 \\$call of method VietVang\\\\QualityChecker\\\\Analyzers\\\\Security\\\\InsecureHashAnalyzer\\:\\:isCredentialContext\\(\\) expects PhpParser\\\\Node\\\\Expr\\\\FuncCall, PhpParser\\\\Node given\\.$#"
 			count: 1
 			path: src/Analyzers/Security/InsecureHashAnalyzer.php
 

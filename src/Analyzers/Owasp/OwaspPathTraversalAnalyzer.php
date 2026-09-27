@@ -12,8 +12,8 @@ use VietVang\QualityChecker\Result\Severity;
 /**
  * A01 Path Traversal (file / Storage / download sinks).
  *
- * Sinks: file_get_contents/file_put_contents/fopen/file/readfile,
- * Storage::get/put/delete/download, File::get/put/delete (facade +
+ * Sinks: file_get_contents/file_put_contents/fopen/file/readfile/unlink/rename,
+ * Storage::get/put/putFile/putFileAs/delete/download, File::get/put/delete (facade +
  * Filesystem), response()->download/file, and dynamic include/require.
  *
  * Assumes: file sinks are flagged when their path argument is a variable, a property/method call, or
@@ -30,9 +30,9 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'OWASP_PATH_TRAVERSAL';
 
-    private const FUNC_SINKS = ['file_get_contents', 'file_put_contents', 'fopen', 'file', 'readfile'];
+    private const FUNC_SINKS = ['file_get_contents', 'file_put_contents', 'fopen', 'file', 'readfile', 'unlink', 'rename'];
 
-    private const STORAGE_METHODS = ['get', 'put', 'delete', 'download'];
+    private const STORAGE_METHODS = ['get', 'put', 'delete', 'download', 'putFile', 'putFileAs'];
 
     private const FILE_METHODS = ['get', 'put', 'delete'];
 

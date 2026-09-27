@@ -46,6 +46,9 @@ php artisan quality:check --tier=all --fail-on=none
 ### `SQL_INJECTION` / `TAINT_SQL_INJECTION` / `LARAVEL_TAINT`
 - **True positive when**: input from the request (`$request->input()`, `$_GET`, ...) is
   concatenated or interpolated into `DB::select`, `whereRaw`, `selectRaw`, ...
+- **Also covered**: column-name injection via `orderBy()`/`orderByDesc()`/`groupBy()`
+  with tainted input (e.g. `orderBy($request->input('sort'))`) — the column position
+  is not a bound value, so user input there is injectable.
 - **False positive when**: a variable shares a name with a tainted variable but has
   been reassigned a clean value; the query builder uses binding (`where('id', $id)`) — the
   analyzer skips this case, so if it still reports, check carefully because it may be
@@ -54,10 +57,18 @@ php artisan quality:check --tier=all --fail-on=none
   ```php
   DB::select('select * from users where id = ?', [$id]);
   ```
+  For sort columns, map input through an allow-list:
+  ```php
+  $sort = in_array($request->input('sort'), ['name', 'created_at'], true) ? $request->input('sort') : 'name';
+  $query->orderBy($sort);
+  ```
 
 ### `MASS_ASSIGNMENT`
 - **True positive when**: `Model::create($request->all())` while the model has no
-  `$fillable`/`$guarded`.
+  `$fillable`/`$guarded`. Also covered: `updateOrCreate()`/`firstOrCreate()`/
+  `updateOrInsert()`/`firstOrNew()` with tainted data in either argument, and models
+  whose `$guarded = []` is explicitly empty (that guards nothing — everything stays
+  mass-assignable).
 - **False positive when**: the model is outside the scan paths (the analyzer cannot
   resolve the model file so it stays silent — fail-open). If the project keeps models
   outside `app/`, add the scan path containing the models so this rule takes effect.
@@ -111,6 +122,10 @@ php artisan quality:check --tier=all --fail-on=none
   - command injection: arguments already wrapped with `escapeshellarg()`/`escapeshellcmd()`,
     and `new Process()` with an array command (no shell — even when
     the array is in a `$command = [...]` variable in the same function).
+  - command injection: `pcntl_exec()`, backtick execution with any dynamic part,
+    and `Process::fromShellCommandline()` with user input are always reported —
+    backticks have no escaping mechanism and shell-commandline strings always
+    go through a shell.
   - command injection: command strings composed entirely of deploy-time parts — literals,
     constants (`PHP_BINARY`, `DIRECTORY_SEPARATOR`), Laravel path helpers
     (`base_path()`...), `escapeshellarg()`-wrapped values, and variables assigned from
@@ -135,7 +150,8 @@ php artisan quality:check --tier=all --fail-on=none
   - SSRF/traversal share a naming convention: variables/properties with local-suggesting
     names (`$file`, `$path`, `$source`, `$outputDir`...) count as local
     paths — unless the root is `$request`/`request()`; `?->` nullsafe chains
-    follow the same rules; dynamic
+    follow the same rules; `copy()` counts as a read sink; `curl_setopt($ch,
+    CURLOPT_URL, $url)` reads the URL from the third argument; dynamic
     `include`/`require` is always reported (LFI to RCE, no exemption).
   - SSTI: template variables assigned a string literal — or a concatenation
     composed solely of literals, numbers, class constants and known variables
@@ -153,12 +169,14 @@ php artisan quality:check --tier=all --fail-on=none
   (local files + test fixtures).
 
 ### `INSECURE_HASH`
-- **True positive when**: `md5()`/`sha1()` on a password in a credential context.
+- **True positive when**: `md5()`/`sha1()` — or `hash('md5'|'sha1'|'md4', ...)` —
+  on a password in a credential context.
 - **Automatically skipped**: files mentioning `pwnedpasswords` — HIBP k-anonymity only sends
   the first 5 characters of the SHA-1 hash to the API, it does not store passwords with SHA-1.
 
 ### `MIGRATION_DESTRUCTIVE_UP`
-- **True positive when**: `up()` drops a table/column that `down()` does not restore.
+- **True positive when**: `up()` drops a table/column that `down()` does not restore —
+  including raw `DROP TABLE/DATABASE` and `TRUNCATE` via `DB::statement()`/`DB::unprepared()`.
 - **Automatically skipped**: every dropped table/column name reappears as a
   string literal in `down()` (for example a dropped column guarded by
   `Schema::hasColumn` + `down()` recreating the column).
@@ -182,9 +200,9 @@ php artisan quality:check --tier=all --fail-on=none
   `redirect()->route('home')` instead of `redirect($request->input('next'))`.
 
 ### `OWASP_PATH_TRAVERSAL`
-- **True positive when**: a file sink (`file_get_contents`, `Storage::get`,
-  `File::get` (facade/Filesystem), `response()->download`, `include $var`, ...)
-  receives a dynamic path.
+- **True positive when**: a file sink (`file_get_contents`, `Storage::get`/`putFile`,
+  `File::get` (facade/Filesystem), `unlink`/`rename`, `response()->download`,
+  `include $var`, ...) receives a dynamic path.
 - **Automatically skipped**: literals (including `storage_path()` with literal arguments),
   `basename()`-wrapped values, `env()`/`config()`, local-named variables (`$file`, `$path`,
   `$outputDir`...) except when rooted at `$request`, and `getRealPath()/getPathname()` methods.
@@ -219,8 +237,17 @@ php artisan quality:check --tier=all --fail-on=none
 - Placeholders such as `xxx`, `changeme`, or empty strings in config files are reported
   by `OWASP_MISCONFIGURATION` (warning level) — replace them with `env()`.
 
+### `OWASP_MISCONFIGURATION`
+- **Reported when**: debug mode is on (`'debug' => true`, `APP_DEBUG=true`),
+  CORS allows wildcard origins, a placeholder/empty secret is present, or session
+  cookies weaken their flags (`'secure' => false`, `'http_only' => false`,
+  `SESSION_SECURE_COOKIE=false`, `same_site => 'none'`).
+- Only real config files are scanned (`/config/`, `.env`), never tests/seeders.
+
 ### `UNSAFE_EVAL`
-- **Reported when**: `eval()`/`assert()`/`create_function()` receive a non-literal argument.
+- **Reported when**: `eval()`/`assert()`/`create_function()`/`call_user_func()`/
+  `call_user_func_array()` receive a non-literal first argument. Only the callable
+  position is checked — tainted *arguments* to a literal callable are the callee's business.
 - **Automatically skipped**: literals, and expressions whose every dynamic leaf
   was validated by `preg_match()`/`preg_match_all()` in the same function
   (e.g. a math expression allow-listed before eval). Filter strength itself is

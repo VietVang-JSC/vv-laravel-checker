@@ -20,6 +20,10 @@ final class MassAssignmentAnalyzer
         'insert',
         'update',
         'fill',
+        'updateOrCreate',
+        'firstOrCreate',
+        'updateOrInsert',
+        'firstOrNew',
     ];
 
     public function analyze(array $files): array
@@ -87,7 +91,21 @@ final class MassAssignmentAnalyzer
 
             $firstArg = $args[0]->value;
             if (!$this->isRequestInput($firstArg)) {
-                continue;
+                // updateOr*/firstOr* take lookup attributes first and fill values
+                // second — taint in either argument is mass assignment.
+                if (!in_array($method, ['updateOrCreate', 'firstOrCreate', 'updateOrInsert', 'firstOrNew'], true)) {
+                    continue;
+                }
+                $tainted = false;
+                foreach (array_slice($args, 1) as $extra) {
+                    if ($this->isRequestInput($extra->value)) {
+                        $tainted = true;
+                        break;
+                    }
+                }
+                if (!$tainted) {
+                    continue;
+                }
             }
 
             $target = $this->resolveModelTarget($call);
@@ -161,7 +179,12 @@ final class MassAssignmentAnalyzer
             foreach ($property->props as $prop) {
                 if ($prop->name instanceof Node\Identifier) {
                     $name = $prop->name->toString();
-                    if ($name === 'fillable' || $name === 'guarded') {
+                    if ($name === 'fillable') {
+                        return true;
+                    }
+                    // An explicitly empty $guarded = [] guards nothing —
+                    // every attribute stays mass-assignable.
+                    if ($name === 'guarded' && !$this->isEmptyArray($prop->default)) {
                         return true;
                     }
                 }
@@ -169,6 +192,11 @@ final class MassAssignmentAnalyzer
         }
 
         return false;
+    }
+
+    private function isEmptyArray(?Node\Expr $expr): bool
+    {
+        return $expr instanceof Node\Expr\Array_ && $expr->items === [];
     }
 
     /**

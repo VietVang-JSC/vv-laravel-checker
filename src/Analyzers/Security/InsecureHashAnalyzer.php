@@ -16,6 +16,12 @@ final class InsecureHashAnalyzer
 
     private const WEAK_FUNCTIONS = ['md5', 'sha1'];
 
+    private const WEAK_HASH_ALGOS = ['md5', 'sha1', 'md4'];
+
+    /**
+     * @param list<string> $files
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
@@ -36,6 +42,9 @@ final class InsecureHashAnalyzer
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
+    /**
+     * @return list<Issue>
+     */
     public function analyzeFile(string $file): array
     {
         $code = $this->readFile($file);
@@ -61,10 +70,16 @@ final class InsecureHashAnalyzer
             }
             $name = strtolower($node->name->toString());
 
-            return in_array($name, self::WEAK_FUNCTIONS, true);
+            return in_array($name, self::WEAK_FUNCTIONS, true) || $name === 'hash';
         });
 
         foreach ($calls as $call) {
+            if (!$call instanceof Node\Expr\FuncCall) {
+                continue;
+            }
+            if (!$this->isWeakHashCall($call)) {
+                continue;
+            }
             if (!$this->isCredentialContext($call, $ast)) {
                 continue;
             }
@@ -82,6 +97,30 @@ final class InsecureHashAnalyzer
         }
 
         return $issues;
+    }
+
+    /**
+     * md5()/sha1() always count; hash() only counts with a weak first
+     * algorithm argument (md5/sha1/md4 literal).
+     */
+    private function isWeakHashCall(Node\Expr\FuncCall $call): bool
+    {
+        if (!$call->name instanceof Node\Name) {
+            return false;
+        }
+        $name = strtolower($call->name->toString());
+        if (in_array($name, self::WEAK_FUNCTIONS, true)) {
+            return true;
+        }
+        if ($name !== 'hash') {
+            return false;
+        }
+        $algo = $call->args[0] ?? null;
+        if (!$algo instanceof Node\Arg || !$algo->value instanceof Node\Scalar\String_) {
+            return false;
+        }
+
+        return in_array(strtolower($algo->value->value), self::WEAK_HASH_ALGOS, true);
     }
 
     private function isCredentialContext(Node\Expr\FuncCall $call, array $ast): bool

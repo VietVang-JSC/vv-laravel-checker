@@ -164,7 +164,7 @@ final class DisabledCsrfAnalyzer
 
         $patterns = [];
         foreach ($items->items as $item) {
-            if ($item === null || $item->value === null) {
+            if (!$item instanceof Node\Expr\ArrayItem) {
                 continue;
             }
             $value = $item->value;

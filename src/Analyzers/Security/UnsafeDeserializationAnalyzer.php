@@ -75,6 +75,25 @@ final class UnsafeDeserializationAnalyzer
                 );
             }
 
+            if (in_array($functionName, ['yaml_parse', 'yaml_parse_file', 'yaml_parse_url'], true)) {
+                $arg = $call->args[0] ?? null;
+                if ($arg === null) {
+                    continue;
+                }
+                if ($arg instanceof Node\Arg && $this->isLiteralOrConstant($arg->value)) {
+                    continue;
+                }
+                $issues[] = new Issue(
+                    self::RULE,
+                    sprintf('%s() is called with a non-literal (potentially untrusted) argument; YAML tags can instantiate PHP objects.', $functionName),
+                    $file,
+                    $call->getStartLine(),
+                    Severity::Critical,
+                    'custom',
+                    ['function' => $functionName]
+                );
+            }
+
             if ($functionName === 'ini_set' || $functionName === 'set_error_handler') {
                 $arg = $call->args[0] ?? null;
                 $arg2 = $call->args[1] ?? null;

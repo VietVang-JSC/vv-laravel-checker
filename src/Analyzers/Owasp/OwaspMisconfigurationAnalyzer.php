@@ -108,10 +108,44 @@ final class OwaspMisconfigurationAnalyzer extends AbstractAnalyzer
                     Severity::Warning,
                     ['kind' => 'placeholder']
                 );
+                continue;
+            }
+
+            $cookieFlag = $this->insecureCookieFlag($trimmed);
+            if ($cookieFlag !== null) {
+                $issues[] = $this->makeIssue(
+                    self::RULE,
+                    sprintf('Insecure session cookie flag: %s.', $cookieFlag),
+                    $file,
+                    $lineNo,
+                    Severity::Warning,
+                    ['kind' => 'cookie']
+                );
             }
         }
 
         return $issues;
+    }
+
+    /**
+     * Session cookies must be secure + http-only. Catches both PHP config
+     * form ('secure' => false) and .env form (SESSION_SECURE_COOKIE=false).
+     */
+    private function insecureCookieFlag(string $line): ?string
+    {
+        if (preg_match('/[\'"](secure|http_only)[\'"]\s*=>\s*false/i', $line, $m) === 1) {
+            return sprintf("'%s' is disabled", strtolower($m[1]));
+        }
+
+        if (preg_match('/^SESSION_SECURE_COOKIE\s*=\s*(?!true\b)\S+/i', $line) === 1) {
+            return 'SESSION_SECURE_COOKIE is not true';
+        }
+
+        if (preg_match('/[\'"]same_site[\'"]\s*=>\s*[\'"]none[\'"]/i', $line) === 1) {
+            return "'same_site' allows cross-site sending ('none')";
+        }
+
+        return null;
     }
 
     private function isDebugEnabled(string $line): bool

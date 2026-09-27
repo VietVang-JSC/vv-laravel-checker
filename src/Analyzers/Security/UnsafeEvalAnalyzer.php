@@ -12,7 +12,8 @@ use VietVang\QualityChecker\Result\Severity;
 /**
  * A03 Injection - unsafe eval.
  *
- * Flags eval()/assert()/create_function() with a non-literal argument, unless
+ * Flags eval()/assert()/create_function()/call_user_func()/call_user_func_array()
+ * with a non-literal first argument, unless
  * every dynamic leaf was validated by preg_match()/preg_match_all() in the
  * same function (e.g. a math expression allow-listed before eval). The filter
  * strength itself is not verified — this is a heuristic.
@@ -21,7 +22,7 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'UNSAFE_EVAL';
 
-    private const FUNCTIONS = ['eval', 'assert', 'create_function'];
+    private const FUNCTIONS = ['eval', 'assert', 'create_function', 'call_user_func', 'call_user_func_array'];
 
     public function analyze(array $files): array
     {

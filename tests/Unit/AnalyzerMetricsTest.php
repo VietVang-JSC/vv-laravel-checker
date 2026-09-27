@@ -18,6 +18,7 @@ use VietVang\QualityChecker\Analyzers\Owasp\OwaspSstiAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspXxeAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\HardcodedSecretAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\InsecureHashAnalyzer;
+use VietVang\QualityChecker\Analyzers\Security\MassAssignmentAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\UnsafeEvalAnalyzer;
 use VietVang\QualityChecker\Result\Issue;
 
@@ -34,7 +35,7 @@ use VietVang\QualityChecker\Result\Issue;
 final class AnalyzerMetricsTest extends TestCase
 {
     /**
-     * @return iterable<string, array{Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer), array<string, string>, string|null}>
+     * @return iterable<string, array{Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer|MassAssignmentAnalyzer), array<string, string>, string|null}>
      */
     public static function corpus(): iterable
     {
@@ -297,6 +298,32 @@ final class AnalyzerMetricsTest extends TestCase
             null,
         ];
 
+        // --- Mass assignment ---
+        yield 'mass_tp_update_or_create' => [
+            static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(),
+            [
+                'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController {\n    public function store(Request \$request) {\n        return Order::updateOrCreate(['code' => 'x'], \$request->all());\n    }\n}\n",
+                'app/Models/Order.php' => "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            ],
+            'MASS_ASSIGNMENT',
+        ];
+        yield 'mass_tp_empty_guarded' => [
+            static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(),
+            [
+                'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController extends Controller {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
+                'app/Models/Order.php' => "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {\n    protected \$guarded = [];\n}\n",
+            ],
+            'MASS_ASSIGNMENT',
+        ];
+        yield 'mass_fp_guarded' => [
+            static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(),
+            [
+                'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController extends Controller {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
+                'app/Models/Order.php' => "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {\n    protected \$guarded = ['id'];\n}\n",
+            ],
+            null,
+        ];
+
         // --- Migration ---
         yield 'mig_tp_dropcolumn_no_restore' => [
             static fn (): AbstractAnalyzer => new MigrationAnalyzer(),
@@ -517,7 +544,7 @@ final class AnalyzerMetricsTest extends TestCase
     }
 
     /**
-     * @param Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer) $factory
+     * @param Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer|MassAssignmentAnalyzer) $factory
      * @param array<string, string> $files
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('corpus')]

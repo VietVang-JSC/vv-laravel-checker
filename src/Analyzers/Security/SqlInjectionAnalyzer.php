@@ -25,6 +25,17 @@ final class SqlInjectionAnalyzer extends AbstractAnalyzer
         'groupByRaw',
     ];
 
+    /**
+     * Builder methods whose first argument is a column/expression name, not a
+     * value: tainted input here is column-name injection
+     * (e.g. orderBy($request->sort)).
+     */
+    private const COLUMN_METHODS = [
+        'orderBy',
+        'orderByDesc',
+        'groupBy',
+    ];
+
     public function analyze(array $files): array
     {
         $issues = [];
@@ -59,7 +70,13 @@ final class SqlInjectionAnalyzer extends AbstractAnalyzer
 
         foreach ($calls as $call) {
             $method = $call->name instanceof Node\Identifier ? $call->name->toString() : null;
-            if ($method === null || !in_array($method, self::RAW_METHODS, true)) {
+            if ($method === null) {
+                continue;
+            }
+
+            $isRaw = in_array($method, self::RAW_METHODS, true);
+            $isColumn = in_array($method, self::COLUMN_METHODS, true);
+            if (!$isRaw && !$isColumn) {
                 continue;
             }
 
@@ -71,7 +88,9 @@ final class SqlInjectionAnalyzer extends AbstractAnalyzer
                 if ($this->containsTaintedInput($arg->value)) {
                     $issues[] = $this->makeIssue(
                         self::RULE,
-                        sprintf('Potential SQL injection: tainted input flows into %s().', $method),
+                        $isColumn
+                            ? sprintf('Potential SQL injection: tainted column name flows into %s() (column-name injection).', $method)
+                            : sprintf('Potential SQL injection: tainted input flows into %s().', $method),
                         $file,
                         $call->getStartLine(),
                         Severity::Critical,
