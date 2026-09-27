@@ -9,6 +9,14 @@ use VietVang\QualityChecker\Analyzers\AbstractAnalyzer;
 use VietVang\QualityChecker\Result\Issue;
 use VietVang\QualityChecker\Result\Severity;
 
+/**
+ * A03 Injection - unsafe eval.
+ *
+ * Flags eval()/assert()/create_function() with a non-literal argument, unless
+ * every dynamic leaf was validated by preg_match()/preg_match_all() in the
+ * same function (e.g. a math expression allow-listed before eval). The filter
+ * strength itself is not verified — this is a heuristic.
+ */
 final class UnsafeEvalAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'UNSAFE_EVAL';
@@ -42,9 +50,16 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
             return [];
         }
 
+        $nodes = [];
+        foreach ($ast as $node) {
+            if ($node instanceof Node) {
+                $nodes[] = $node;
+            }
+        }
+
         $issues = [];
-        $calls = $this->finder()->findInstanceOf($ast, Node\Expr\FuncCall::class);
-        $evals = $this->finder()->findInstanceOf($ast, Node\Expr\Eval_::class);
+        $calls = $this->finder()->findInstanceOf($nodes, Node\Expr\FuncCall::class);
+        $evals = $this->finder()->findInstanceOf($nodes, Node\Expr\Eval_::class);
 
         foreach ($calls as $call) {
             if (!$call->name instanceof Node\Name) {
@@ -64,6 +79,9 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
             if ($this->isStaticValue($firstArg)) {
                 continue;
             }
+            if ($this->isValidatedExpression($firstArg, $call, $nodes)) {
+                continue;
+            }
 
             $issues[] = $this->makeIssue(
                 self::RULE,
@@ -78,6 +96,9 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
         foreach ($evals as $eval) {
             $expr = $eval->expr;
             if ($this->isStaticValue($expr)) {
+                continue;
+            }
+            if ($this->isValidatedExpression($expr, $eval, $nodes)) {
                 continue;
             }
 
@@ -105,5 +126,101 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
         }
 
         return false;
+    }
+
+    /**
+     * True when every dynamic leaf of the expression was validated by
+     * preg_match()/preg_match_all() in the enclosing function. Collects
+     * variables used as match subjects (any argument past the pattern).
+     *
+     * @param list<Node> $nodes
+     */
+    private function isValidatedExpression(Node\Expr $expr, Node $call, array $nodes): bool
+    {
+        $func = $this->enclosingFunction($call, $nodes);
+        if ($func === null) {
+            return false;
+        }
+
+        $guarded = [];
+        $matchers = $this->finder()->find($func, static function (Node $node): bool {
+            return $node instanceof Node\Expr\FuncCall
+                && $node->name instanceof Node\Name
+                && in_array(strtolower($node->name->toString()), ['preg_match', 'preg_match_all'], true);
+        });
+        foreach ($matchers as $matcher) {
+            if (!$matcher instanceof Node\Expr\FuncCall) {
+                continue;
+            }
+            foreach (array_slice($matcher->args, 1) as $arg) {
+                if ($arg instanceof Node\Arg && $arg->value instanceof Node\Expr\Variable && is_string($arg->value->name)) {
+                    $guarded[$arg->value->name] = true;
+                }
+            }
+        }
+
+        if ($guarded === []) {
+            return false;
+        }
+
+        return $this->allLeavesGuarded($expr, $guarded);
+    }
+
+    /**
+     * @param array<string, true> $guarded
+     */
+    private function allLeavesGuarded(Node\Expr $expr, array $guarded): bool
+    {
+        if ($this->isStaticValue($expr)) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+            return isset($guarded[$expr->name]);
+        }
+
+        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
+            return $this->allLeavesGuarded($expr->left, $guarded)
+                && $this->allLeavesGuarded($expr->right, $guarded);
+        }
+
+        if ($expr instanceof Node\Scalar\InterpolatedString) {
+            foreach ($expr->parts as $part) {
+                if ($part instanceof Node\Expr && !$this->allLeavesGuarded($part, $guarded)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param list<Node> $nodes
+     */
+    private function enclosingFunction(
+        Node $call,
+        array $nodes
+    ): Node\Stmt\ClassMethod|Node\Stmt\Function_|null {
+        $target = spl_object_id($call);
+        $funcs = $this->finder()->find($nodes, static function (Node $node): bool {
+            return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
+        });
+
+        foreach ($funcs as $func) {
+            if (!$func instanceof Node\Stmt\ClassMethod && !$func instanceof Node\Stmt\Function_) {
+                continue;
+            }
+            $found = $this->finder()->find($func, static function (Node $node) use ($target): bool {
+                return spl_object_id($node) === $target;
+            });
+            if ($found !== []) {
+                return $func;
+            }
+        }
+
+        return null;
     }
 }

@@ -7,11 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (new public pilots audit)
+
+- Secret skips field-name declarations (`OPT_* = '...'`); eval skips
+  preg-validated expressions; SSTI skips template registries; CSRF
+  `install/*` downgraded; Blade `Html::` builders and paginator render.
+
 ### Added
 
 - Remediation catalog (`src/Remediation/RuleRemediation.php`, 38 rules):
-  every finding now teaches the fix — bilingual why + before/after sample,
-  rendered in console (why_vi per rule), HTML (fixbox per rule group),
+  every finding now teaches the fix — English why + before/after sample,
+  rendered in console (why per rule), HTML (fixbox per rule group),
   Markdown (`## Remediation`), JSON (`remediation` per issue) and SARIF
   (`help` + `helpUri` per rule descriptor).
 

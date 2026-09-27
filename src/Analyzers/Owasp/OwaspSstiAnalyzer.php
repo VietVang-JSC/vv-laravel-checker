@@ -96,6 +96,9 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
             if ($this->isLiteralExpression($arg, $call, $scopes)) {
                 continue;
             }
+            if ($this->isViewRegistry($arg)) {
+                continue;
+            }
 
             $issues[] = $this->makeIssue(
                 self::RULE,
@@ -196,6 +199,30 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
             }
 
             return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Template registries (`$this->views['show']`, `$this->template`) hold
+     * framework-resolved view names, not request input — unless rooted at
+     * `$request`/`request()`. A bare `$view`/`$template` variable stays
+     * flaggable: it may carry anything, and the literal/param rules already
+     * cover the provably-safe cases.
+     */
+    private function isViewRegistry(Node\Expr $expr): bool
+    {
+        if ($expr instanceof Node\Expr\ArrayDimFetch) {
+            return $this->isViewRegistry($expr->var);
+        }
+
+        if ($this->rootVariableName($expr) === 'request') {
+            return false;
+        }
+
+        if ($expr instanceof Node\Expr\PropertyFetch && $expr->name instanceof Node\Identifier) {
+            return in_array(strtolower($expr->name->toString()), ['view', 'views', 'template', 'layout'], true);
         }
 
         return false;

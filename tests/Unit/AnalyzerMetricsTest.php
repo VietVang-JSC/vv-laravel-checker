@@ -16,7 +16,9 @@ use VietVang\QualityChecker\Analyzers\Owasp\OwaspPathTraversalAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspSstiAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspXxeAnalyzer;
+use VietVang\QualityChecker\Analyzers\Security\HardcodedSecretAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\InsecureHashAnalyzer;
+use VietVang\QualityChecker\Analyzers\Security\UnsafeEvalAnalyzer;
 use VietVang\QualityChecker\Result\Issue;
 
 /**
@@ -32,7 +34,7 @@ use VietVang\QualityChecker\Result\Issue;
 final class AnalyzerMetricsTest extends TestCase
 {
     /**
-     * @return iterable<string, array{Closure(): (AbstractAnalyzer|InsecureHashAnalyzer), array<string, string>, string|null}>
+     * @return iterable<string, array{Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer), array<string, string>, string|null}>
      */
     public static function corpus(): iterable
     {
@@ -203,6 +205,11 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/PosController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass PosController extends Controller {\n    public function index() {\n        \$industry = 2;\n        \$viewName = 'front.pos.pos_type_' . \$industry . '.pos_new';\n        return view(\$viewName);\n    }\n}\n"],
             null,
         ];
+        yield 'ssti_fp_view_registry' => [
+            static fn (): AbstractAnalyzer => new OwaspSstiAnalyzer(),
+            ['app/Abstracts/Report.php' => "<?php\nnamespace App;\nclass Report {\n    protected \$views = ['show' => 'reports.show'];\n    public function show() {\n        return view(\$this->views['show']);\n    }\n}\n"],
+            null,
+        ];
 
         // --- XXE ---
         yield 'xxe_tp_sink' => [
@@ -225,6 +232,16 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'hash_fp_hibp' => [
             static fn (): InsecureHashAnalyzer => new InsecureHashAnalyzer(),
             ['app/Services/PasswordBreachService.php' => "<?php\nnamespace App\\Services;\nclass PasswordBreachService {\n    public function breached(string \$password): bool {\n        \$prefix = strtoupper(substr(sha1(\$password), 0, 5));\n        \$body = file_get_contents('https://api.pwnedpasswords.com/range/' . \$prefix);\n        return str_contains((string) \$body, 'suffix');\n    }\n}\n"],
+            null,
+        ];
+        yield 'eval_fp_preg_guarded' => [
+            static fn (): UnsafeEvalAnalyzer => new UnsafeEvalAnalyzer(),
+            ['app/Services/MathService.php' => "<?php\nnamespace App\\Services;\nclass MathService {\n    public function calc(string \$quantity): float {\n        if (!preg_match('/^[0-9]+$/', \$quantity)) {\n            throw new \\InvalidArgumentException('bad');\n        }\n        return (float) eval('return ' . \$quantity . ';');\n    }\n}\n"],
+            null,
+        ];
+        yield 'secret_fp_option_const' => [
+            static fn (): HardcodedSecretAnalyzer => new HardcodedSecretAnalyzer(),
+            ['app/Console/Commands/Install.php' => "<?php\nnamespace App\\Console\\Commands;\nclass Install {\n    const OPT_DB_PASSWORD = 'db-password';\n}\n"],
             null,
         ];
 
@@ -400,6 +417,16 @@ final class AnalyzerMetricsTest extends TestCase
             ['packages/Webkul/Shop/src/Resources/views/layouts/header.blade.php' => "<div>{!! view_render_event('bagisto.shop.header.before') !!}</div>\n"],
             null,
         ];
+        yield 'bladexss_fp_form_builder' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/events/edit.blade.php' => "<div>{!! Form::model(\$event, ['route' => 'events.show']) !!}</div>\n"],
+            null,
+        ];
+        yield 'bladexss_fp_html_builder' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/events/index.blade.php' => "<div>{!! Html::sortable_link(trans('Name'), \$sort) !!}</div>\n"],
+            null,
+        ];
         yield 'bladexss_fp_json_hex' => [
             static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
             ['resources/views/pos/index.blade.php' => "<script>var C = {!! json_encode(\$cfg, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!};</script>\n"],
@@ -413,7 +440,7 @@ final class AnalyzerMetricsTest extends TestCase
     }
 
     /**
-     * @param Closure(): (AbstractAnalyzer|InsecureHashAnalyzer) $factory
+     * @param Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer) $factory
      * @param array<string, string> $files
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('corpus')]

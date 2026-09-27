@@ -70,15 +70,15 @@ final class DisabledCsrfAnalyzer
                 $except = $this->findProperty($class, 'except');
                 $patterns = $except !== null ? $this->wildcardPatterns($except) : [];
                 if ($patterns !== []) {
-                    $apiOnly = $patterns !== [] && $this->isApiOnlyExclusion($patterns);
+                    $limited = $this->isLimitedExclusion($patterns);
                     $issues[] = new Issue(
                         self::RULE_EXCEPTION_STAR,
-                        $apiOnly
-                            ? 'VerifyCsrfToken::$except excludes "api/*": acceptable only for stateless (token-authenticated) APIs — verify no session-authenticated route lives under /api/.'
+                        $limited
+                            ? 'VerifyCsrfToken::$except excludes ("' . implode('", "', $patterns) . '"): acceptable only for stateless (token-authenticated) APIs or the one-time installer — verify no session-authenticated route matches.'
                             : 'VerifyCsrfToken::$except contains a broad wildcard pattern ("*"), disabling CSRF protection.',
                         $file,
                         $except->getStartLine(),
-                        $apiOnly ? Severity::Warning : Severity::Critical,
+                        $limited ? Severity::Warning : Severity::Critical,
                         'custom',
                         ['class' => $this->className($class)]
                     );
@@ -177,12 +177,15 @@ final class DisabledCsrfAnalyzer
     }
 
     /**
+     * Limited exclusions (stateless `api/*`, one-time `install*` installer
+     * routes) are Warning-level: legitimate, but worth a review.
+     *
      * @param list<string> $patterns
      */
-    private function isApiOnlyExclusion(array $patterns): bool
+    private function isLimitedExclusion(array $patterns): bool
     {
         foreach ($patterns as $pattern) {
-            if ($pattern !== 'api/*') {
+            if ($pattern !== 'api/*' && !str_starts_with($pattern, 'install')) {
                 return false;
             }
         }

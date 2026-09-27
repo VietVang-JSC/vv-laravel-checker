@@ -354,6 +354,9 @@ cannot regress silently.
 | K — internal POS backend | Laravel | ~700 | — | **254** (1 / 50 / 203) | coverage debt + 20 BAC (JWT groups resolved) |
 | L — internal web app (backend) | Laravel | ~600 | — | **511** (8 / 279 / 224) | hardcoded API key + exec-from-DB + 270 blade |
 | M — internal web app (frontend) | Laravel | ~800 | — | **143** (1 / 46 / 96) | auth-flow findings + payment CSRF exceptions |
+| N — OSS accounting app | Laravel | ~1,500 | — | **559** (1 / 523 / 35) | 500 blade + 3 unserialize TP + preg-guarded eval |
+| O — OSS starter kit | Laravel | ~400 | — | **57** (0 / 16 / 41) | clean baseline |
+| P — OSS ticketing app | Laravel | ~900 | — | **112** (0 / 57 / 55) | Form:: builders + installer CSRF |
 
 *(severity split: critical / error / warning)*
 

@@ -133,8 +133,10 @@ php artisan quality:check --tier=all --fail-on=none
     names (`$file`, `$path`, `$source`, `$outputDir`...) count as local
     paths — unless the root is `$request`/`request()`; dynamic
     `include`/`require` is always reported (LFI to RCE, no exemption).
-  - SSTI: template variables assigned a string literal in the same function
-    (`$viewName = 'backend.page'; view($viewName)`), and
+  - SSTI: template variables assigned a string literal — or a concatenation
+    composed solely of literals — in the same function
+    (`$viewName = 'front.pos_' . $industry` with `$industry = 2`), template
+    registry properties (`$this->views['show']`, `$this->template`), and
     non-public helpers where every same-file call site passes a literal for the
     template parameter (public helpers are not exempted because they can be called from another file).
 - **Pilot case (HRM app)**: the binary resolver uses
@@ -192,7 +194,8 @@ php artisan quality:check --tier=all --fail-on=none
   `htmlspecialchars()`, `purify()`, `clean()`), `json_encode()` with all 4
   `JSON_HEX_*` flags (missing flags are still reported — `</script>` breakout is real),
   framework event hooks (`view_render_event(...)` — output from internal
-  listeners, 440 findings from theme event hooks in one pilot), paginator `->links()`, `{{ ... }}`
+  listeners), form builders (`Form::`/`Html::` — values escaped by the
+  builder), paginator `->links()` / `->appends()->render()`, `{{ ... }}`
   (escaped syntax), and sanitized-HTML conventions: `*Html`/`*Rendered`/`*Sanitized`
   variables or `->getHtml()`/`->renderedHTML` methods/properties
   (markdown rendered and purified at the model layer).
@@ -204,8 +207,17 @@ php artisan quality:check --tier=all --fail-on=none
   are also matched** — this is intentional. For test fixtures, either use clearly
   fake values that do not match the pattern, or exclude the test directory from the
   security scan paths.
+- Field-name constants (e.g. `OPT_DB_PASSWORD = 'db-password'`) are skipped —
+  the right side names a CLI option, it is not a credential.
 - Placeholders such as `xxx`, `changeme`, or empty strings in config files are reported
   by `OWASP_MISCONFIGURATION` (warning level) — replace them with `env()`.
+
+### `UNSAFE_EVAL`
+- **Reported when**: `eval()`/`assert()`/`create_function()` receive a non-literal argument.
+- **Automatically skipped**: literals, and expressions whose every dynamic leaf
+  was validated by `preg_match()`/`preg_match_all()` in the same function
+  (e.g. a math expression allow-listed before eval). Filter strength itself is
+  not verified — review the regex.
 
 ### `DISABLED_CSRF_EXCEPTION_STAR`
 - **Reported as Critical when**: `$except` contains a wildcard beyond `api/*` (e.g. `*`,

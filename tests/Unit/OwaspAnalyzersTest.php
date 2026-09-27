@@ -198,6 +198,19 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testSstiSkipsViewRegistryProperty(): void
+    {
+        $file = $this->temp(
+            "<?php\nnamespace App;\nclass Report {\n    protected \$views = ['show' => 'reports.show'];\n" .
+            "    public function show() {\n        return view(\$this->views['show']);\n    }\n}\n",
+            'app/Abstracts/Report.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testSstiSkipsProtectedHelperWithLiteralCallSites(): void
     {
         $file = $this->temp(

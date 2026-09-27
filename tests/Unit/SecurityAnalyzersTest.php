@@ -119,6 +119,20 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testUnsafeEvalSkipsPregValidatedExpression(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nclass MathService {\n    public function calc(string \$quantity): float {\n" .
+            "        if (!preg_match('/^[0-9,+\\-*\\/().\\s]+\$/', \$quantity)) {\n            throw new \\InvalidArgumentException('bad');\n        }\n" .
+            "        \$result = eval('return ' . \$quantity . ';');\n        return (float) \$result;\n    }\n}\n",
+            'app/Services/MathService.php'
+        );
+
+        $issues = (new UnsafeEvalAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     /** HardcodedSecretAnalyzer */
 
     public function testHardcodedSecretFlagsOpenAiKey(): void
@@ -139,6 +153,18 @@ final class SecurityAnalyzersTest extends TestCase
         $file = $this->tempPhp(
             "<?php\nnamespace App\\Services;\nclass GreetingService {\n    private string \$greeting = 'Hello World';\n}\n",
             'app/Services/GreetingService.php'
+        );
+
+        $issues = (new HardcodedSecretAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testHardcodedSecretSkipsOptionNameConstant(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Console\\Commands;\nclass Install {\n    const OPT_DB_PASSWORD = 'db-password';\n}\n",
+            'app/Console/Commands/Install.php'
         );
 
         $issues = (new HardcodedSecretAnalyzer())->analyze([$file]);
@@ -353,6 +379,20 @@ final class SecurityAnalyzersTest extends TestCase
     {
         $file = $this->tempPhp(
             "<?php\nnamespace App\\Http\\Middleware;\nclass VerifyCsrfToken {\n    protected \$except = ['api/*'];\n}\n",
+            'app/Http/Middleware/VerifyCsrfToken.php'
+        );
+
+        $issues = (new DisabledCsrfAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertSame('DISABLED_CSRF_EXCEPTION_STAR', $issues[0]->rule);
+        self::assertSame(Severity::Warning, $issues[0]->severity);
+    }
+
+    public function testDisabledCsrfDowngradesInstallerException(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Middleware;\nclass VerifyCsrfToken {\n    protected \$except = ['install/*'];\n}\n",
             'app/Http/Middleware/VerifyCsrfToken.php'
         );
 

@@ -153,6 +153,42 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testSkipsFormBuilderOutput(): void
+    {
+        $file = $this->temp(
+            "<div>{!! Form::model(\$event, ['route' => route('events.show', ['id' => \$event->id])]) !!}</div>\n",
+            'resources/views/events/edit.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsHtmlBuilderOutput(): void
+    {
+        $file = $this->temp(
+            "<div>{!! Html::sortable_link(trans('Name'), \$sort, 'name') !!}</div>\n",
+            'resources/views/events/index.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsPaginatorAppendsRender(): void
+    {
+        $file = $this->temp(
+            "<div>{!! \$events->appends(['sort' => 'name'])->render() !!}</div>\n",
+            'resources/views/events/index.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testSkipsJsonEncodeWithHexFlags(): void
     {
         $file = $this->temp(

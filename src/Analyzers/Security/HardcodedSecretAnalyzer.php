@@ -13,6 +13,15 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'HARDCODED_SECRET';
 
+    /**
+     * Identifier fragments marking a field/option NAME rather than a secret
+     * value (e.g. `const OPT_DB_PASSWORD = 'db-password'` — the right side
+     * names the CLI option, it is not a credential).
+     */
+    private const FIELD_NAME_MARKERS = [
+        'OPT', 'OPTION', 'FLAG', 'COLUMN', 'FIELD', 'LABEL', 'ATTR', 'PARAM',
+    ];
+
     private const PATTERNS = [
         '/sk-(?:[A-Za-z0-9]){20,}/' => 'OpenAI API key',
         '/AKIA[0-9A-Z]{16}/' => 'AWS access key',
@@ -55,6 +64,9 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
         $lines = preg_split('/\r\n|\r|\n/', $code) ?: [];
 
         foreach ($lines as $index => $line) {
+            if ($this->isFieldNameDeclaration($line)) {
+                continue;
+            }
             foreach (self::PATTERNS as $pattern => $label) {
                 if (preg_match($pattern, $line, $m) === 1) {
                     $issues[] = $this->makeIssue(
@@ -71,5 +83,16 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
         }
 
         return $issues;
+    }
+
+    private function isFieldNameDeclaration(string $line): bool
+    {
+        foreach (self::FIELD_NAME_MARKERS as $marker) {
+            if (preg_match('/\b' . $marker . '(_|$)/i', $line) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

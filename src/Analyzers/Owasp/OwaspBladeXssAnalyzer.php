@@ -21,7 +21,8 @@ use VietVang\QualityChecker\Result\Severity;
  * `sanitizeHtml(...)`, `strip_tags(...)`, `htmlspecialchars(...)` and alike,
  * `json_encode(...)` with all four JSON_HEX_* flags, framework event-hook
  * output (`view_render_event(...)`), the escaped `{{ ... }}` syntax (which is
- * safe by definition), paginator `->links(...)` output, and variables whose
+ * safe by definition), paginator `->links(...)` / `->appends(...)->render()`
+ * output, and variables whose
  * name marks pre-rendered/sanitized HTML (`$commentHtml`, `$page->getHtml()`).
  */
 final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
@@ -41,11 +42,13 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
     private const JSON_HEX_FLAGS = ['JSON_HEX_TAG', 'JSON_HEX_APOS', 'JSON_HEX_AMP', 'JSON_HEX_QUOT'];
 
     /**
-     * Framework event hooks whose output comes from internal listeners, not
-     * user data (e.g. Bagisto `{!! view_render_event('...') !!}` theming hook
-     * present in hundreds of templates).
+     * Framework event hooks and form builders whose output comes from internal
+     * rendering (values escaped by the builder), not raw user data — e.g.
+     * `{!! view_render_event('...') !!}` theming hooks,
+     * Laravel Collective `{!! Form::open(...) !!}` / `{!! Html::link(...) !!}`,
+     * and paginator `{!! $rows->links() !!}` / `{!! $rows->appends([...])->render() !!}`.
      */
-    private const EVENT_FUNCS = ['view_render_event'];
+    private const EVENT_FUNCS = ['view_render_event', 'form::', 'html::'];
 
     public function supports(string $path): bool
     {
@@ -115,6 +118,10 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
                 continue;
             }
 
+            if (str_contains($inner, '->appends(') && str_contains($inner, '->render()')) {
+                continue;
+            }
+
             if (preg_match('/\$\w*(html|rendered|sanitized|purified|markup)/i', $inner) === 1) {
                 continue;
             }
@@ -162,7 +169,8 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
     {
         $lower = strtolower($inner);
         foreach (self::EVENT_FUNCS as $fn) {
-            if (str_contains($lower, $fn . '(')) {
+            $needle = str_ends_with($fn, '::') ? $fn : $fn . '(';
+            if (str_contains($lower, $needle)) {
                 return true;
             }
         }
