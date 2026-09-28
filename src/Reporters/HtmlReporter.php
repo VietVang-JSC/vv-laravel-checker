@@ -743,6 +743,7 @@ final class HtmlReporter implements ReporterInterface
             . $this->buildToolbar()
             . $this->buildSummaryGrid($summary, $rules)
             . $this->buildQualityScore(QualityScore::score($results))
+            . $this->buildDeltaCard($ctx)
             . $this->buildRulesTable($rules)
             . $this->buildOwaspSection($owasp, $owaspIssues, $ctx)
             . $this->buildCheckerTable($checkers)
@@ -806,6 +807,7 @@ final class HtmlReporter implements ReporterInterface
             . '<nav aria-label="Report sections"><ul>' . "\n"
             . '<li><a href="#summary">Summary</a></li>' . "\n"
             . '<li><a href="#quality-score">Quality Score</a></li>' . "\n"
+            . '<li><a href="#delta">Delta</a></li>' . "\n"
             . '<li><a href="#top-rules">Top Rules</a></li>' . "\n"
             . '<li><a href="#owasp">OWASP</a></li>' . "\n"
             . '<li><a href="#checkers">Per-Checker</a></li>' . "\n"
@@ -1299,7 +1301,8 @@ final class HtmlReporter implements ReporterInterface
                 . '<td><a class="file-link" href="' . $this->escape($href) . '" title="'
                 . $this->escape($file) . '">' . $this->escape($this->shortPath($file)) . '</a></td>'
                 . '<td class="severity ' . $this->escape($issue['severity']) . '">' . $this->escape($issue['severity']) . '</td>'
-                . '<td>' . $this->escape($issue['confidence']) . '</td>'
+                . '<td>' . $this->escape($issue['confidence']) . ' <small>('
+                . $this->escape($this->confidenceScoreLabel($issue['confidence'])) . ')</small></td>'
                 . '<td>' . $this->escape($issue['line'] !== null ? (string) $issue['line'] : '-') . '</td>'
                 . '<td>' . $this->escape($issue['message'])
                 . ($snippet !== ''
@@ -1316,6 +1319,50 @@ final class HtmlReporter implements ReporterInterface
         return $html . '</tbody>' . "\n"
             . '</table>' . "\n"
             . '</details>' . "\n";
+    }
+
+    private function confidenceScoreLabel(string $confidence): string
+    {
+        return match (strtolower($confidence)) {
+            'high' => '1.0',
+            'medium' => '0.5',
+            'low' => '0.25',
+            default => '?',
+        };
+    }
+
+    /**
+     * PR-style delta vs the baseline file. Rendered only when the command
+     * computed one (baseline file present, not generating).
+     */
+    private function buildDeltaCard(CheckContext $ctx): string
+    {
+        $delta = $ctx->metadata['delta'] ?? null;
+        if (!is_array($delta)) {
+            return '';
+        }
+
+        $rows = '';
+        /** @var array<string, int> $byRule */
+        $byRule = is_array($delta['new_by_rule'] ?? null) ? $delta['new_by_rule'] : [];
+        foreach (array_slice($byRule, 0, 10, true) as $rule => $count) {
+            $rows .= '<div class="bar-row">'
+                . '<span class="bar-label" title="' . $this->escape((string) $rule) . '">'
+                . $this->escape((string) $rule) . '</span>'
+                . '<span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>'
+                . '<span class="bar-val">+' . (int) $count . '</span>'
+                . '</div>' . "\n";
+        }
+
+        return '<div class="card" id="delta">' . "\n"
+            . '<h2>Delta vs Baseline</h2>' . "\n"
+            . '<div class="summary-grid">' . "\n"
+            . $this->stat('New', (int) ($delta['new'] ?? 0))
+            . $this->stat('Fixed', (int) ($delta['fixed'] ?? 0))
+            . $this->stat('Existing', (int) ($delta['existing'] ?? 0))
+            . '</div>' . "\n"
+            . $rows
+            . '</div>' . "\n";
     }
 
     /**

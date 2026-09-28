@@ -29,7 +29,21 @@ final class Issue
             'source' => $this->source,
             'metadata' => $this->metadata,
             'confidence' => $this->confidence->value,
+            'confidence_score' => $this->confidenceScore(),
         ];
+    }
+
+    /**
+     * Numeric confidence 0.0-1.0. Same weights as the quality-score
+     * deductions (see Reporters\QualityScore) so reports stay consistent.
+     */
+    public function confidenceScore(): float
+    {
+        return match ($this->confidence) {
+            Confidence::High => 1.0,
+            Confidence::Medium => 0.5,
+            Confidence::Low => 0.25,
+        };
     }
 
     public static function fromArray(array $data): self

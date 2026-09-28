@@ -319,4 +319,41 @@ final class HtmlReporterTest extends TestCase
         self::assertStringContainsString('Must Fix', $html);
         self::assertStringContainsString('href="#quality-score"', $html);
     }
+
+    public function testConfidenceScoresShownPerIssue(): void
+    {
+        $html = $this->renderHtml();
+
+        self::assertStringContainsString('(1.0)', $html);
+        self::assertStringContainsString('(0.25)', $html);
+    }
+
+    public function testDeltaCardRendersFromMetadata(): void
+    {
+        $this->tempDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-html-delta-' . uniqid('', true);
+        @mkdir($this->tempDir, 0777, true);
+
+        $results = [
+            new CheckResult('custom', 'failed', 0.1, [], null, null),
+        ];
+        $ctx = new CheckContext(
+            sys_get_temp_dir(),
+            ['app'],
+            [],
+            $this->tempDir,
+            packageVersion: '1.0.0'
+        );
+        $ctx->metadata['delta'] = [
+            'new' => 2,
+            'fixed' => 7,
+            'existing' => 481,
+            'new_by_rule' => ['OWASP_SSRF' => 2],
+        ];
+
+        (new HtmlReporter())->render($results, $ctx);
+        $html = (string) file_get_contents($this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.html');
+
+        self::assertStringContainsString('id="delta"', $html);
+        self::assertStringContainsString('href="#delta"', $html);
+    }
 }

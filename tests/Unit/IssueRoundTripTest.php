@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Runner\CheckContext;
@@ -33,6 +34,18 @@ final class IssueRoundTripTest extends TestCase
         self::assertSame($issue->line, $restored->line);
         self::assertSame($issue->severity, $restored->severity);
         self::assertSame($issue->metadata, $restored->metadata);
+    }
+
+    public function testConfidenceScoreMapping(): void
+    {
+        $high = new Issue('R', 'm', 'f.php', 1, Severity::Error, 'custom', [], Confidence::High);
+        $medium = new Issue('R', 'm', 'f.php', 1, Severity::Error, 'custom', [], Confidence::Medium);
+        $low = new Issue('R', 'm', 'f.php', 1, Severity::Error, 'custom', [], Confidence::Low);
+
+        self::assertSame(1.0, $high->confidenceScore());
+        self::assertSame(0.5, $medium->confidenceScore());
+        self::assertSame(0.25, $low->confidenceScore());
+        self::assertSame(0.5, $medium->toArray()['confidence_score']);
     }
 
     public function testCheckResultRoundTrip(): void

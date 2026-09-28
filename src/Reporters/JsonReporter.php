@@ -25,6 +25,7 @@ final class JsonReporter implements ReporterInterface
             'min_confidence' => $ctx->minConfidence,
             'duration_total' => $this->totalDuration($results),
             'summary' => $this->buildSummary($results),
+            'delta' => $ctx->metadata['delta'] ?? null,
             'rules' => IssueGrouper::byRule($results),
             'owasp' => $this->buildOwasp($results),
             'checkers' => $this->buildCheckers($results),

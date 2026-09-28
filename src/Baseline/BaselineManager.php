@@ -23,7 +23,7 @@ final class BaselineManager
 {
     private const DEFAULT_FILENAME = 'baseline.json';
 
-    /** @var array<string, true> */
+    /** @var array<string, string> */
     private array $signatures = [];
 
     private ?string $baselineFile;
@@ -68,6 +68,16 @@ final class BaselineManager
 
         $this->signatures = $loaded;
 
+        return $this->signatures;
+    }
+
+    /**
+     * Loaded signatures (empty when load() found nothing).
+     *
+     * @return array<string, string> signature => signature
+     */
+    public function signatures(): array
+    {
         return $this->signatures;
     }
 

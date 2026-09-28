@@ -7,6 +7,7 @@ namespace Rampart\QualityChecker\Commands;
 use Illuminate\Console\Command;
 use Rampart\QualityChecker\Baseline\BaselineFilter;
 use Rampart\QualityChecker\Baseline\BaselineManager;
+use Rampart\QualityChecker\Baseline\IssueDelta;
 use Rampart\QualityChecker\Fixer\PhpcsFixer;
 use Rampart\QualityChecker\Reporters\ConsoleReporter;
 use Rampart\QualityChecker\Reporters\HtmlReporter;
@@ -54,6 +55,8 @@ final class QualityCheckCommand extends Command
         $runner = new CheckRunner($ctx);
         $checkers = $runner->buildCheckers();
         $results = $runner->run($checkers);
+
+        $this->recordDelta($ctx, $results);
 
         $results = $this->applyBaseline($ctx, $results);
 
@@ -142,6 +145,55 @@ final class QualityCheckCommand extends Command
         $ctx->metadata = ['format' => $format];
 
         return $ctx;
+    }
+
+    /**
+     * PR-style delta vs the baseline file (New / Fixed / Existing), stored
+     * on the context for reporters. Computed before baseline filtering so
+     * the "existing" count survives. Only when a baseline file exists and
+     * we are not (re)generating it.
+     *
+     * @param CheckResult[] $results
+     */
+    private function recordDelta(CheckContext $ctx, array $results): void
+    {
+        if (!is_file($ctx->baselineFile)) {
+            return;
+        }
+        try {
+            $generate = (bool) $this->option('baseline-generate');
+            $update = (bool) $this->option('baseline-update');
+        } catch (\Throwable $e) {
+            return;
+        }
+        if ($generate || $update) {
+            return;
+        }
+
+        $manager = new BaselineManager($ctx->baselineFile);
+        $manager->load();
+
+        $issues = [];
+        foreach ($this->resultsToArrays($results) as $result) {
+            foreach ($result['issues'] ?? [] as $issue) {
+                $issues[] = $issue;
+            }
+        }
+
+        $delta = IssueDelta::compute($issues, $manager->signatures());
+        $ctx->metadata['delta'] = [
+            'new' => count($delta['new']),
+            'fixed' => $delta['fixed'],
+            'existing' => $delta['existing'],
+            'new_by_rule' => $delta['new_by_rule'],
+        ];
+
+        $this->line(sprintf(
+            'Delta vs baseline: %d new, %d fixed, %d existing.',
+            count($delta['new']),
+            $delta['fixed'],
+            $delta['existing']
+        ));
     }
 
     /**

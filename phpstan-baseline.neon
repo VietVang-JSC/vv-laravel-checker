@@ -799,18 +799,6 @@ parameters:
 			path: src/Baseline/BaselineManager.php
 
 		-
-			message: '#^Property Rampart\\QualityChecker\\Baseline\\BaselineManager\:\:\$signatures \(array\<string, true\>\) does not accept array\<non\-empty\-string, non\-empty\-string\>\.$#'
-			identifier: assign.propertyType
-			count: 1
-			path: src/Baseline/BaselineManager.php
-
-		-
-			message: '#^Property Rampart\\QualityChecker\\Baseline\\BaselineManager\:\:\$signatures \(array\<string, true\>\) does not accept array\<string, string\>\.$#'
-			identifier: assign.propertyType
-			count: 1
-			path: src/Baseline/BaselineManager.php
-
-		-
 			message: '#^Method Rampart\\QualityChecker\\Checkers\\AbstractProcessChecker\:\:result\(\) has parameter \$issues with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1

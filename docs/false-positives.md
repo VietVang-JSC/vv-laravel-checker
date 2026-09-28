@@ -406,6 +406,17 @@ php artisan quality:check --tier=all --fail-on=none
   projects. `--fail-on=` sets the severity threshold, `--min-confidence=`
   drops low-confidence findings from the gate.
 
+## Delta vs baseline & confidence scores
+
+- With a `baseline.json` present, every run prints `Delta vs baseline: X new,
+  Y fixed, Z existing` (console), plus a `delta` block in JSON and a Delta
+  card in HTML. Moved lines count as new+fixed (same trade-off as baselining).
+- Every finding carries a numeric `confidence_score` (High 1.0 / Medium 0.5 /
+  Low 0.25), shown in JSON and next to the confidence badge in HTML. The
+  Quality Score dashboard deducts severity x confidence per finding, so
+  low-confidence noise cannot nuke the score — and only high-confidence
+  severe findings block the release gate.
+
 ## 4. Suggested review flow
 
 ```bash

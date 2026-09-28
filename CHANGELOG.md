@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (expert-review wave 2)
+- Delta vs baseline: console line, JSON `delta` block and HTML Delta card
+  (New / Fixed / Existing) whenever a `baseline.json` is present.
+- Numeric `confidence_score` per finding (High 1.0 / Medium 0.5 / Low 0.25)
+  in JSON payloads and next to HTML confidence badges; quality-score
+  deductions use the same weights.
+
 ### Changed (rebrand)
 - Renamed package `vietvang/quality-checker` → `rampart/laravel-checker` and
   namespace `VietVang\QualityChecker` → `Rampart\QualityChecker` (all sources,
