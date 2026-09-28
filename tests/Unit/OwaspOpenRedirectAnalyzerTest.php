@@ -358,6 +358,18 @@ final class OwaspOpenRedirectAnalyzerTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testSkipsOAuthAuthorizationUrl(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$authorizationUrl = \$qb->sdk()->getAuthorizationUrl();\nreturn redirect()->to(\$authorizationUrl);\n",
+            'app/Http/Controllers/OAuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testStillFlagsGetUrlBuilder(): void
     {
         $file = $this->temp(

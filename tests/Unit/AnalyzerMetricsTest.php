@@ -768,6 +768,11 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Services/StreamerAdapter.php' => "<?php\nreturn redirect(\$this->storage->getPresignedUrl(\$path));\n"],
             null,
         ];
+        yield 'openredirect_fp_oauth_authorization_url' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/OAuthController.php' => "<?php\n\$authorizationUrl = \$qb->sdk()->getAuthorizationUrl();\nreturn redirect()->to(\$authorizationUrl);\n"],
+            null,
+        ];
         yield 'openredirect_fp_storage_temporary_url' => [
             static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
             ['app/Http/Controllers/AuthController.php' => "<?php\nuse Illuminate\\Support\\Facades\\Storage;\nreturn redirect()->away(Storage::disk(\$disk)->temporaryUrl(\$file, now()->addMinutes(5)));\n"],

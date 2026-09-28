@@ -152,6 +152,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New rules `SESSION_FIXATION` (login without session rotation in the same
   function) and `WEAK_PASSWORD_POLICY` (`Password::min(N<8)`, short or missing
   `min:` on password fields).
+- Report status follows the gate: `fail-on=none` reports `completed` instead
+  of a contradictory `failed` (exit code stays 0).
+- Open redirect: OAuth SDK `getAuthorizationUrl()` skipped (provider-hosted).
 - Password policy: custom-message keys (`'password.min' => '...'`) and
   non-`rules()` positions are not fields; `$rules`-variable indirection is
   followed.

@@ -81,6 +81,7 @@ final class HtmlReporter implements ReporterInterface
     }
     .badge.passed { background: var(--pass); }
     .badge.warning { background: var(--warning); }
+    .badge.completed { background: var(--warning); }
     .badge.failed { background: var(--error); }
     h2 { font-size: 18px; margin: 0 0 12px; }
     h3 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
@@ -739,7 +740,7 @@ final class HtmlReporter implements ReporterInterface
             . '<div class="layout">' . "\n"
             . $this->buildSidebar($checkers, $summary, $rules, $hotFiles)
             . '<div class="main"><div class="container">' . "\n"
-            . $this->buildHeader($ctx, $this->overallStatus($results))
+            . $this->buildHeader($ctx, $this->overallStatus($results, $ctx->failOn))
             . $this->buildToolbar()
             . $this->buildSummaryGrid($summary, $rules)
             . $this->buildQualityScore(QualityScore::score($results))
@@ -1651,7 +1652,7 @@ final class HtmlReporter implements ReporterInterface
     /**
      * @param CheckResult[] $results
      */
-    private function overallStatus(array $results): string
+    private function overallStatus(array $results, string $failOn): string
     {
         $failed = false;
         $hasIssues = false;
@@ -1668,6 +1669,11 @@ final class HtmlReporter implements ReporterInterface
             }
         }
 
+        // With fail-on=none the gate never fails: report completion with
+        // findings instead of a contradictory "failed" status.
+        if (strtolower($failOn) === 'none') {
+            return $hasIssues ? 'completed' : 'passed';
+        }
         if ($failed) {
             return 'failed';
         }

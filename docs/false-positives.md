@@ -277,8 +277,9 @@ php artisan quality:check --tier=all --fail-on=none
   (`sprintf('https://oauth.host/authorize?%s', $query)` — including via a
   variable assigned that literal), no-argument `$request->url()` concatenations
   (current-URL getter), SDK-signed storage URLs
-  (`Storage::disk()->temporaryUrl()`, `->getPresignedUrl()` — the host is the
-  configured provider), and `*Safe*` methods (`getSafeUrl()`,
+  (`Storage::disk()->temporaryUrl()`, `->getPresignedUrl()`) and OAuth SDK
+  authorization URLs (`->getAuthorizationUrl()` — the host is the configured
+  provider), and `*Safe*` methods (`getSafeUrl()`,
   `getSafePreviousUrl()` — same naming-convention trade-off as `*Html`).
 - **Confidence**: plain variable / `$request->input()` / dynamic concatenation = High;
   `redirect($page->getUrl())` (method/property/static — usually an internal

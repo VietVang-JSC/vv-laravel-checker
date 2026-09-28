@@ -47,7 +47,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
      * never an attacker-steered host. `getUrl()` is deliberately excluded —
      * generic URL builders can return anything.
      */
-    private const SIGNED_URL_METHODS = ['temporaryurl', 'presignedurl', 'getpresignedurl', 'temporary_url', 'presigned_url'];
+    private const SIGNED_URL_METHODS = ['temporaryurl', 'presignedurl', 'getpresignedurl', 'temporary_url', 'presigned_url', 'getauthorizationurl'];
 
     public function analyze(array $files): array
     {

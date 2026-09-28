@@ -22,7 +22,7 @@ final class MarkdownReporter implements ReporterInterface
         $lines[] = '';
         $lines[] = 'Generated: ' . $generatedAt . ' | Package: v' . $version;
         $lines[] = '';
-        $lines[] = '**Status:** ' . $this->overallStatus($results)
+        $lines[] = '**Status:** ' . $this->overallStatus($results, $ctx->failOn)
             . ' | **Tier:** ' . $this->esc($ctx->tier)
             . ' | **Fail on:** ' . $this->esc($ctx->failOn)
             . ' | **Exit code:** ' . $ctx->exitCode;
@@ -367,7 +367,7 @@ final class MarkdownReporter implements ReporterInterface
         return $summary;
     }
 
-    private function overallStatus(array $results): string
+    private function overallStatus(array $results, string $failOn): string
     {
         $failed = false;
         $hasIssues = false;
@@ -384,6 +384,11 @@ final class MarkdownReporter implements ReporterInterface
             }
         }
 
+        // With fail-on=none the gate never fails: report completion with
+        // findings instead of a contradictory "failed" status.
+        if (strtolower($failOn) === 'none') {
+            return $hasIssues ? 'completed' : 'passed';
+        }
         if ($failed) {
             return 'failed';
         }

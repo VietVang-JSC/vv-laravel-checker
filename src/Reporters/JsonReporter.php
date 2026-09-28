@@ -19,7 +19,7 @@ final class JsonReporter implements ReporterInterface
             'generated_at' => (new \DateTimeImmutable())->format('Y-m-d\TH:i:sP'),
             'package_version' => $ctx->packageVersion,
             'exit_code' => $ctx->exitCode,
-            'overall_status' => $this->overallStatus($results),
+            'overall_status' => $this->overallStatus($results, $ctx->failOn),
             'tier' => $ctx->tier,
             'fail_on' => $ctx->failOn,
             'min_confidence' => $ctx->minConfidence,
@@ -103,7 +103,7 @@ final class JsonReporter implements ReporterInterface
     /**
      * @param CheckResult[] $results
      */
-    private function overallStatus(array $results): string
+    private function overallStatus(array $results, string $failOn): string
     {
         $failed = false;
         $hasIssues = false;
@@ -120,6 +120,11 @@ final class JsonReporter implements ReporterInterface
             }
         }
 
+        // With fail-on=none the gate never fails: report completion with
+        // findings instead of a contradictory "failed" status.
+        if (strtolower($failOn) === 'none') {
+            return $hasIssues ? 'completed' : 'passed';
+        }
         if ($failed) {
             return 'failed';
         }

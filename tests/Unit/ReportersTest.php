@@ -78,6 +78,32 @@ final class ReportersTest extends TestCase
 
     /** JsonReporter */
 
+    public function testFailOnNoneReportsCompletedInsteadOfFailed(): void
+    {
+        $ctx = $this->context();
+        $ctx->failOn = 'none';
+
+        (new JsonReporter())->render($this->sampleResults(), $ctx);
+
+        $file = $this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.json';
+        $payload = json_decode((string) file_get_contents($file), true);
+
+        self::assertSame('completed', $payload['overall_status']);
+    }
+
+    public function testFailOnErrorKeepsFailedStatus(): void
+    {
+        $ctx = $this->context();
+        $ctx->failOn = 'error';
+
+        (new JsonReporter())->render($this->sampleResults(), $ctx);
+
+        $file = $this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.json';
+        $payload = json_decode((string) file_get_contents($file), true);
+
+        self::assertSame('failed', $payload['overall_status']);
+    }
+
     public function testJsonKeepsStableKeysAndAddsEnterpriseKeys(): void
     {
         $ctx = $this->context();
