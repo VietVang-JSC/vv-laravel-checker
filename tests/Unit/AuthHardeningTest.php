@@ -187,4 +187,34 @@ final class AuthHardeningTest extends TestCase
 
         self::assertCount(0, $issues);
     }
+
+    public function testWeakPasswordPolicyFlagsStringWithoutMin(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Requests;\n" .
+            "class RegisterRequest extends \\Illuminate\\Foundation\\Http\\FormRequest {\n" .
+            "    public function rules(): array {\n        return ['password' => 'required|confirmed'];\n    }\n}\n",
+            'app/Http/Requests/RegisterRequest.php'
+        );
+
+        $issues = $this->onlyRule((new AuthHardeningAnalyzer())->analyze([$file]), 'WEAK_PASSWORD_POLICY');
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'WEAK_PASSWORD_POLICY', Severity::Warning));
+    }
+
+    public function testWeakPasswordPolicyFlagsRulesViaVariable(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Requests;\n" .
+            "class RegisterRequest extends \\Illuminate\\Foundation\\Http\\FormRequest {\n" .
+            "    public function rules(): array {\n        \$rules = ['password' => 'required|min:4'];\n        return \$rules;\n    }\n}\n",
+            'app/Http/Requests/RegisterRequest.php'
+        );
+
+        $issues = $this->onlyRule((new AuthHardeningAnalyzer())->analyze([$file]), 'WEAK_PASSWORD_POLICY');
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'WEAK_PASSWORD_POLICY', Severity::Warning));
+    }
 }

@@ -317,6 +317,7 @@ final class AuthHardeningAnalyzer
             if (
                 $parent instanceof Node\Expr\Array_
                 || $parent instanceof Node\Expr\ArrayItem
+                || $parent instanceof Node\Expr\Assign
                 || $parent instanceof Node\Stmt\Return_
                 || $parent instanceof Node\Stmt\Expression
             ) {
@@ -374,14 +375,19 @@ final class AuthHardeningAnalyzer
     private function weakPasswordRuleValue(?Node\Expr $value): ?string
     {
         if ($value instanceof Node\Scalar\String_) {
+            $hasMin = false;
             foreach (explode('|', $value->value) as $segment) {
                 $segment = trim($segment);
                 if (preg_match('/^min:(\d+)/', $segment, $matches) !== 1) {
                     continue;
                 }
+                $hasMin = true;
                 if ((int) $matches[1] < self::MIN_PASSWORD_LENGTH) {
                     return sprintf('minimum length %d is below the minimum; ', (int) $matches[1]);
                 }
+            }
+            if (!$hasMin) {
+                return 'no minimum length rule is defined; ';
             }
 
             return null;

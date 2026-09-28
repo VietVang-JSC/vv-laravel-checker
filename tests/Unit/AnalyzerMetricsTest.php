@@ -1048,6 +1048,11 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Requests/RegisterRequest.php' => "<?php\nnamespace App\\Http\\Requests;\nclass RegisterRequest extends \\Illuminate\\Foundation\\Http\\FormRequest {\n    public function rules(): array {\n        return ['password' => 'required|min:4'];\n    }\n}\n"],
             'WEAK_PASSWORD_POLICY',
         ];
+        yield 'auth_tp_string_no_min' => [
+            static fn (): AuthHardeningAnalyzer => new AuthHardeningAnalyzer(),
+            ['app/Http/Requests/RegisterRequest.php' => "<?php\nnamespace App\\Http\\Requests;\nclass RegisterRequest extends \\Illuminate\\Foundation\\Http\\FormRequest {\n    public function rules(): array {\n        return ['password' => 'required|confirmed'];\n    }\n}\n"],
+            'WEAK_PASSWORD_POLICY',
+        ];
         yield 'auth_fp_strong_min' => [
             static fn (): AuthHardeningAnalyzer => new AuthHardeningAnalyzer(),
             ['app/Http/Requests/RegisterRequest.php' => "<?php\nnamespace App\\Http\\Requests;\nclass RegisterRequest extends \\Illuminate\\Foundation\\Http\\FormRequest {\n    public function rules(): array {\n        return ['password' => ['required', 'min:8', 'confirmed']];\n    }\n}\n"],

@@ -1360,7 +1360,7 @@ final class HtmlReporter implements ReporterInterface
             if (is_file($abs) && @filesize($abs) < 1_048_576) {
                 // Reviewed: $abs comes from resolvePath() (base path + scan
                 // file list), not from request input.
-                // quality-checker-ignore-next-line OWASP_PATH_TRAVERSAL
+                // quality-checker-ignore-next-line OWASP_PATH_TRAVERSAL, OWASP_SSRF
                 $lines = @file($abs, FILE_IGNORE_NEW_LINES);
                 if (is_array($lines)) {
                     $this->lineCache[$abs] = $lines;
