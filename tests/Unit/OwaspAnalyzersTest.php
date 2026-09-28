@@ -1462,6 +1462,30 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testSsrfSkipsEnvAssignedProperty(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass EmsCommand {\n    private \$apiUrl;\n    public function __construct() {\n        \$this->apiUrl = env('EMS_URL');\n    }\n    public function run(\$client): void {\n        \$client->request('POST', \$this->apiUrl, []);\n    }\n}\n",
+            'app/Console/Commands/EmsCommand.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSsrfStillFlagsRequestAssignedProperty(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass EmsCommand {\n    private \$apiUrl;\n    public function run(\$client, \$request): void {\n        \$this->apiUrl = \$request->input('url');\n        \$client->request('POST', \$this->apiUrl, []);\n    }\n}\n",
+            'app/Console/Commands/EmsCommand.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertContains('OWASP_SSRF', $this->rules($issues));
+    }
+
     public function testSstiFlagsViewFacadeMake(): void
     {
         $file = $this->temp(

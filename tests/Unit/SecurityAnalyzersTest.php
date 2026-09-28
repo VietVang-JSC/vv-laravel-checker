@@ -333,6 +333,31 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertTrue($this->ruleMatches($issues[0], 'HARDCODED_SECRET', Severity::Critical));
     }
 
+    public function testHardcodedSecretFlagsPasswordComparison(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nclass AuthController {\n    public function login(string \$username, array \$credentials) {\n        if (\$credentials['password'] == '!S3cretMaster2024#Admin') {\n            return true;\n        }\n        return false;\n    }\n}\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new HardcodedSecretAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'HARDCODED_SECRET', Severity::Critical));
+    }
+
+    public function testHardcodedSecretSkipsPasswordVariableComparison(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nclass AuthController {\n    public function login(object \$user, string \$password) {\n        if (\$user->password === \$password) {\n            return true;\n        }\n        return false;\n    }\n}\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new HardcodedSecretAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testHardcodedSecretFlagsEnvDefaultSecret(): void
     {
         $file = $this->tempPhp(

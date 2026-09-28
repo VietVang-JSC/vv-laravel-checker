@@ -335,7 +335,7 @@ The **tier** controls what the gate fails on:
 Custom analyzers only (phpcs/phpstan/phpunit excluded), `tier=security`,
 `fail-on=none`, cold runs without cache. Quality is pinned by a labeled
 corpus (`tests/Unit/AnalyzerMetricsTest.php`): **precision 1.000 / recall 1.000**
-across 184 true/false-positive cases (68 TP + 116 TN), so the reductions below
+across 188 true/false-positive cases (70 TP + 118 TN), so the reductions below
 cannot regress silently.
 | Pilot | Stack | Files | Before | After | Signal left |
 |---|---|---|---|---|---|
@@ -365,6 +365,10 @@ cannot regress silently.
 | W — OSS helpdesk app | Laravel | ~500 | — | **81** (4 / 42 / 35) | safe_raw_html + signed tracking links + module SSRF review |
 | X — OSS blog package | Laravel | ~300 | — | **38** (1 / 6 / 31) | Gate-denies-throw + test fixtures + trivial authorize TP |
 | Y — OSS link manager | Laravel | ~230 | — | **82** (0 / 54 / 28) | guarded install routes + login auth + plugin includes |
+| Z — internal LMS app | Laravel 8 | ~200 | — | **195** (1 / 56 / 138) | master-password TP + session fixation + weak policy |
+| AA — internal shop app | Laravel 8 | ~150 | — | **139** (0 / 24 / 115) | password policy + validation debt |
+| AB — internal portal | Laravel 10 | ~450 | — | **265** (6 / 84 / 175) | shared master password + social login fixation |
+| AC — internal warehouse app | Laravel | ~800 | — | **479** (22 / 196 / 261) | property-origin SSRF + leaked API key TP |
 | W — OSS helpdesk app | Laravel | ~500 | — | **81** (4 / 42 / 35) | safe_raw_html + signed tracking links + module SSRF review |
 | X — OSS blog package | Laravel | ~300 | — | **38** (1 / 6 / 31) | Gate-denies-throw + test fixtures + trivial authorize TP |
 | Y — OSS link manager | Laravel | ~230 | — | **92** (0 / 64 / 28) | login auth + theme directory reads + plugin includes |

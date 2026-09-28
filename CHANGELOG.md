@@ -118,6 +118,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Blade: `safe_raw_html()` family, all-literal ternary branches (Elvis still
   flags), shared local-path hints extended (`tmp`, `temp`, `dest`).
 - Secrets: obvious fixtures in test paths skipped (test/fake/example/... markers).
+- Secrets: password-vs-long-literal comparisons (`==`/`===`/`!=`/`!==`, either
+  order) reported as master-password pattern; variable-to-variable stays silent.
+- SSRF: `$this->prop` (assignments + declaration defaults) origin tracking —
+  env()/config()-assigned properties count as deploy-time; request-assigned or
+  unassigned properties still flag.
 - New rule `INSECURE_COOKIE`: `Cookie::queue()/make()/forever()`, the
   `cookie()` helper and `->cookie()` without an explicit Secure flag
   (Warning) or with literal `false` (Error).

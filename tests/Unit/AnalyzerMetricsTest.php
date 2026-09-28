@@ -346,6 +346,16 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Services/ThemeService.php' => "<?php\nclass ThemeService {\n    public function scan(): void {\n        if (\$handle = opendir('themes')) {\n            while (false !== (\$entry = readdir(\$handle))) {\n                \$text = file_get_contents('themes/' . \$entry . '/readme.md');\n            }\n        }\n    }\n}\n"],
             null,
         ];
+        yield 'ssrf_fp_env_property' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Console/Commands/EmsCommand.php' => "<?php\nclass EmsCommand {\n    private \$apiUrl;\n    public function __construct() {\n        \$this->apiUrl = env('EMS_URL');\n    }\n    public function run(\$client): void {\n        \$client->request('POST', \$this->apiUrl, []);\n    }\n}\n"],
+            null,
+        ];
+        yield 'ssrf_tp_request_property' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Console/Commands/EmsCommand.php' => "<?php\nclass EmsCommand {\n    private \$apiUrl;\n    public function run(\$client, \$request): void {\n        \$this->apiUrl = \$request->input('url');\n        \$client->request('POST', \$this->apiUrl, []);\n    }\n}\n"],
+            'OWASP_SSRF',
+        ];
         yield 'ssrf_fp_glob_loop' => [
             static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
             ['app/Console/Commands/MoveUploads.php' => "<?php\n\$logos = glob('public/uploads/*.*');\nforeach (\$logos as \$logo) {\n    \$contents = file_get_contents(\$logo);\n}\n"],
@@ -546,6 +556,16 @@ final class AnalyzerMetricsTest extends TestCase
             static fn (): HardcodedSecretAnalyzer => new HardcodedSecretAnalyzer(),
             ['app/Services/WebhookService.php' => "<?php\nnamespace App\\Services;\nclass WebhookService {\n    private string \$secret = 'whsec_aB3x9QwE7rT2yU4iO6pQ8s';\n}\n"],
             'HARDCODED_SECRET',
+        ];
+        yield 'secret_tp_password_comparison' => [
+            static fn (): HardcodedSecretAnalyzer => new HardcodedSecretAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass AuthController {\n    public function login(array \$credentials) {\n        if (\$credentials['password'] == '!S3cretMaster2024#Admin') {\n            return true;\n        }\n        return false;\n    }\n}\n"],
+            'HARDCODED_SECRET',
+        ];
+        yield 'secret_fp_password_variable_comparison' => [
+            static fn (): HardcodedSecretAnalyzer => new HardcodedSecretAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass AuthController {\n    public function login(object \$user, string \$password) {\n        if (\$user->password === \$password) {\n            return true;\n        }\n        return false;\n    }\n}\n"],
+            null,
         ];
 
         // --- Mass assignment ---

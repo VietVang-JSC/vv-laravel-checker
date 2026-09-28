@@ -171,9 +171,11 @@ php artisan quality:check --tier=all --fail-on=none
     are not SSRF; `env()`/`config()` are deploy-time,
     even when wrapped in `rtrim()`/`sprintf()`/all-deploy-time concatenation.
   - SSRF/traversal share a naming convention: variables/properties with local-suggesting
-    names (`$file`, `$path`, `$source`, `$outputDir`...) count as local
+    names (`$file`, `$path`, `$source`, `$outputDir`, `$tmp`, `$dest`...) count as local
     paths — unless the root is `$request`/`request()`; `?->` nullsafe chains
-    follow the same rules; `copy()`/`readfile()`/`file()` count as read sinks;
+    follow the same rules; `$this->prop` assigned only deploy-time values
+    (SSRF: `env()` in constructor) counts as deploy-time; `copy()`/`readfile()`/
+    `file()` count as read sinks;
     `fsockopen()`/`pfsockopen()`/`stream_socket_client()` read the host from
     the first argument (literals like `'localhost'` stay silent);
     `curl_setopt($ch, CURLOPT_URL, $url)` reads the URL from the third argument;
@@ -330,6 +332,9 @@ php artisan quality:check --tier=all --fail-on=none
   placeholder/xxx). Production values with those markers still flag. For other
   test fixtures, either use clearly fake values, or exclude the test directory
   from the security scan paths.
+- **Password comparisons** (`$credentials['password'] == 'long-literal'`) are
+  reported as master-password pattern — including Yoda order. Variable-to-variable
+  comparisons stay silent.
 - Field-name constants (e.g. `OPT_DB_PASSWORD = 'db-password'`) are skipped —
   the right side names a CLI option, it is not a credential.
 - Placeholders such as `xxx`, `changeme`, or empty strings in config files are reported

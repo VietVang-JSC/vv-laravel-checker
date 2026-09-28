@@ -109,6 +109,20 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
                     break;
                 }
             }
+            $comparison = $this->hardcodedPasswordComparison($line);
+            if ($comparison !== null) {
+                if ($isTest && $this->isFakeFixture($comparison)) {
+                    continue;
+                }
+                $issues[] = $this->makeIssue(
+                    self::RULE,
+                    'Possible hardcoded secret detected: password compared against a hardcoded literal (master-password/backdoor pattern).',
+                    $file,
+                    $index + 1,
+                    Severity::Critical,
+                    ['kind' => 'hardcoded password comparison', 'hint' => mb_substr(trim($line), 0, 120)]
+                );
+            }
         }
 
         return $issues;
@@ -134,6 +148,27 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
         }
 
         return false;
+    }
+
+    /**
+     * Master-password pattern: a password-ish value compared (==/===/!=/!==)
+     * against a long string literal, e.g. if ($credentials['password'] ==
+     * '!S3cret...'). Returns the literal for fixture screening, null when
+     * the line does not match.
+     */
+    private function hardcodedPasswordComparison(string $line): ?string
+    {
+        $patterns = [
+            "/(?i)\\b(?:password|passwd|pwd)\\b['\"\\]\\s]*?(?:==|===|!=|!==)\\s*['\"]([^'\"]{8,})['\"]/",
+            "/(?i)['\"]([^'\"]{8,})['\"]\\s*(?:==|===|!=|!==)\\s*.*?\\b(?:password|passwd|pwd)\\b/",
+        ];
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $line, $m) === 1) {
+                return $m[1];
+            }
+        }
+
+        return null;
     }
 
     /**

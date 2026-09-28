@@ -304,6 +304,19 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             return false;
         }
 
+        // $this->apiUrl assigned only deploy-time values (typically
+        // env()/config() in the constructor) is deploy-time, not input.
+        // Any dynamic assignment keeps it flaggable.
+        if (
+            $expr instanceof Node\Expr\PropertyFetch
+            && $expr->var instanceof Node\Expr\Variable
+            && $expr->var->name === 'this'
+            && $expr->name instanceof Node\Identifier
+            && $this->isDeployTimeProperty($expr->name->toString(), $origins, [])
+        ) {
+            return false;
+        }
+
         if (
             $expr instanceof Node\Expr\FuncCall
             && $expr->name instanceof Node\Name
@@ -371,9 +384,11 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
 
     /**
      * Extra origins the assignment scan misses: foreach value/key variables
-     * (`foreach ($files as $file)` maps $file to $files) and array-element
-     * assignments (`$uploads['k'] = glob(...)` maps $uploads to the RHS).
-     * Only adds origins (silencing direction) — never removes any.
+     * (`foreach ($files as $file)` maps $file to $files), array-element
+     * assignments (`$uploads['k'] = glob(...)`), and `$this->prop = ...`
+     * property assignments (deploy-time config typically lands in
+     * properties: `$this->apiUrl = env('EMS_URL')`). Only adds origins
+     * (silencing direction) — never removes any.
      *
      * @param list<Node> $nodes
      * @return array<string, list<Node\Expr>>
@@ -383,9 +398,21 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         $origins = [];
         $loops = $this->finder()->find($nodes, static function (Node $node): bool {
             return $node instanceof Node\Stmt\Foreach_
-                || $node instanceof Node\Expr\Assign;
+                || $node instanceof Node\Expr\Assign
+                || $node instanceof Node\Stmt\Property;
         });
         foreach ($loops as $node) {
+            if ($node instanceof Node\Stmt\Property) {
+                foreach ($node->props as $prop) {
+                    if (
+                        $prop instanceof Node\Stmt\PropertyProperty
+                        && $prop->default instanceof Node\Expr
+                    ) {
+                        $origins['this->' . $prop->name->toString()][] = $prop->default;
+                    }
+                }
+                continue;
+            }
             if ($node instanceof Node\Stmt\Foreach_) {
                 if ($node->valueVar instanceof Node\Expr\Variable && is_string($node->valueVar->name)) {
                     $origins[$node->valueVar->name][] = $node->expr;
@@ -402,6 +429,20 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
                 && is_string($node->var->var->name)
             ) {
                 $origins[$node->var->var->name][] = $node->expr;
+            }
+            if (
+                $node instanceof Node\Expr\Assign
+                && $node->var instanceof Node\Expr\PropertyFetch
+                && $node->var->var instanceof Node\Expr\Variable
+                && $node->var->var->name === 'this'
+            ) {
+                // PropertyFetch->name is natively Node; dynamic property
+                // names ($this->$var) are not tracked as origins.
+                /** @var Node\Identifier|Node\Expr $propName */
+                $propName = $node->var->name;
+                if ($propName instanceof Node\Identifier) {
+                    $origins['this->' . $propName->toString()][] = $node->expr;
+                }
             }
         }
 
@@ -555,6 +596,33 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         }
 
         return false;
+    }
+
+    /**
+     * A $this->property is deploy-time when it has at least one assignment
+     * and every assignment is deploy-time.
+     *
+     * @param array<string, list<Node\Expr>> $origins
+     * @param array<string, true> $seen cycle guard
+     */
+    private function isDeployTimeProperty(string $name, array $origins, array $seen): bool
+    {
+        if (isset($seen[$name])) {
+            return false;
+        }
+        $seen[$name] = true;
+
+        $rhsList = $origins['this->' . $name] ?? [];
+        if ($rhsList === []) {
+            return false;
+        }
+        foreach ($rhsList as $rhs) {
+            if (!$this->isDeployTimeExpr($rhs, $origins, $seen)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
