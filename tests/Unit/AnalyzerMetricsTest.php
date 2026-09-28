@@ -113,6 +113,22 @@ final class AnalyzerMetricsTest extends TestCase
             ],
             null,
         ];
+        yield 'bac_fp_authorizing_formrequest' => [
+            static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
+            [
+                'app/Http/Controllers/AccountController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Http\\Requests\\CreateAccountRequest;\nclass AccountController extends Controller {\n    public function store(CreateAccountRequest \$request) {\n        return \$this->repo->store(\$request->validated());\n    }\n}\n",
+                'app/Http/Requests/CreateAccountRequest.php' => "<?php\nnamespace App\\Http\\Requests;\nclass CreateAccountRequest extends \\Illuminate\\Foundation\\Http\\FormRequest {\n    public function authorize() {\n        return \\Ninja::isHosted();\n    }\n}\n",
+            ],
+            null,
+        ];
+        yield 'bac_tp_trivial_formrequest' => [
+            static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
+            [
+                'app/Http/Controllers/AccountController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Http\\Requests\\OpenRequest;\nclass AccountController extends Controller {\n    public function store(OpenRequest \$request) {\n        return \$this->repo->store(\$request->validated());\n    }\n}\n",
+                'app/Http/Requests/OpenRequest.php' => "<?php\nnamespace App\\Http\\Requests;\nclass OpenRequest extends \\Illuminate\\Foundation\\Http\\FormRequest {\n    public function authorize() {\n        return true;\n    }\n}\n",
+            ],
+            'OWASP_BROKEN_ACCESS_CONTROL',
+        ];
         yield 'bac_tp_unknown_middleware' => [
             static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(true, ['extra_middleware' => ['verified-staff']]),
             [
@@ -431,6 +447,21 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Services/ImportService.php' => "<?php\nnamespace App\\Services;\nclass ImportService {\n    protected \$progressCallback;\n    public function run(): void {\n        if (\$this->progressCallback) {\n            call_user_func(\$this->progressCallback, 1);\n        }\n    }\n}\n"],
             null,
         ];
+        yield 'eval_fp_assert_instanceof' => [
+            static fn (): UnsafeEvalAnalyzer => new UnsafeEvalAnalyzer(),
+            ['app/Services/EmbedService.php' => "<?php\nnamespace App\\Services;\nclass EmbedService {\n    public function register(object \$adapter): void {\n        \\assert(\$adapter instanceof \\App\\Contracts\\EmbedAdapter);\n    }\n}\n"],
+            null,
+        ];
+        yield 'eval_tp_assert_variable' => [
+            static fn (): UnsafeEvalAnalyzer => new UnsafeEvalAnalyzer(),
+            ['app/Services/EmbedService.php' => "<?php\nnamespace App\\Services;\nclass EmbedService {\n    public function register(string \$check): void {\n        \\assert(\$check);\n    }\n}\n"],
+            'UNSAFE_EVAL',
+        ];
+        yield 'eval_fp_app_container_callable' => [
+            static fn (): UnsafeEvalAnalyzer => new UnsafeEvalAnalyzer(),
+            ['app/helpers.php' => "<?php\nfunction is_active(mixed \$routes): bool {\n    return (bool) call_user_func_array([app('router'), 'is'], (array) \$routes);\n}\n"],
+            null,
+        ];
         yield 'deser_tp_yaml_parse_input' => [
             static fn (): UnsafeDeserializationAnalyzer => new UnsafeDeserializationAnalyzer(),
             ['app/Services/ImportService.php' => "<?php\nnamespace App\\Services;\nclass ImportService {\n    public function run(\\Illuminate\\Http\\Request \$request): array {\n        return yaml_parse(\$request->input('doc'));\n    }\n}\n"],
@@ -537,6 +568,14 @@ final class AnalyzerMetricsTest extends TestCase
             [
                 'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Domain\\Shop\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
                 'app/Domain/Shop/Models/Order.php' => "<?php\nnamespace App\\Domain\\Shop\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            ],
+            null,
+        ];
+        yield 'mass_fp_unguarded_seeder' => [
+            static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(),
+            [
+                'database/seeders/UserSeeder.php' => "<?php\nnamespace Database\\Seeders;\nuse App\\Models\\User;\nclass UserSeeder {\n    public function run(): void {\n        User::unguard();\n        User::create(['name' => 'admin']);\n    }\n}\n",
+                'app/Models/User.php' => "<?php\nnamespace App\\Models;\nclass User extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
             ],
             null,
         ];
@@ -662,6 +701,16 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'openredirect_fp_safe_method' => [
             static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
             ['app/Http/Controllers/AuthController.php' => "<?php\nreturn redirect(\$this->getSafePreviousUrl());\n"],
+            null,
+        ];
+        yield 'openredirect_fp_sprintf_fixed_host' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/OAuthController.php' => "<?php\nreturn redirect()->to(sprintf('https://connect.example.com/oauth/authorize?%s', http_build_query(\$params)));\n"],
+            null,
+        ];
+        yield 'openredirect_fp_request_url_concat' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/CompassController.php' => "<?php\nreturn redirect(\$this->request->url() . '?logs=true');\n"],
             null,
         ];
 
@@ -851,6 +900,26 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'bladexss_fp_amount_formatter_family' => [
             static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
             ['resources/views/reports/budget.blade.php' => "<div>{!! format_amount_by_currency(\$currency, \$account['max_amount']) !!}</div>\n"],
+            null,
+        ];
+        yield 'bladexss_fp_literal_ternary' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/formfields/checkbox.blade.php' => "<div>{!! \$checked ? 'checked=\"checked\"' : '' !!}</div>\n"],
+            null,
+        ];
+        yield 'bladexss_tp_elvis_operator' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/users/show.blade.php' => "<div>{!! \$name ?: 'anonymous' !!}</div>\n"],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'bladexss_fp_excerpt_method' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/articles/summary.blade.php' => "<div>{!! \$article->excerpt() !!}</div>\n"],
+            null,
+        ];
+        yield 'bladexss_fp_md_to_html' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/articles/show.blade.php' => "<div>{!! md_to_html(\$article->body()) !!}</div>\n"],
             null,
         ];
         yield 'bladexss_fp_extra_sanitizer' => [

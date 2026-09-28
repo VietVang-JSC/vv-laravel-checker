@@ -85,6 +85,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
         }
         $known = $this->safeTargetVars($nodes);
         $pinned = $this->pinnedHostVars($nodes, $known);
+        $literals = $this->literalStringVars($nodes);
 
         $issues = [];
         $calls = $this->finder()->find($nodes, function (Node $node): bool {
@@ -108,7 +109,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
             }
             // Host-pinned lead: route('home').$path or signed storage URLs
             // keep the host even when the tail is dynamic.
-            if ($this->hasPinnedHostLead($target, $pinned)) {
+            if ($this->hasPinnedHostLead($target, $known, $pinned, $literals)) {
                 continue;
             }
             if (!$this->isFlaggableTarget($target)) {
@@ -396,6 +397,12 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
      */
     private function isHostPinned(Node\Expr $expr, array $known, array $pinned): bool
     {
+        // A leading literal with its own host pins the redirect:
+        // 'https://oauth.host/authorize?' . $query cannot steer off-site.
+        if ($expr instanceof Node\Scalar\String_) {
+            return $this->hasFixedHostPrefix($expr->value);
+        }
+
         if (
             $expr instanceof Node\Expr\FuncCall
             && $expr->name instanceof Node\Name
@@ -426,14 +433,40 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
     /**
      * A concatenation/interpolation whose leading part pins the host
      * (`route('index') . $from`) cannot redirect off-site no matter how
-     * dynamic the tail is.
+     * dynamic the tail is. Same for sprintf() with a fixed-host format
+     * (`sprintf('https://oauth.host/authorize?%s', $query)`).
      *
+     * @param array<string, true> $known
      * @param array<string, true> $pinned
+     * @param array<string, string> $literals
      */
-    private function hasPinnedHostLead(Node\Expr $expr, array $pinned): bool
+    private function hasPinnedHostLead(Node\Expr $expr, array $known, array $pinned, array $literals): bool
     {
         if ($expr instanceof Node\Expr\BinaryOp\Concat) {
-            return $this->isHostPinned($expr->left, [], $pinned);
+            return $this->isHostPinned($expr->left, $known, $pinned);
+        }
+
+        if (
+            $expr instanceof Node\Expr\FuncCall
+            && $expr->name instanceof Node\Name
+            && strtolower($expr->name->toString()) === 'sprintf'
+        ) {
+            $format = $expr->args[0] ?? null;
+            if (!$format instanceof Node\Arg) {
+                return false;
+            }
+            if ($format->value instanceof Node\Scalar\String_) {
+                return $this->hasFixedHostPrefix($format->value->value);
+            }
+            if (
+                $format->value instanceof Node\Expr\Variable
+                && is_string($format->value->name)
+                && isset($literals[$format->value->name])
+            ) {
+                return $this->hasFixedHostPrefix($literals[$format->value->name]);
+            }
+
+            return false;
         }
 
         if ($expr instanceof Node\Scalar\InterpolatedString) {
@@ -444,11 +477,43 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
                     }
                     continue;
                 }
-                return $this->isHostPinned($part, [], $pinned);
+                return $this->isHostPinned($part, $known, $pinned);
             }
         }
 
         return false;
+    }
+
+    private function hasFixedHostPrefix(string $value): bool
+    {
+        return preg_match('#^https?://[^/$\s]+/#i', $value) === 1;
+    }
+
+    /**
+     * Variables assigned a plain string literal (`$url =
+     * 'https://oauth.host/authorize?%s'`), for format-string resolution.
+     *
+     * @param list<Node> $nodes
+     * @return array<string, string>
+     */
+    private function literalStringVars(array $nodes): array
+    {
+        $literals = [];
+        $assigns = $this->finder()->find($nodes, static function (Node $node): bool {
+            return $node instanceof Node\Expr\Assign;
+        });
+        foreach ($assigns as $assign) {
+            if (
+                $assign instanceof Node\Expr\Assign
+                && $assign->var instanceof Node\Expr\Variable
+                && is_string($assign->var->name)
+                && $assign->expr instanceof Node\Scalar\String_
+            ) {
+                $literals[$assign->var->name] = $assign->expr->value;
+            }
+        }
+
+        return $literals;
     }
 
     /**
@@ -494,6 +559,18 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
             && $expr->name instanceof Node\Identifier
             && strtolower($expr->name->toString()) === 'previous'
             && $this->isUrlHelper($expr->var)
+        ) {
+            return true;
+        }
+
+        // $request->url() with no arguments returns the current request URL
+        // — the host is the application host by construction. A ->url()
+        // WITH arguments is an unknown builder call and stays flaggable.
+        if (
+            $expr instanceof Node\Expr\MethodCall
+            && $expr->name instanceof Node\Identifier
+            && strtolower($expr->name->toString()) === 'url'
+            && $expr->args === []
         ) {
             return true;
         }

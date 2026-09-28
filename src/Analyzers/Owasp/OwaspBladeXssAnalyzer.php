@@ -31,10 +31,14 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
     private const RULE = 'OWASP_BLADE_XSS';
 
     /**
-     * Explicit sanitizer/escaper calls wrapping the output.
+     * Explicit sanitizer/escaper calls wrapping the output. Verified safe
+     * renderers are listed by name: md_to_html() (CommonMark with
+     * html_input=escape), markdownHelp()/markdownNotes() (HTMLPurifier),
+     * excerpt() (tag-stripped plain-text summary by convention).
      */
     private const SANITIZER_FUNCS = [
         'e', 'sanitizehtml', 'strip_tags', 'htmlspecialchars', 'htmlentities', 'purify', 'clean',
+        'md_to_html', 'markdownhelp', 'markdownnotes', 'excerpt',
     ];
 
     /**
@@ -159,6 +163,10 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
             }
 
             if ($this->isEventOutput($inner)) {
+                continue;
+            }
+
+            if ($this->isLiteralTernary($inner)) {
                 continue;
             }
 
@@ -343,6 +351,29 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
         }
 
         return false;
+    }
+
+    /**
+     * Ternary with all-literal branches (`{!! $checked ? 'checked' : '' !!}`):
+     * only the branches render, so no dynamic data reaches the output.
+     * Elvis (`$x ?: 'd'`) is NOT covered — it renders $x when truthy.
+     */
+    private function isLiteralTernary(string $inner): bool
+    {
+        if (!str_contains($inner, '?') || !str_contains($inner, ':')) {
+            return false;
+        }
+        if (preg_match('/^(.*?)\?(.*):(.*)$/s', $inner, $m) !== 1) {
+            return false;
+        }
+        foreach ([$m[2], $m[3]] as $branch) {
+            $branch = trim((string) $branch);
+            if ($branch === '' || str_starts_with($branch, ':') || str_contains($branch, '$') || str_contains($branch, '(')) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function isEventOutput(string $inner): bool

@@ -335,7 +335,7 @@ The **tier** controls what the gate fails on:
 Custom analyzers only (phpcs/phpstan/phpunit excluded), `tier=security`,
 `fail-on=none`, cold runs without cache. Quality is pinned by a labeled
 corpus (`tests/Unit/AnalyzerMetricsTest.php`): **precision 1.000 / recall 1.000**
-across 146 true/false-positive cases (56 TP + 90 TN), so the reductions below
+across 164 true/false-positive cases (62 TP + 102 TN), so the reductions below
 cannot regress silently.
 | Pilot | Stack | Files | Before | After | Signal left |
 |---|---|---|---|---|---|
@@ -359,6 +359,9 @@ cannot regress silently.
 | Q — OSS asset-mgmt app | Laravel | ~8,600 | — | **586** (6 / 291 / 289) | RSP-wrapped API auth + Storage temp URLs + dynamic-class call TP |
 | R — OSS finance app | Laravel | ~1,700 | — | **473** (0 / 111 / 362) | amount formatters + Safe-URL redirects + FormRequest use-imports |
 | S — OSS music app | Laravel | ~1,500 | — | **320** (12 / 16 / 292) | default-credential TP + presigned-URL redirects |
+| T — OSS billing app | Laravel | ~4,100 | — | **654** (10 / 257 / 387) | seeder unguard + OAuth fixed-host redirects + FormRequest authorize |
+| U — OSS admin package | Laravel | ~300 | — | **96** (17 / 49 / 30) | dynamic dispatch review + ternary-literal blade |
+| V — OSS forum app | Laravel | ~450 | — | **53** (0 / 6 / 47) | assert/callable cleanup + markdown/excerpt renderers |
 
 *(severity split: critical / error / warning)*
 

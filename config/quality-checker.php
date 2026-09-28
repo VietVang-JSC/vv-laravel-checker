@@ -118,6 +118,10 @@ return [
 
         // Additional safe-output function needles for Blade XSS (e.g. 'my_escape(', 'MyLib::').
         'extra_sanitizers' => [],
+
+        // Skip PHP files larger than this (multi-MB data dumps exhaust the
+        // parser with no signal). 0 or negative disables the limit.
+        'max_file_kb' => 1024,
     ],
 
     'fail_on' => 'error',

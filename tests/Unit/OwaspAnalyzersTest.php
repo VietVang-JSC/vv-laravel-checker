@@ -590,6 +590,50 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $this->rules($issues)[0] ?? null);
     }
 
+    public function testAccessControlSkipsAuthorizingFormRequest(): void
+    {
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-owasp-fr-' . uniqid('', true);
+        $files = [
+            'app/Http/Controllers/AccountController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Http\\Requests\\CreateAccountRequest;\n" .
+                "class AccountController extends Controller {\n    public function store(CreateAccountRequest \$request) {\n        return \$this->repo->store(\$request->validated());\n    }\n}\n",
+            'app/Http/Requests/CreateAccountRequest.php' => "<?php\nnamespace App\\Http\\Requests;\n" .
+                "class CreateAccountRequest extends \\Illuminate\\Foundation\\Http\\FormRequest {\n    public function authorize() {\n        return \\Ninja::isHosted();\n    }\n}\n",
+        ];
+        $paths = [];
+        foreach ($files as $rel => $content) {
+            $path = $dir . DIRECTORY_SEPARATOR . $rel;
+            @mkdir(dirname($path), 0777, true);
+            file_put_contents($path, $content);
+            $paths[] = $path;
+        }
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze($paths);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testAccessControlStillFlagsTrivialFormRequest(): void
+    {
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-owasp-fr-' . uniqid('', true);
+        $files = [
+            'app/Http/Controllers/AccountController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Http\\Requests\\OpenRequest;\n" .
+                "class AccountController extends Controller {\n    public function store(OpenRequest \$request) {\n        return \$this->repo->store(\$request->validated());\n    }\n}\n",
+            'app/Http/Requests/OpenRequest.php' => "<?php\nnamespace App\\Http\\Requests;\n" .
+                "class OpenRequest extends \\Illuminate\\Foundation\\Http\\FormRequest {\n    public function authorize() {\n        return true;\n    }\n}\n",
+        ];
+        $paths = [];
+        foreach ($files as $rel => $content) {
+            $path = $dir . DIRECTORY_SEPARATOR . $rel;
+            @mkdir(dirname($path), 0777, true);
+            file_put_contents($path, $content);
+            $paths[] = $path;
+        }
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze($paths);
+
+        self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $this->rules($issues)[0] ?? null);
+    }
+
     public function testAccessControlStillFlagsThrottleOnlyRoute(): void
     {
         $controller = $this->temp(

@@ -81,13 +81,14 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
     public function analyze(array $files): array
     {
         $routeAuth = $this->routeMiddleware ? $this->buildRouteAuthMap($files) : [];
+        $formRequestAuth = $this->buildFormRequestAuthMap($files);
 
         $issues = [];
         foreach ($files as $file) {
             if (!$this->supports($file)) {
                 continue;
             }
-            foreach ($this->analyzeFile($file, $routeAuth) as $issue) {
+            foreach ($this->analyzeFile($file, $routeAuth, $formRequestAuth) as $issue) {
                 $issues[] = $issue;
             }
         }
@@ -96,9 +97,95 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
     }
 
     /**
-     * @param array<string, list<bool>> $routeAuth
+     * FormRequests with a non-trivial authorize() method perform
+     * authorization before validation: store(CustomRequest $request) is
+     * protected when CustomRequest::authorize() does real checks. A lone
+     * `return true;` (or no authorize() at all) means no protection.
+     *
+     * @param list<string> $files
+     * @return array<string, true> lowercased FQCN => authorized
      */
-    private function analyzeFile(string $file, array $routeAuth): array
+    private function buildFormRequestAuthMap(array $files): array
+    {
+        $map = [];
+        foreach ($files as $file) {
+            if (!$this->supports($file)) {
+                continue;
+            }
+            $base = strtolower((string) pathinfo($file, PATHINFO_BASENAME));
+            if (!str_ends_with($base, 'request.php')) {
+                continue;
+            }
+            $ast = $this->parse($this->readFile($file));
+            if ($ast === null) {
+                continue;
+            }
+            $nodes = $this->nodeList($ast);
+            $namespace = $this->namespaceOf($nodes);
+            $classes = $this->finder()->findInstanceOf($nodes, Node\Stmt\Class_::class);
+            foreach ($classes as $class) {
+                if (!$class instanceof Node\Stmt\Class_ || $class->name === null) {
+                    continue;
+                }
+                $fqn = strtolower($namespace !== null ? $namespace . '\\' . $class->name->toString() : $class->name->toString());
+                foreach ($class->stmts as $stmt) {
+                    if (
+                        $stmt instanceof Node\Stmt\ClassMethod
+                        && strtolower($stmt->name->toString()) === 'authorize'
+                        && !$this->isTrivialTrueReturn($stmt)
+                    ) {
+                        $map[$fqn] = true;
+                    }
+                }
+            }
+        }
+
+        return $map;
+    }
+
+    private function isTrivialTrueReturn(Node\Stmt\ClassMethod $method): bool
+    {
+        if ($method->stmts === null || count($method->stmts) !== 1) {
+            return false;
+        }
+        $only = $method->stmts[0];
+
+        return $only instanceof Node\Stmt\Return_
+            && $only->expr instanceof Node\Expr\ConstFetch
+            && strtolower($only->expr->name->toString()) === 'true';
+    }
+
+    /**
+     * @param array<string, string> $uses
+     * @param array<string, true> $formRequestAuth
+     */
+    private function hasAuthorizingFormRequest(
+        Node\Stmt\ClassMethod $method,
+        array $uses,
+        ?string $namespace,
+        array $formRequestAuth
+    ): bool {
+        if ($formRequestAuth === []) {
+            return false;
+        }
+        foreach ($method->params as $param) {
+            if (!$param->type instanceof Node\Name) {
+                continue;
+            }
+            $resolved = strtolower($this->resolveName($param->type->toString(), $uses, $namespace));
+            if (isset($formRequestAuth[$resolved])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, list<bool>> $routeAuth
+     * @param array<string, true> $formRequestAuth
+     */
+    private function analyzeFile(string $file, array $routeAuth, array $formRequestAuth = []): array
     {
         $ast = $this->parse($this->readFile($file));
         if ($ast === null) {
@@ -109,11 +196,12 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
         $issues = [];
         $classes = $this->finder()->findInstanceOf($nodes, Node\Stmt\Class_::class);
         $namespace = $this->namespaceOf($nodes);
+        $uses = $this->useMap($nodes);
         foreach ($classes as $class) {
             if (!$class instanceof Node\Stmt\Class_ || !$this->isControllerClass($class)) {
                 continue;
             }
-            foreach ($this->analyzeController($class, $file, $routeAuth, $namespace) as $issue) {
+            foreach ($this->analyzeController($class, $file, $routeAuth, $namespace, $uses, $formRequestAuth) as $issue) {
                 $issues[] = $issue;
             }
         }
@@ -137,13 +225,17 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
 
     /**
      * @param array<string, list<bool>> $routeAuth
+     * @param array<string, string> $uses
+     * @param array<string, true> $formRequestAuth
      * @return Issue[]
      */
     private function analyzeController(
         Node\Stmt\Class_ $class,
         string $file,
         array $routeAuth,
-        ?string $namespace
+        ?string $namespace,
+        array $uses = [],
+        array $formRequestAuth = []
     ): array {
         $issues = [];
         $hasAuthContext = $this->classHasAuthContext($class);
@@ -164,6 +256,9 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
                 continue;
             }
             if ($this->isRouteProtected($class, $methodName, $routeAuth, $namespace)) {
+                continue;
+            }
+            if ($this->hasAuthorizingFormRequest($stmt, $uses, $namespace, $formRequestAuth)) {
                 continue;
             }
 

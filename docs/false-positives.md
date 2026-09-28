@@ -98,6 +98,9 @@ php artisan quality:check --tier=all --fail-on=none
   `base_path()`/`app_path()` targets are resolved by walking up to the project root.
   Both the legacy array syntax (`['as' => ..., 'uses' => 'FQCN@method']`) and
   `[Controller::class, 'method']` are resolved.
+  A mutating action is also skipped when it type-hints a FormRequest whose
+  `authorize()` does real checks (resolved through `use` imports against the
+  scanned files) — a lone `return true;` (or no `authorize()`) still flags.
   Middleware names containing `auth`/`can`/`permission`/`role`/`gate`/`admin`/`bouncer`/
   `checklevel`/`login`/`apikey`/`sanctum`/`jwt`/`oauth`... count as protection;
   `throttle` does not; `guest*` is never protection
@@ -240,7 +243,10 @@ php artisan quality:check --tier=all --fail-on=none
   `url()` with all-literal arguments, concatenations led by a host-pinning call
   (`redirect(route('index') . $from)` — the framework host cannot change, only the
   path varies; note `url($dynamic)` is NOT safe because `url()` returns
-  already-valid URLs unchanged), SDK-signed storage URLs
+  already-valid URLs unchanged), `sprintf()` with a fixed-host format
+  (`sprintf('https://oauth.host/authorize?%s', $query)` — including via a
+  variable assigned that literal), no-argument `$request->url()` concatenations
+  (current-URL getter), SDK-signed storage URLs
   (`Storage::disk()->temporaryUrl()`, `->getPresignedUrl()` — the host is the
   configured provider), and `*Safe*` methods (`getSafeUrl()`,
   `getSafePreviousUrl()` — same naming-convention trade-off as `*Html`).
@@ -274,8 +280,12 @@ php artisan quality:check --tier=all --fail-on=none
   no data-flow analysis — string literals and `config()`/`env()` stay silent).
 - **Automatically skipped**: `{!! csrf_field() !!}` (no dynamic data),
   explicit sanitizers (`e()`, `sanitizeHtml()`, `strip_tags()`,
-  `htmlspecialchars()`, `purify()`, `clean()`, plus project-specific functions
-  listed in `analyzers.extra_sanitizers`), `json_encode()` with all 4
+  `htmlspecialchars()`, `purify()`, `clean()`, `md_to_html()`,
+  `markdownHelp()`/`markdownNotes()` (HTMLPurifier), `excerpt()` (tag-stripped
+  summary convention), plus project-specific functions
+  listed in `analyzers.extra_sanitizers`), ternaries with all-literal branches
+  (`{!! $checked ? 'checked' : '' !!}` — only branches render; Elvis `$x ?: 'd'`
+  still flags because it renders `$x`), `json_encode()` with all 4
   `JSON_HEX_*` flags (missing flags are still reported — `</script>` breakout is real),
   framework event hooks (`view_render_event(...)` — output from internal
   listeners), form builders (`Form::`/`Html::` — values escaped by the
@@ -310,7 +320,10 @@ php artisan quality:check --tier=all --fail-on=none
   `call_user_func_array()` receive a non-literal first argument. Only the callable
   position is checked — tainted *arguments* to a literal callable are the callee's business.
 - **Automatically skipped**: literals, fixed callables (`[$this, 'handle']`,
-  `$this->callback` properties holding internally-assigned handlers), and expressions
+  `$this->callback` properties holding internally-assigned handlers,
+  `app('router')`/`resolve(...)` container lookups with all-literal arguments),
+  `assert()` with provably-boolean arguments (`instanceof`, comparisons,
+  `empty()`/`isset()`, `is_*()` predicates), and expressions
   whose every dynamic leaf was validated by `preg_match()`/`preg_match_all()` in the
   same function (e.g. a math expression allow-listed before eval). Filter strength itself is
   not verified — review the regex.

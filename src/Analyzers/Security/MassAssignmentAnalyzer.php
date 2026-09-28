@@ -123,6 +123,13 @@ final class MassAssignmentAnalyzer
                 ) {
                     continue;
                 }
+                // Seed data paths (seeders, data migrations, tests) carry no
+                // request input by construction — unguard() there seeds
+                // literals. Console commands and jobs keep flagging: CLI
+                // arguments and job payloads are real input.
+                if ($this->isSeedDataPath($file)) {
+                    continue;
+                }
                 $issues[] = new Issue(
                     self::RULE,
                     'Mass assignment protection is disabled globally via Model::unguard() — every attribute becomes fillable.',
@@ -257,6 +264,21 @@ final class MassAssignmentAnalyzer
         }
 
         return false;
+    }
+
+    /**
+     * Seed-data paths carry no request input by construction, so a global
+     * unguard() there only affects literal seed data.
+     */
+    private function isSeedDataPath(string $file): bool
+    {
+        $normalized = strtolower(str_replace('\\', '/', $file));
+
+        return str_contains($normalized, '/database/seeders/')
+            || str_contains($normalized, '/database/factories/')
+            || str_contains($normalized, '/database/migrations/')
+            || str_contains($normalized, '/tests/')
+            || str_starts_with($normalized, 'tests/');
     }
 
     private function modelExists(string $model, array $modelClassFiles): bool

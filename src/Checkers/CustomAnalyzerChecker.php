@@ -70,7 +70,7 @@ final class CustomAnalyzerChecker implements CheckerInterface
     public function run(CheckContext $ctx): CheckResult
     {
         $start = microtime(true);
-        $files = $this->collectFiles($ctx);
+        [$files, $skippedOversized] = $this->collectFiles($ctx);
         $files = array_values(array_unique(array_merge(
             $files,
             $this->collectBladeFiles($ctx),
@@ -117,6 +117,9 @@ final class CustomAnalyzerChecker implements CheckerInterface
         $summary = sprintf('Custom analyzers found %d issue(s) across %d file(s).', count($issues), count($files));
         if ($suppressed > 0) {
             $summary .= sprintf(' %d issue(s) suppressed via inline ignore.', $suppressed);
+        }
+        if ($skippedOversized > 0) {
+            $summary .= sprintf(' %d oversized file(s) skipped (see max_file_kb).', $skippedOversized);
         }
 
         return new CheckResult($this->name(), $status, microtime(true) - $start, $issues, null, $summary);
@@ -229,12 +232,19 @@ final class CustomAnalyzerChecker implements CheckerInterface
     }
 
     /**
-     * @return list<string>
+     * PHP files under the scan paths. Files larger than max_file_kb are
+     * skipped: multi-megabyte data dumps (e.g. a 2.4 MB SMS-number list)
+     * exhaust the parser with zero security signal. Explicitly-passed files
+     * are always honored. Returns [files, oversizedSkipped].
+     *
+     * @return array{list<string>, int}
      */
     private function collectFiles(CheckContext $ctx): array
     {
         $files = [];
+        $skippedOversized = 0;
         $skipDirs = ['vendor', 'node_modules', 'storage', 'bootstrap/cache', '.git'];
+        $maxBytes = $this->maxFileBytes($ctx);
 
         foreach ($ctx->paths as $path) {
             $abs = $ctx->resolvePath($path);
@@ -262,6 +272,10 @@ final class CustomAnalyzerChecker implements CheckerInterface
                 if ($extension !== 'php') {
                     continue;
                 }
+                if ($maxBytes > 0 && $file->getSize() > $maxBytes) {
+                    $skippedOversized++;
+                    continue;
+                }
 
                 $pathname = str_replace('\\', '/', $file->getPathname());
                 $skipped = false;
@@ -277,7 +291,17 @@ final class CustomAnalyzerChecker implements CheckerInterface
             }
         }
 
-        return array_values(array_unique($files));
+        return [array_values(array_unique($files)), $skippedOversized];
+    }
+
+    private function maxFileBytes(CheckContext $ctx): int
+    {
+        $kb = (int) ($ctx->config['analyzers']['max_file_kb'] ?? 1024);
+        if ($kb <= 0) {
+            return 0;
+        }
+
+        return $kb * 1024;
     }
 
     /**

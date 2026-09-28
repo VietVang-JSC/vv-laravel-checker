@@ -373,6 +373,66 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
         self::assertSame('OWASP_BLADE_XSS', $this->rules($issues)[0] ?? null);
     }
 
+    public function testSkipsLiteralTernaryBranches(): void
+    {
+        $file = $this->temp(
+            "<div>{!! \$checked ? 'checked=\"checked\"' : '' !!}</div>\n",
+            'resources/views/formfields/checkbox.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testStillFlagsElvisOperator(): void
+    {
+        $file = $this->temp(
+            "<div>{!! \$name ?: 'anonymous' !!}</div>\n",
+            'resources/views/users/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_BLADE_XSS', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testStillFlagsDynamicTernaryBranch(): void
+    {
+        $file = $this->temp(
+            "<div>{!! \$ok ? \$name : 'anonymous' !!}</div>\n",
+            'resources/views/users/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_BLADE_XSS', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testSkipsExcerptMethod(): void
+    {
+        $file = $this->temp(
+            "<div>{!! \$article->excerpt() !!}</div>\n",
+            'resources/views/articles/summary.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsMdToHtml(): void
+    {
+        $file = $this->temp(
+            "<div>{!! md_to_html(\$article->body()) !!}</div>\n",
+            'resources/views/articles/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testSkipsExtraSanitizerNeedle(): void
     {
         $file = $this->temp(

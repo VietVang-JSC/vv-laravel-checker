@@ -214,6 +214,60 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertTrue($this->ruleMatches($issues[0], 'UNSAFE_EVAL', Severity::Critical));
     }
 
+    public function testUnsafeEvalSkipsAssertInstanceof(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\n" .
+            "class EmbedService {\n    public function register(object \$adapter): void {\n        \\assert(\$adapter instanceof \\App\\Contracts\\EmbedAdapter);\n    }\n}\n",
+            'app/Services/EmbedService.php'
+        );
+
+        $issues = (new UnsafeEvalAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testUnsafeEvalStillFlagsAssertVariable(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\n" .
+            "class EmbedService {\n    public function register(string \$check): void {\n        \\assert(\$check);\n    }\n}\n",
+            'app/Services/EmbedService.php'
+        );
+
+        $issues = (new UnsafeEvalAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'UNSAFE_EVAL', Severity::Critical));
+    }
+
+    public function testUnsafeEvalSkipsAppContainerCallable(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\n" .
+            "function is_active(mixed \$routes): bool {\n    return (bool) call_user_func_array([app('router'), 'is'], (array) \$routes);\n}\n",
+            'app/helpers.php'
+        );
+
+        $issues = (new UnsafeEvalAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testUnsafeEvalStillFlagsAppDynamicCallable(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\n" .
+            "class AlertService {\n    public function fire(string \$name, array \$args): void {\n        call_user_func_array([app('alerts.' . \$name), 'create'], \$args);\n    }\n}\n",
+            'app/Services/AlertService.php'
+        );
+
+        $issues = (new UnsafeEvalAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'UNSAFE_EVAL', Severity::Critical));
+    }
+
     /** HardcodedSecretAnalyzer */
 
     public function testHardcodedSecretFlagsOpenAiKey(): void
@@ -408,6 +462,41 @@ final class SecurityAnalyzersTest extends TestCase
         $issues = (new MassAssignmentAnalyzer())->analyze([$controller, $model]);
 
         self::assertCount(0, $issues);
+    }
+
+    public function testMassAssignmentSkipsUnguardInSeeder(): void
+    {
+        $seeder = $this->tempPhp(
+            "<?php\nnamespace Database\\Seeders;\nuse App\\Models\\User;\n" .
+            "class UserSeeder {\n    public function run(): void {\n        User::unguard();\n        User::create(['name' => 'admin']);\n    }\n}\n",
+            'database/seeders/UserSeeder.php'
+        );
+        $model = $this->tempPhp(
+            "<?php\nnamespace App\\Models;\nclass User extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            'app/Models/User.php'
+        );
+
+        $issues = (new MassAssignmentAnalyzer())->analyze([$seeder, $model]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testMassAssignmentStillFlagsUnguardInJob(): void
+    {
+        $job = $this->tempPhp(
+            "<?php\nnamespace App\\Jobs;\nuse App\\Models\\User;\n" .
+            "class ImportJob {\n    public function handle(): void {\n        User::unguard();\n        User::create(['name' => 'x']);\n    }\n}\n",
+            'app/Jobs/ImportJob.php'
+        );
+        $model = $this->tempPhp(
+            "<?php\nnamespace App\\Models;\nclass User extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            'app/Models/User.php'
+        );
+
+        $issues = (new MassAssignmentAnalyzer())->analyze([$job, $model]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'MASS_ASSIGNMENT', Severity::Error));
     }
 
     /** UnsafeDeserializationAnalyzer */

@@ -149,4 +149,52 @@ final class InlineSuppressorTest extends TestCase
 
         self::assertNotCount(0, $result->issues);
     }
+
+    public function testCustomCheckerSkipsOversizedFiles(): void
+    {
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-oversized-' . uniqid('', true);
+        @mkdir($dir . DIRECTORY_SEPARATOR . 'app', 0777, true);
+        file_put_contents(
+            $dir . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Small.php',
+            "<?php\n\$data = file_get_contents(\$url);\n"
+        );
+        // Just over 1 KB with max_file_kb = 1: skipped before parsing.
+        file_put_contents(
+            $dir . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Big.php',
+            "<?php\n\$data = file_get_contents(\$url);\n// " . str_repeat('x', 2048) . "\n"
+        );
+
+        $ctx = new CheckContext(
+            $dir,
+            ['app'],
+            ['analyzers' => ['enabled' => true, 'max_file_kb' => 1, 'owasp' => ['ssrf' => true]]],
+            $dir . DIRECTORY_SEPARATOR . 'reports'
+        );
+
+        $result = (new CustomAnalyzerChecker())->run($ctx);
+
+        self::assertCount(1, $result->issues);
+        self::assertStringContainsString('1 oversized file(s) skipped', (string) $result->summary);
+    }
+
+    public function testCustomCheckerDisablesOversizedLimit(): void
+    {
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-oversized-off-' . uniqid('', true);
+        @mkdir($dir . DIRECTORY_SEPARATOR . 'app', 0777, true);
+        file_put_contents(
+            $dir . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Big.php',
+            "<?php\n\$data = file_get_contents(\$url);\n// " . str_repeat('x', 2048) . "\n"
+        );
+
+        $ctx = new CheckContext(
+            $dir,
+            ['app'],
+            ['analyzers' => ['enabled' => true, 'max_file_kb' => 0, 'owasp' => ['ssrf' => true]]],
+            $dir . DIRECTORY_SEPARATOR . 'reports'
+        );
+
+        $result = (new CustomAnalyzerChecker())->run($ctx);
+
+        self::assertCount(1, $result->issues);
+    }
 }

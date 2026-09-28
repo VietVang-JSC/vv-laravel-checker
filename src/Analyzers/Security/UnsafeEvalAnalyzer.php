@@ -80,6 +80,12 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
             if ($this->isStaticValue($firstArg)) {
                 continue;
             }
+            // assert() with a provably-boolean argument (instanceof,
+            // comparisons, empty()/isset(), is_*/has_* checks, boolean
+            // operators) cannot carry code — there is nothing to evaluate.
+            if ($name === 'assert' && $this->isBooleanExpression($firstArg)) {
+                continue;
+            }
             // call_user_func([$this, 'handle'], $userInput) passes user data
             // as an argument to a fixed method — the callable itself is not
             // attacker-controlled, so this is not code injection. Only the
@@ -140,10 +146,60 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
     }
 
     /**
+     * Provably-boolean expressions: instanceof, comparisons, empty/isset,
+     * boolean not/and/or, and predicate-style calls (is_xxx, has_xxx,
+     * can_xxx). A variable or arbitrary call stays flaggable — it could
+     * hold a string.
+     */
+    private function isBooleanExpression(Node\Expr $expr): bool
+    {
+        if ($expr instanceof Node\Expr\Instanceof_) {
+            return true;
+        }
+
+        if (
+            $expr instanceof Node\Expr\BinaryOp\Identical
+            || $expr instanceof Node\Expr\BinaryOp\NotIdentical
+            || $expr instanceof Node\Expr\BinaryOp\Equal
+            || $expr instanceof Node\Expr\BinaryOp\NotEqual
+            || $expr instanceof Node\Expr\BinaryOp\Greater
+            || $expr instanceof Node\Expr\BinaryOp\GreaterOrEqual
+            || $expr instanceof Node\Expr\BinaryOp\Smaller
+            || $expr instanceof Node\Expr\BinaryOp\SmallerOrEqual
+            || $expr instanceof Node\Expr\BinaryOp\Spaceship
+            || $expr instanceof Node\Expr\BinaryOp\BooleanAnd
+            || $expr instanceof Node\Expr\BinaryOp\BooleanOr
+            || $expr instanceof Node\Expr\BinaryOp\LogicalAnd
+            || $expr instanceof Node\Expr\BinaryOp\LogicalOr
+            || $expr instanceof Node\Expr\BooleanNot
+            || $expr instanceof Node\Expr\Empty_
+            || $expr instanceof Node\Expr\Isset_
+        ) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\FuncCall && $expr->name instanceof Node\Name) {
+            $fn = strtolower($expr->name->toString());
+            if ($fn === 'empty' || $fn === 'isset') {
+                return true;
+            }
+
+            return (bool) preg_match('/^(is_|has_|can_)/', $fn);
+        }
+
+        if ($expr instanceof Node\Expr\MethodCall && $expr->name instanceof Node\Identifier) {
+            return (bool) preg_match('/^(is|has|can)[A-Z_]/', $expr->name->toString());
+        }
+
+        return false;
+    }
+
+    /**
      * A callable that cannot be influenced by input: string literal,
-     * constant, closure, or an array of static parts such as
-     * [$this, 'handle'] or ['Class', 'method']. A dynamic element
-     * (e.g. [$this, $method]) stays flaggable.
+     * constant, closure, an app()/resolve() lookup with all-literal
+     * arguments (service-container bindings are deploy-time), or an array
+     * of static parts such as [$this, 'handle'] or ['Class', 'method'].
+     * A dynamic element (e.g. [$this, $method]) stays flaggable.
      */
     private function isFixedCallable(Node\Expr $expr): bool
     {
@@ -155,6 +211,26 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
             || $expr instanceof Node\Expr\ArrowFunction
         ) {
             return true;
+        }
+
+        if ($expr instanceof Node\Expr\FuncCall && $expr->name instanceof Node\Name) {
+            $fn = strtolower($expr->name->toString());
+            if (($fn === 'app' || $fn === 'resolve') && $expr->args !== []) {
+                foreach ($expr->args as $arg) {
+                    if (
+                        !$arg instanceof Node\Arg
+                        || !($arg->value instanceof Node\Scalar
+                            || $arg->value instanceof Node\Expr\ConstFetch
+                            || $arg->value instanceof Node\Expr\ClassConstFetch)
+                    ) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            return false;
         }
 
         // $this->callback properties hold internally-assigned callables
@@ -179,13 +255,9 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
             }
             $value = $item->value;
             if (
-                $value instanceof Node\Scalar\String_
-                || $value instanceof Node\Expr\ConstFetch
-                || $value instanceof Node\Expr\ClassConstFetch
+                ($value instanceof Node\Expr\Variable && $value->name === 'this')
+                || $this->isFixedCallable($value)
             ) {
-                continue;
-            }
-            if ($value instanceof Node\Expr\Variable && $value->name === 'this') {
                 continue;
             }
 

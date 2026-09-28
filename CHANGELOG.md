@@ -91,6 +91,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   formatter family skipped (NumberFormatter float-cast output).
 - Traversal: `tempnam()`/`tmpfile()`/`sys_get_temp_dir()` origins are
   server-side temp paths.
+- Robustness: `max_file_kb` (default 1024) skips multi-MB data dumps that
+  exhaust the parser; the summary reports how many files were skipped.
+- Unsafe eval: `assert()` with provably-boolean arguments skipped
+  (`instanceof`, comparisons, `empty()`/`isset()`, `is_*()` predicates);
+  `app()`/`resolve()` container lookups with all-literal arguments count as
+  fixed callables.
+- Blade: verified safe renderers (`md_to_html()`, `markdownHelp()`/
+  `markdownNotes()`, `excerpt()`) and all-literal ternary branches skipped
+  (Elvis still flags).
+- Open redirect: fixed-host `sprintf()` formats (literal or literal-assigned
+  variable) and no-argument `$request->url()` concatenations skipped.
+- Broken access control: FormRequest `authorize()` with real checks counts as
+  authorization (`return true` alone still flags).
+- Mass assignment: `Model::unguard()` in seed-data paths (seeders, factories,
+  migrations, tests) skipped — jobs and console commands still flag.
 - Configurable heuristics (previously hardcoded): `cache.enabled`/`cache.ttl`
   for the result cache; `analyzers.models_dirs` for Eloquent model lookup
   (DDD layouts); `analyzers.extra_middleware` for custom protective middleware;

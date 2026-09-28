@@ -393,4 +393,52 @@ final class OwaspOpenRedirectAnalyzerTest extends TestCase
 
         self::assertCount(0, $issues);
     }
+
+    public function testSkipsSprintfFixedHostFormat(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn redirect()->to(sprintf('https://connect.example.com/oauth/authorize?%s', http_build_query(\$params)));\n",
+            'app/Http/Controllers/OAuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsSprintfLiteralVarFormat(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$url = 'https://connect.example.com/oauth/authorize?%s';\nreturn redirect()->to(sprintf(\$url, http_build_query(\$params)));\n",
+            'app/Http/Controllers/OAuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testStillFlagsSprintfDynamicFormat(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn redirect()->to(sprintf(\$format, \$params));\n",
+            'app/Http/Controllers/OAuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_OPEN_REDIRECT', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testSkipsNoArgRequestUrlConcat(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn redirect(\$this->request->url() . '?logs=true');\n",
+            'app/Http/Controllers/CompassController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
 }
