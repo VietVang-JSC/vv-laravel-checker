@@ -67,6 +67,16 @@ final class CheckRunner
         $cache = new ResultCache($this->ctx);
         $results = [];
 
+        $cacheConfig = $this->ctx->config['cache'] ?? [];
+        if (!is_array($cacheConfig)) {
+            $cacheConfig = [];
+        }
+        $enabled = (bool) ($cacheConfig['enabled'] ?? true);
+        $ttl = (int) ($cacheConfig['ttl'] ?? 3600);
+        if ($ttl <= 0) {
+            $ttl = 3600;
+        }
+
         foreach ($checkers as $checker) {
             if (!$checker->isAvailable($this->ctx)) {
                 $skipped = $this->tryProvision($checker);
@@ -76,7 +86,7 @@ final class CheckRunner
 
             $cacheKey = $cache->key($checker->name(), $this->ctx->paths, $checker->config());
 
-            if (!$this->ctx->noCache) {
+            if (!$this->ctx->noCache && $enabled) {
                 $cached = $cache->get($cacheKey);
                 if (is_array($cached)) {
                     $results[] = CheckResult::fromArray($cached);
@@ -85,7 +95,9 @@ final class CheckRunner
             }
 
             $result = $checker->run($this->ctx);
-            $cache->put($cacheKey, $result->toArray(), 3600);
+            if ($enabled) {
+                $cache->put($cacheKey, $result->toArray(), $ttl);
+            }
             $results[] = $result;
         }
 

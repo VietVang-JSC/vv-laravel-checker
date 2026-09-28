@@ -15,6 +15,33 @@ final class MassAssignmentAnalyzer
 {
     private const RULE = 'MASS_ASSIGNMENT';
 
+    /** @var list<string> normalized model dir segments (e.g. app/Models) */
+    private array $modelDirSegments = ['app/Models'];
+
+    /**
+     * @param array{models_dirs?: string|list<string>} $options
+     */
+    public function __construct(array $options = [])
+    {
+        $raw = $options['models_dirs'] ?? ['app/Models'];
+        if (is_string($raw)) {
+            $raw = [$raw];
+        }
+        $segments = [];
+        foreach ($raw as $dir) {
+            if (!is_string($dir)) {
+                continue;
+            }
+            $seg = trim(str_replace('\\', '/', $dir), '/');
+            if ($seg !== '') {
+                $segments[] = $seg;
+            }
+        }
+        if ($segments !== []) {
+            $this->modelDirSegments = array_values(array_unique($segments));
+        }
+    }
+
     private const SOURCE_METHODS = [
         'create',
         'insert',
@@ -292,7 +319,14 @@ final class MassAssignmentAnalyzer
         $result = [];
         foreach ($files as $file) {
             $pathname = str_replace('\\', '/', $file);
-            if (stripos($pathname, '/app/Models/') === false) {
+            $inModelDir = false;
+            foreach ($this->modelDirSegments as $seg) {
+                if (stripos($pathname, '/' . $seg . '/') !== false) {
+                    $inModelDir = true;
+                    break;
+                }
+            }
+            if (!$inModelDir) {
                 continue;
             }
 

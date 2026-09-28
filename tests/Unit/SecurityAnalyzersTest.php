@@ -675,17 +675,39 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertSame(Severity::Warning, $issues[0]->severity);
     }
 
-    public function testDisabledCsrfDowngradesInstallerException(): void
+    public function testMassAssignmentFlagsModelInCustomDirWithConfiguredModelsDirs(): void
     {
-        $file = $this->tempPhp(
-            "<?php\nnamespace App\\Http\\Middleware;\nclass VerifyCsrfToken {\n    protected \$except = ['install/*'];\n}\n",
-            'app/Http/Middleware/VerifyCsrfToken.php'
+        $controller = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Domain\\Shop\\Models\\Product;\nuse Illuminate\\Http\\Request;\n" .
+            "class ShopController {\n    public function store(Request \$request) {\n        return Product::create(\$request->all());\n    }\n}\n",
+            'app/Http/Controllers/ShopController.php'
+        );
+        $model = $this->tempPhp(
+            "<?php\nnamespace App\\Domain\\Shop\\Models;\nclass Product extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            'app/Domain/Shop/Models/Product.php'
         );
 
-        $issues = (new DisabledCsrfAnalyzer())->analyze([$file]);
+        $issues = (new MassAssignmentAnalyzer(['models_dirs' => ['app/Domain/Shop/Models']]))
+            ->analyze([$controller, $model]);
 
         self::assertNotEmpty($issues);
-        self::assertSame('DISABLED_CSRF_EXCEPTION_STAR', $issues[0]->rule);
-        self::assertSame(Severity::Warning, $issues[0]->severity);
+        self::assertTrue($this->ruleMatches($issues[0], 'MASS_ASSIGNMENT', Severity::Error));
+    }
+
+    public function testMassAssignmentMissesCustomDirModelWithDefaultOptions(): void
+    {
+        $controller = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Domain\\Shop\\Models\\Product;\nuse Illuminate\\Http\\Request;\n" .
+            "class ShopController {\n    public function store(Request \$request) {\n        return Product::create(\$request->all());\n    }\n}\n",
+            'app/Http/Controllers/ShopController.php'
+        );
+        $model = $this->tempPhp(
+            "<?php\nnamespace App\\Domain\\Shop\\Models;\nclass Product extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            'app/Domain/Shop/Models/Product.php'
+        );
+
+        $issues = (new MassAssignmentAnalyzer())->analyze([$controller, $model]);
+
+        self::assertCount(0, $issues);
     }
 }

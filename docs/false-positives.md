@@ -77,7 +77,8 @@ php artisan quality:check --tier=all --fail-on=none
 - **Automatically skipped**: `Model::unguard(false)` (explicit re-guard intent).
 - **False positive when**: the model is outside the scan paths (the analyzer cannot
   resolve the model file so it stays silent — fail-open). If the project keeps models
-  outside `app/`, add the scan path containing the models so this rule takes effect.
+  outside `app/`, add the scan path containing the models so this rule takes effect,
+  and list the directory in `analyzers.models_dirs` (e.g. `app/Domain/Shop/Models`).
 - **Correct fix**: declare `$fillable` or use a FormRequest + `validated()`.
 
 ### `OWASP_BROKEN_ACCESS_CONTROL`
@@ -102,7 +103,8 @@ php artisan quality:check --tier=all --fail-on=none
   `throttle` does not; `guest*` is never protection
   (guest means unauthenticated, even `guestAdmin` containing `admin`). Actions are matched by
   FQCN (`use` imports are resolved) so two same-named controllers in different namespaces
-  (Admin vs Shop API) are not mixed up. Disable with
+  (Admin vs Shop API) are not mixed up. Custom guards are added via
+  `analyzers.extra_middleware` (name fragments, e.g. `verified-staff`). Disable with
   `analyzers.owasp.route_middleware => false` for the legacy behavior (method-only
   checks).
 - **Still reported (review then baseline)**: routes that are public by design (login,
@@ -272,7 +274,8 @@ php artisan quality:check --tier=all --fail-on=none
   no data-flow analysis — string literals and `config()`/`env()` stay silent).
 - **Automatically skipped**: `{!! csrf_field() !!}` (no dynamic data),
   explicit sanitizers (`e()`, `sanitizeHtml()`, `strip_tags()`,
-  `htmlspecialchars()`, `purify()`, `clean()`), `json_encode()` with all 4
+  `htmlspecialchars()`, `purify()`, `clean()`, plus project-specific functions
+  listed in `analyzers.extra_sanitizers`), `json_encode()` with all 4
   `JSON_HEX_*` flags (missing flags are still reported — `</script>` breakout is real),
   framework event hooks (`view_render_event(...)` — output from internal
   listeners), form builders (`Form::`/`Html::` — values escaped by the

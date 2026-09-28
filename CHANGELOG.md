@@ -83,6 +83,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   formatter family skipped (NumberFormatter float-cast output).
 - Traversal: `tempnam()`/`tmpfile()`/`sys_get_temp_dir()` origins are
   server-side temp paths.
+- Configurable heuristics (previously hardcoded): `cache.enabled`/`cache.ttl`
+  for the result cache; `analyzers.models_dirs` for Eloquent model lookup
+  (DDD layouts); `analyzers.extra_middleware` for custom protective middleware;
+  `analyzers.extra_sanitizers` for project-specific Blade escape helpers;
+  SARIF `informationUri`/help links use the configured `html.repo_url`.
 
 ### Fixed (new public pilots audit)
 

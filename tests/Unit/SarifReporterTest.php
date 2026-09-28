@@ -171,4 +171,47 @@ final class SarifReporterTest extends TestCase
         self::assertSame(1, $payload['runs'][0]['properties']['exit_code']);
         self::assertSame('quality', $payload['runs'][0]['properties']['tier']);
     }
+
+    public function testInformationUriUsesConfiguredRepoUrlAndFallsBack(): void
+    {
+        $customDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-sarif-' . uniqid('', true);
+        @mkdir($customDir, 0777, true);
+        $fallbackDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-sarif-' . uniqid('', true);
+        @mkdir($fallbackDir, 0777, true);
+
+        try {
+            $customCtx = new CheckContext(
+                '/project',
+                ['app'],
+                ['html' => ['repo_url' => 'https://github.com/acme/demo', 'branch' => 'main']],
+                $customDir,
+                packageVersion: '1.0.0'
+            );
+            (new SarifReporter())->render([], $customCtx);
+            $customPayload = json_decode(
+                (string) file_get_contents($customDir . DIRECTORY_SEPARATOR . 'quality-report.sarif'),
+                true
+            );
+            self::assertSame(
+                'https://github.com/acme/demo',
+                $customPayload['runs'][0]['tool']['driver']['informationUri']
+            );
+
+            $fallbackCtx = new CheckContext('/project', ['app'], [], $fallbackDir, packageVersion: '1.0.0');
+            (new SarifReporter())->render([], $fallbackCtx);
+            $fallbackPayload = json_decode(
+                (string) file_get_contents($fallbackDir . DIRECTORY_SEPARATOR . 'quality-report.sarif'),
+                true
+            );
+            self::assertSame(
+                'https://github.com/VietVang-JSC/vv-laravel-checker',
+                $fallbackPayload['runs'][0]['tool']['driver']['informationUri']
+            );
+        } finally {
+            @unlink($customDir . DIRECTORY_SEPARATOR . 'quality-report.sarif');
+            @rmdir($customDir);
+            @unlink($fallbackDir . DIRECTORY_SEPARATOR . 'quality-report.sarif');
+            @rmdir($fallbackDir);
+        }
+    }
 }

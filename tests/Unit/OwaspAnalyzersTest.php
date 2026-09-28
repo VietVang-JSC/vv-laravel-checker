@@ -1377,4 +1377,60 @@ final class OwaspAnalyzersTest extends TestCase
 
         self::assertSame('OWASP_SSTI', $this->rules($issues)[0] ?? null);
     }
+
+    public function testAccessControlSkipsExtraMiddlewareProtectedAction(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\n" .
+            "class VaultController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
+            'app/Http/Controllers/VaultController.php'
+        );
+        $routes = $this->temp(
+            "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+            "Route::post('/vault', 'App\\Http\\Controllers\\VaultController@store')->middleware('myShield');\n",
+            'routes/web.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer(true, ['extra_middleware' => ['myShield']]))
+            ->analyze([$controller, $routes]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testAccessControlStillFlagsExtraMiddlewareContentWithDefaultOptions(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\n" .
+            "class VaultController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
+            'app/Http/Controllers/VaultController.php'
+        );
+        $routes = $this->temp(
+            "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+            "Route::post('/vault', 'App\\Http\\Controllers\\VaultController@store')->middleware('myShield');\n",
+            'routes/web.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
+
+        self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testAccessControlStillFlagsUnknownMiddlewareWithExtraConfigured(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\n" .
+            "class VaultController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
+            'app/Http/Controllers/VaultController.php'
+        );
+        $routes = $this->temp(
+            "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+            "Route::post('/vault', 'App\\Http\\Controllers\\VaultController@store')->middleware('throttle:forms');\n",
+            'routes/web.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer(true, ['extra_middleware' => ['myShield']]))
+            ->analyze([$controller, $routes]);
+
+        self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $this->rules($issues)[0] ?? null);
+    }
 }

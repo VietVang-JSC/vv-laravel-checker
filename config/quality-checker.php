@@ -42,6 +42,12 @@ return [
         'version' => '0.74.0',
     ],
 
+    // Result cache for checker runs (file-based under the output directory).
+    'cache' => [
+        'enabled' => true,
+        'ttl' => 3600,
+    ],
+
     'analyzers' => [
         'enabled' => true,
 
@@ -103,6 +109,15 @@ return [
             'dead_code' => false,
             'laravel_pitfall' => false,
         ],
+
+        // Eloquent model directories for mass-assignment resolution.
+        'models_dirs' => ['app/Models'],
+
+        // Additional protective middleware name fragments for access control.
+        'extra_middleware' => [],
+
+        // Additional safe-output function needles for Blade XSS (e.g. 'my_escape(', 'MyLib::').
+        'extra_sanitizers' => [],
     ],
 
     'fail_on' => 'error',

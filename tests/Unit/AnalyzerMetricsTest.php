@@ -105,6 +105,22 @@ final class AnalyzerMetricsTest extends TestCase
             ],
             null,
         ];
+        yield 'bac_fp_extra_middleware' => [
+            static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(true, ['extra_middleware' => ['verified-staff']]),
+            [
+                'app/Http/Controllers/BackupController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass BackupController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
+                'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\nRoute::post('/backup', 'App\\Http\\Controllers\\BackupController@store')->middleware('verified-staff');\n",
+            ],
+            null,
+        ];
+        yield 'bac_tp_unknown_middleware' => [
+            static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(true, ['extra_middleware' => ['verified-staff']]),
+            [
+                'app/Http/Controllers/BackupController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass BackupController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
+                'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\nRoute::post('/backup', 'App\\Http\\Controllers\\BackupController@store')->middleware('throttle:forms');\n",
+            ],
+            'OWASP_BROKEN_ACCESS_CONTROL',
+        ];
         yield 'validation_fp_use_imported_formrequest' => [
             static fn (): AbstractAnalyzer => new RouteValidationAnalyzer(),
             ['app/Api/V1/Controllers/AccountController.php' => "<?php\nnamespace App\\Api\\V1\\Controllers;\nuse App\\Api\\V1\\Requests\\StoreRequest;\nclass AccountController extends Controller {\n    public function store(StoreRequest \$request) {\n        return \$this->repository->store(\$request->getAllAccountData());\n    }\n}\n"],
@@ -508,6 +524,22 @@ final class AnalyzerMetricsTest extends TestCase
             ],
             null,
         ];
+        yield 'mass_tp_custom_model_dir' => [
+            static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(['models_dirs' => ['app/Domain/Shop/Models']]),
+            [
+                'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Domain\\Shop\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
+                'app/Domain/Shop/Models/Order.php' => "<?php\nnamespace App\\Domain\\Shop\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            ],
+            'MASS_ASSIGNMENT',
+        ];
+        yield 'mass_fp_custom_dir_default_options' => [
+            static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(),
+            [
+                'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Domain\\Shop\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
+                'app/Domain/Shop/Models/Order.php' => "<?php\nnamespace App\\Domain\\Shop\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            ],
+            null,
+        ];
 
         // --- Migration ---
         yield 'mig_tp_dropcolumn_no_restore' => [
@@ -820,6 +852,16 @@ final class AnalyzerMetricsTest extends TestCase
             static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
             ['resources/views/reports/budget.blade.php' => "<div>{!! format_amount_by_currency(\$currency, \$account['max_amount']) !!}</div>\n"],
             null,
+        ];
+        yield 'bladexss_fp_extra_sanitizer' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(['extra_sanitizers' => ['my_escape(']]),
+            ['resources/views/users/show.blade.php' => "<div>{!! my_escape(\$user->bio) !!}</div>\n"],
+            null,
+        ];
+        yield 'bladexss_tp_unknown_formatter' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(['extra_sanitizers' => ['my_escape(']]),
+            ['resources/views/users/show.blade.php' => "<div>{!! format_html(\$user->bio) !!}</div>\n"],
+            'OWASP_BLADE_XSS',
         ];
 
         // --- Misconfiguration ---

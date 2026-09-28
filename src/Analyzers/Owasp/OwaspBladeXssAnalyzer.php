@@ -66,6 +66,31 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
      */
     private const VIEW_DIRECTIVES = ['extends', 'include', 'includeif', 'includewhen', 'includefirst', 'each'];
 
+    /** @var list<string> lowercase extra sanitizer needles */
+    private array $extraSanitizers = [];
+
+    /**
+     * @param array{extra_sanitizers?: string|list<string>} $options
+     */
+    public function __construct(array $options = [])
+    {
+        $raw = $options['extra_sanitizers'] ?? [];
+        if (is_string($raw)) {
+            $raw = [$raw];
+        }
+        $needles = [];
+        foreach ($raw as $needle) {
+            if (!is_string($needle)) {
+                continue;
+            }
+            $normalized = strtolower(trim($needle));
+            if ($normalized !== '') {
+                $needles[] = $normalized;
+            }
+        }
+        $this->extraSanitizers = array_values(array_unique($needles));
+    }
+
     public function supports(string $path): bool
     {
         return str_ends_with(strtolower($path), '.blade.php');
@@ -307,6 +332,12 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
         $lower = strtolower($inner);
         foreach (self::SANITIZER_FUNCS as $fn) {
             if (preg_match('/\b' . preg_quote($fn, '/') . '\s*\(/', $lower) === 1) {
+                return true;
+            }
+        }
+        foreach ($this->extraSanitizers as $fn) {
+            $needle = str_ends_with($fn, '::') || str_ends_with($fn, '(') ? $fn : $fn . '(';
+            if (str_contains($lower, $needle)) {
                 return true;
             }
         }

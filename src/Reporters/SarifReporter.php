@@ -58,7 +58,7 @@ final class SarifReporter implements ReporterInterface
                     'tool' => [
                         'driver' => [
                             'name' => 'vietvang/quality-checker',
-                            'informationUri' => 'https://github.com/VietVang-JSC/vv-laravel-checker',
+                            'informationUri' => $this->repoUri($ctx),
                             'version' => $ctx->packageVersion,
                             'rules' => array_values($rules),
                         ],
@@ -140,17 +140,25 @@ final class SarifReporter implements ReporterInterface
             return null;
         }
 
+        $repo = $this->repoUri($ctx);
         $cfg = $ctx->configFor('html');
-        $repo = rtrim(trim((string) ($cfg['repo_url'] ?? '')), '/');
-        if ($repo === '') {
-            $repo = 'https://github.com/VietVang-JSC/vv-laravel-checker';
-        }
         $branch = trim((string) ($cfg['branch'] ?? 'main'));
         if ($branch === '') {
             $branch = 'main';
         }
 
         return $repo . '/blob/' . $branch . '/docs/false-positives.md' . $anchor;
+    }
+
+    private function repoUri(CheckContext $ctx): string
+    {
+        $cfg = $ctx->configFor('html');
+        $repo = rtrim(trim((string) ($cfg['repo_url'] ?? '')), '/');
+        if ($repo === '') {
+            $repo = 'https://github.com/VietVang-JSC/vv-laravel-checker';
+        }
+
+        return $repo;
     }
 
     /**

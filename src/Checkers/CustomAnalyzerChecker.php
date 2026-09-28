@@ -140,15 +140,20 @@ final class CustomAnalyzerChecker implements CheckerInterface
             $this->entry($analyzers, 'security.sql_injection', new SqlInjectionAnalyzer()),
             $this->entry($analyzers, 'security.unsafe_eval', new UnsafeEvalAnalyzer()),
             $this->entry($analyzers, 'security.hardcoded_secret', new HardcodedSecretAnalyzer()),
-            $this->entry($analyzers, 'security.mass_assignment', new MassAssignmentAnalyzer()),
+            $this->entry($analyzers, 'security.mass_assignment', new MassAssignmentAnalyzer(
+                ['models_dirs' => $analyzers['models_dirs'] ?? ['app/Models']]
+            )),
             $this->entry($analyzers, 'security.unsafe_unserialize', new UnsafeDeserializationAnalyzer()),
             $this->entry($analyzers, 'security.insecure_hash', new InsecureHashAnalyzer()),
             $this->entry($analyzers, 'security.laravel_taint', new LaravelTaintAnalyzer()),
             $this->entry($analyzers, 'security.disabled_csrf', new DisabledCsrfAnalyzer()),
             $this->entry($analyzers, 'owasp.broken_access_control', new OwaspAccessControlAnalyzer(
-                (bool) ($analyzers['owasp']['route_middleware'] ?? true)
+                (bool) ($analyzers['owasp']['route_middleware'] ?? true),
+                ['extra_middleware' => $analyzers['extra_middleware'] ?? []]
             )),
-            $this->entry($analyzers, 'owasp.blade_xss', new OwaspBladeXssAnalyzer()),
+            $this->entry($analyzers, 'owasp.blade_xss', new OwaspBladeXssAnalyzer(
+                ['extra_sanitizers' => $analyzers['extra_sanitizers'] ?? []]
+            )),
             $this->entry($analyzers, 'owasp.open_redirect', new OwaspOpenRedirectAnalyzer()),
             $this->entry($analyzers, 'owasp.path_traversal', new OwaspPathTraversalAnalyzer()),
             $this->entry($analyzers, 'owasp.ssrf', new OwaspSsrfAnalyzer()),

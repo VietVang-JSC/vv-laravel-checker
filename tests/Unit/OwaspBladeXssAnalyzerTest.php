@@ -372,4 +372,52 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
 
         self::assertSame('OWASP_BLADE_XSS', $this->rules($issues)[0] ?? null);
     }
+
+    public function testSkipsExtraSanitizerNeedle(): void
+    {
+        $file = $this->temp(
+            "<div>{!! mySanitize(\$comment->body) !!}</div>\n",
+            'resources/views/comments/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer(['extra_sanitizers' => ['mySanitize']]))->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsExtraSanitizerPrefixNeedle(): void
+    {
+        $file = $this->temp(
+            "<div>{!! ShopHtml::render(\$comment->body) !!}</div>\n",
+            'resources/views/comments/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer(['extra_sanitizers' => ['shophtml::']]))->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testStillFlagsExtraSanitizerContentWithDefaultOptions(): void
+    {
+        $file = $this->temp(
+            "<div>{!! mySanitize(\$comment->body) !!}</div>\n",
+            'resources/views/comments/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_BLADE_XSS', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testStillFlagsPlainVariableWithExtraSanitizerConfigured(): void
+    {
+        $file = $this->temp(
+            "<div>{!! \$comment->body !!}</div>\n",
+            'resources/views/comments/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer(['extra_sanitizers' => ['mySanitize']]))->analyze([$file]);
+
+        self::assertSame('OWASP_BLADE_XSS', $this->rules($issues)[0] ?? null);
+    }
 }

@@ -53,8 +53,29 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
 
     private const API_RESOURCE_METHODS = ['index', 'store', 'show', 'update', 'destroy'];
 
-    public function __construct(private readonly bool $routeMiddleware = true)
+    /** @var list<string> */
+    private readonly array $extraMiddleware;
+
+    /**
+     * @param array{extra_middleware?: string|list<string>} $options
+     */
+    public function __construct(private readonly bool $routeMiddleware = true, array $options = [])
     {
+        $raw = $options['extra_middleware'] ?? [];
+        if (is_string($raw)) {
+            $raw = [$raw];
+        }
+        $fragments = [];
+        foreach ($raw as $fragment) {
+            if (!is_string($fragment)) {
+                continue;
+            }
+            $base = strtolower(trim(explode(':', $fragment, 2)[0]));
+            if ($base !== '') {
+                $fragments[] = $base;
+            }
+        }
+        $this->extraMiddleware = array_values(array_unique($fragments));
     }
 
     public function analyze(array $files): array
@@ -1037,6 +1058,12 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
         }
         if (in_array($base, ['auth', 'verified', 'signed', 'can'], true)) {
             return true;
+        }
+
+        foreach ($this->extraMiddleware as $fragment) {
+            if (str_contains($base, $fragment)) {
+                return true;
+            }
         }
 
         foreach (['can', 'auth', 'permission', 'role', 'gate', 'admin', 'bouncer', 'checklevel', 'login', 'apikey', 'api_key', 'api.key', 'sanctum', 'jwt', 'oauth'] as $hint) {
