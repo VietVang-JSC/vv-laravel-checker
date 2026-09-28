@@ -59,29 +59,29 @@ final class AnalyzerMetricsTest extends TestCase
             ],
             null,
         ];
-        yield 'bac_fp_group_middleware' => [
+        yield 'bac_tp_review_custom_middleware' => [
             static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
             [
                 'app/Http/Controllers/BackupController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass BackupController extends Controller {\n    public function destroy() {\n        \$this->model->delete();\n    }\n}\n",
                 'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\nRoute::group(['middleware' => ['checkLevel']], function () {\n    Route::post('/backup/delete', 'App\\Http\\Controllers\\BackupController@destroy');\n});\n",
             ],
-            null,
+            'OWASP_BROKEN_ACCESS_CONTROL',
         ];
-        yield 'bac_fp_controller_group' => [
+        yield 'bac_tp_review_admin_gate' => [
             static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
             [
                 'app/Http/Controllers/AttributeController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass AttributeController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
                 'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\nuse App\\Http\\Controllers\\AttributeController;\nRoute::middleware(['admin'])->group(function () {\n    Route::controller(AttributeController::class)->group(function () {\n        Route::post('create', 'store');\n    });\n});\n",
             ],
-            null,
+            'OWASP_BROKEN_ACCESS_CONTROL',
         ];
-        yield 'bac_fp_legacy_uses' => [
+        yield 'bac_tp_review_auth_only' => [
             static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
             [
                 'src/Controller/AccountController.php' => "<?php\nnamespace Aimeos\\Shop\\Controller;\nclass AccountController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
                 'routes/shop.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\nRoute::group(['middleware' => ['web', 'auth']], function () {\n    Route::match(['POST'], 'profile', ['as' => 'shop.account', 'uses' => 'Aimeos\\\\Shop\\\\Controller\\\\AccountController@store']);\n});\n",
             ],
-            null,
+            'OWASP_BROKEN_ACCESS_CONTROL',
         ];
         yield 'bac_tp_throttle_only' => [
             static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
@@ -98,14 +98,14 @@ final class AnalyzerMetricsTest extends TestCase
             ],
             null,
         ];
-        yield 'bac_fp_provider_group_middleware' => [
+        yield 'bac_tp_review_auth_api' => [
             static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
             [
                 'app/Http/Controllers/Api/BackupController.php' => "<?php\nnamespace App\\Http\\Controllers\\Api;\nclass BackupController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
                 'routes/api.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\nRoute::post('/backup', 'App\\Http\\Controllers\\Api\\BackupController@store');\n",
                 'app/Providers/RouteServiceProvider.php' => "<?php\nnamespace App\\Providers;\nuse Illuminate\\Support\\Facades\\Route;\nclass RouteServiceProvider {\n    public function boot(): void {\n        Route::group(['middleware' => 'auth:api', 'prefix' => 'api'], function () {\n            require base_path('routes/api.php');\n        });\n    }\n}\n",
             ],
-            null,
+            'OWASP_BROKEN_ACCESS_CONTROL',
         ];
         yield 'bac_fp_extra_middleware' => [
             static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(true, ['extra_middleware' => ['verified-staff']]),
@@ -146,13 +146,13 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/OpenController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass OpenController extends Controller {\n    public function update(int \$id, string \$hash) {\n        \$thread = \\App\\Models\\Thread::findOrFail(\$id);\n        if (!\\Helper::hashEquals(\$hash, \\App\\Models\\Thread::trackingHash(\$thread))) {\n            throw new \\RuntimeException('bad signature');\n        }\n        \$thread->save();\n    }\n}\n"],
             null,
         ];
-        yield 'bac_fp_if_nested_group' => [
+        yield 'bac_tp_review_installer_guard_auth' => [
             static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
             [
                 'app/Http/Controllers/LinkController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass LinkController extends Controller {\n    public function sort(\\Illuminate\\Http\\Request \$request) {\n        \\App\\Models\\Link::query()->update(['sort' => 1]);\n    }\n}\n",
                 'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\nif (file_exists(base_path('INSTALLERLOCK'))) {\n    Route::middleware(['auth'])->group(function () {\n        Route::post('/sort', 'App\\Http\\Controllers\\LinkController@sort');\n    });\n}\n",
             ],
-            null,
+            'OWASP_BROKEN_ACCESS_CONTROL',
         ];
         yield 'bac_tp_unknown_middleware' => [
             static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(true, ['extra_middleware' => ['verified-staff']]),

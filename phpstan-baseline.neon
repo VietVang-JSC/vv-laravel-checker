@@ -127,12 +127,6 @@ parameters:
 			path: src/Analyzers/Laravel/RouteValidationAnalyzer.php
 
 		-
-			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: src/Analyzers/Owasp/OwaspAccessControlAnalyzer.php
-
-		-
 			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Owasp\\OwaspAccessControlAnalyzer\:\:analyzeFile\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1

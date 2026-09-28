@@ -514,7 +514,7 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
-    public function testAccessControlSkipsGroupMiddlewareProtectedAction(): void
+    public function testAccessControlFlagsReviewForCustomGroupMiddleware(): void
     {
         $controller = $this->temp(
             "<?php\nnamespace App\\Http\\Controllers;\n" .
@@ -531,13 +531,18 @@ final class OwaspAnalyzersTest extends TestCase
 
         $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
 
-        self::assertCount(0, $issues);
+        // Custom middleware is an unverifiable gate: review, not suppression.
+        self::assertCount(1, $issues);
+        self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $issues[0]->rule);
+        self::assertSame('review', $issues[0]->metadata['semantic_status'] ?? null);
+        self::assertSame(['checkLevel'], $issues[0]->metadata['middleware'] ?? null);
     }
 
-    public function testAccessControlSkipsProviderWrappedRouteMiddleware(): void
+    public function testAccessControlFlagsReviewForProviderWrappedAuthApi(): void
     {
         // RouteServiceProvider-style: routes/api.php is required inside a
         // middleware group (base_path() target resolved by walking up).
+        // auth:api authenticates but proves no authorization → review.
         $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-owasp-rsp-' . uniqid('', true);
         $files = [
             'app/Http/Controllers/Api/BackupController.php' => "<?php\nnamespace App\\Http\\Controllers\\Api;\n" .
@@ -560,7 +565,9 @@ final class OwaspAnalyzersTest extends TestCase
 
         $issues = (new OwaspAccessControlAnalyzer())->analyze($paths);
 
-        self::assertCount(0, $issues);
+        self::assertCount(1, $issues);
+        self::assertSame('review', $issues[0]->metadata['semantic_status'] ?? null);
+        self::assertSame(['auth:api'], $issues[0]->metadata['middleware'] ?? null);
     }
 
     public function testAccessControlStillFlagsProviderGroupWithoutAuth(): void
@@ -673,7 +680,7 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
-    public function testAccessControlSkipsGroupNestedInInstallerGuard(): void
+    public function testAccessControlFlagsReviewForGroupNestedInInstallerGuard(): void
     {
         $controller = $this->temp(
             "<?php\nnamespace App\\Http\\Controllers;\n" .
@@ -694,7 +701,9 @@ final class OwaspAnalyzersTest extends TestCase
 
         $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
 
-        self::assertCount(0, $issues);
+        // auth-only group (even nested in an installer guard) → review.
+        self::assertCount(1, $issues);
+        self::assertSame('review', $issues[0]->metadata['semantic_status'] ?? null);
     }
 
     public function testAccessControlSkipsHashEqualsCapability(): void
@@ -728,7 +737,7 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $this->rules($issues)[0] ?? null);
     }
 
-    public function testAccessControlSkipsApiKeyMiddleware(): void
+    public function testAccessControlFlagsReviewForApiKeyMiddleware(): void
     {
         $controller = $this->temp(
             "<?php\nnamespace App\\Http\\Controllers\\Api;\n" .
@@ -745,10 +754,12 @@ final class OwaspAnalyzersTest extends TestCase
 
         $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
 
-        self::assertCount(0, $issues);
+        // API-key guards authenticate identity, not permission → review.
+        self::assertCount(1, $issues);
+        self::assertSame('review', $issues[0]->metadata['semantic_status'] ?? null);
     }
 
-    public function testAccessControlSkipsLoginCheckMiddleware(): void
+    public function testAccessControlFlagsReviewForLoginCheckMiddleware(): void
     {
         $controller = $this->temp(
             "<?php\nnamespace App\\Http\\Controllers;\n" .
@@ -765,7 +776,8 @@ final class OwaspAnalyzersTest extends TestCase
 
         $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
 
-        self::assertCount(0, $issues);
+        self::assertCount(1, $issues);
+        self::assertSame('review', $issues[0]->metadata['semantic_status'] ?? null);
     }
 
     public function testAccessControlStillFlagsGuestMiddleware(): void
@@ -806,7 +818,7 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $this->rules($issues)[0] ?? null);
     }
 
-    public function testAccessControlSkipsControllerGroupWithRequiredFile(): void
+    public function testAccessControlFlagsReviewForAdminRequiredFile(): void
     {
         $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-owasp-' . uniqid('', true);
         @mkdir($dir . DIRECTORY_SEPARATOR . 'routes', 0777, true);
@@ -840,10 +852,12 @@ final class OwaspAnalyzersTest extends TestCase
 
         $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $catalog, $web]);
 
-        self::assertCount(0, $issues);
+        // `admin` is custom middleware: unverifiable gate → review.
+        self::assertCount(1, $issues);
+        self::assertSame('review', $issues[0]->metadata['semantic_status'] ?? null);
     }
 
-    public function testAccessControlSkipsLegacyUsesActionWithAuth(): void
+    public function testAccessControlFlagsReviewForLegacyUsesActionWithAuth(): void
     {
         $controller = $this->temp(
             "<?php\nnamespace Aimeos\\Shop\\Controller;\n" .
@@ -860,7 +874,9 @@ final class OwaspAnalyzersTest extends TestCase
 
         $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
 
-        self::assertCount(0, $issues);
+        // web + auth authenticates but proves no authorization → review.
+        self::assertCount(1, $issues);
+        self::assertSame('review', $issues[0]->metadata['semantic_status'] ?? null);
     }
 
     public function testAccessControlStillFlagsLegacyUsesActionWithoutAuth(): void
@@ -880,7 +896,9 @@ final class OwaspAnalyzersTest extends TestCase
 
         $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
 
+        // web + api carry no access meaning → exposed, high confidence.
         self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $this->rules($issues)[0] ?? null);
+        self::assertSame('exposed', $issues[0]->metadata['semantic_status'] ?? null);
     }
 
     public function testAccessControlDistinguishesSameNamedControllers(): void
@@ -916,8 +934,16 @@ final class OwaspAnalyzersTest extends TestCase
             [$adminController, $shopController, $adminRoutes, $shopRoutes]
         );
 
-        self::assertCount(1, $issues);
-        self::assertStringContainsString('Shop', (string) ($issues[0]->file ?? ''));
+        // Same-named controllers stay separated: admin context (custom
+        // `admin` middleware) is review, public shop context is exposed.
+        self::assertCount(2, $issues);
+        $statusBySide = [];
+        foreach ($issues as $issue) {
+            $side = str_contains((string) ($issue->file ?? ''), 'Admin') ? 'admin' : 'shop';
+            $statusBySide[$side] = $issue->metadata['semantic_status'] ?? null;
+        }
+        self::assertSame('review', $statusBySide['admin'] ?? null);
+        self::assertSame('exposed', $statusBySide['shop'] ?? null);
     }
 
     public function testCommandInjectionSkipsEscapedShellArg(): void

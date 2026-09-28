@@ -82,47 +82,59 @@ php artisan quality:check --tier=all --fail-on=none
 - **Correct fix**: declare `$fillable` or use a FormRequest + `validated()`.
 
 ### `OWASP_BROKEN_ACCESS_CONTROL`
-- **True positive when**: a mutating action (`store`/`update`/`destroy`/...) shows no
-  `authorize()`, `Gate::`, `$this->authorize()`, `abort()`, `$user->can()`/`cannot()`,
-  or middleware in the
-  method or constructor — **and** no protective route middleware.
-- **Automatically skipped when**: the action is protected by route middleware. The analyzer reads
-  route files (`/routes/`, `/Routes/`, `web.php`/`api.php`) and understands:
-  `Route::middleware(...)` / `->middleware(...)` chains,
-  `Route::group(['middleware' => ...])` (including nested groups and groups called
-  directly as statics), `Route::controller(X::class)` with the action as a bare string,
-  `Route::resource()`/`apiResource()`, and `require`/`include` of route files inside
-  a group closure (a required file inherits the middleware stack, it is not parsed standalone).
-  Route files pulled in by a `*ServiceProvider` (`Route::group(['middleware' => ...],
-  fn () => require base_path('routes/api.php'))`) inherit the provider's stack too —
+- **Decision model**: every mutating action (`store`/`update`/`destroy`/...) gets one
+  verdict per route context — `protected` / `review` / `exposed` / `unknown` — never a
+  bare boolean. The finding carries the evidence: `controller`, `action`, `route`
+  (methods + URI), full inherited `middleware` stack, `authorization_evidence`, and
+  `semantic_status`.
+- **Authentication is not authorization**: `auth`/`auth:api`/token guards (`sanctum`,
+  `jwt`, API-key guards) and `verified` prove identity only. Auth-only routes yield
+  `review` findings (Error severity, medium confidence — visible but non-blocking)
+  instead of being suppressed. Only ability checks suppress: `can:*`, `permission:*`,
+  `role:*`, configured `analyzers.extra_middleware` fragments, and local evidence
+  (`$this->authorize()`, `Gate::authorize()`, enforcing `denies()` branches,
+  authorizing FormRequests, `$request->authenticate()`/`Auth::attempt()` credential
+  verification, `hasValidSignature()`/`hash_equals()` capability proofs).
+- **Custom middleware is review, not protection**: `admin`, `owner`, `checkLevel`,
+  `signed`, ... sound protective but their implementation is unknown to the engine —
+  recorded as evidence for human review. (`signed`/`verified`/`throttle` are explicitly
+  never authorization; `throttle`/`guest`/`web`/`api` carry no access meaning, so
+  routes guarded only by them are `exposed`.)
+- **Multi-route actions keep contexts separate**: one public route among protected ones
+  still yields an `exposed` finding citing that route — contexts are never merged into
+  "has auth". Actions with no resolvable route stay `unknown` and keep the fail-safe
+  finding (Error, high confidence).
+- **Automatically skipped when**: the action is protected by route middleware. Route
+  contexts come from `LaravelSemanticIndex`, which reads route files (`/routes/`,
+  `/Routes/`, `web.php`/`api.php`, `*ServiceProvider` loading) and understands:
+  `Route::middleware(...)` / `->middleware(...)` chains, nested
+  `Route::group(['middleware' => ...])` (middleware inherited through every level),
+  `Route::controller(X::class)` with the action as a bare string,
+  `Route::resource()`/`apiResource()` (with `only`/`except`), `Route::match()`/`any()`,
+  and `require`/`include` of route files inside a group closure (a required file
+  inherits the middleware stack, it is not parsed standalone).
   `base_path()`/`app_path()` targets are resolved by walking up to the project root.
   Groups nested in top-level guards (installer checks, maintenance mode) are
   descended with the ambient stack.
   Both the legacy array syntax (`['as' => ..., 'uses' => 'FQCN@method']`) and
-  `[Controller::class, 'method']` are resolved.
-  Credential verification counts as authorization context
-  (`$request->authenticate()`, `Auth::attempt()`, `$request->hasValidSignature()`,
-  `hash_equals()` capability checks), as do enforcing gate branches
-  (`if (Gate::...->denies(...)) { throw ...; }` — a bare `allows()` still flags).
-  A mutating action is also skipped when it type-hints a FormRequest whose
-  `authorize()` does real checks (resolved through `use` imports against the
-  scanned files) — a lone `return true;` (or no `authorize()`) still flags.
-  Middleware names containing `auth`/`can`/`permission`/`role`/`gate`/`admin`/`bouncer`/
-  `checklevel`/`login`/`apikey`/`sanctum`/`jwt`/`oauth`... count as protection;
-  `throttle` does not; `guest*` is never protection
-  (guest means unauthenticated, even `guestAdmin` containing `admin`). Actions are matched by
+  `[Controller::class, 'method']` are resolved. Actions are matched by
   FQCN (`use` imports are resolved) so two same-named controllers in different namespaces
-  (Admin vs Shop API) are not mixed up. Custom guards are added via
-  `analyzers.extra_middleware` (name fragments, e.g. `verified-staff`). Disable with
-  `analyzers.owasp.route_middleware => false` for the legacy behavior (method-only
-  checks).
+  (Admin vs Shop API) are not mixed up. Disable with
+  `analyzers.owasp.route_middleware => false` (no route contexts → every action is
+  `unknown` and flags, the legacy method-only behavior).
 - **Still reported (review then baseline)**: routes that are public by design (login,
   password reset, 2FA verify, storefront, payment callback/IPN), actions with no route
   (dead code), and sample code in documentation folders (for example the OpenAPI `Docs`
   of one pilot — example classes named `*Controller` that never run).
-- **Pilot case**: HRM pilot 45 → 1 (the remaining action is 2FA verify, public by
-  design); e-commerce pilot 453 → 150, of which 105 are `Docs` samples and the rest are
-  public storefront/auth/callback plus a few admin methods with no route.
+- **Pilot case (v0.3.2)**: Snipe-it 4 → 31 (0 suppressed, 27 new `review`: 24 behind the
+  project-specific `authorize:superuser` gate middleware — human-verified as
+  `Gate::allows()` authorization, clearable via `extra_middleware` or a future
+  middleware-alias resolver — plus 3 pure-auth endpoints; 4 kept `exposed`/`unknown`
+  unchanged). Linkstack 6 → 30 (0 suppressed, 24 new `review`: 11 behind the
+  project-specific `admin` role middleware and 3 behind the ownership-checking
+  `link-id` middleware — both human-verified as real authorization — plus 10
+  auth-only studio/auth endpoints including genuine IDOR surface such as
+  `UserController@deleteLink`; 6 kept unchanged).
 
 ### `OWASP_SSRF` / `OWASP_COMMAND_INJECTION` / `OWASP_SSTI`
 - The engine only reports when the URL/template/command is **not a literal** and shows
