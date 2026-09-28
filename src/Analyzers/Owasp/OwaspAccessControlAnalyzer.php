@@ -11,6 +11,9 @@ use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Semantic\AccessDecision;
 use Rampart\QualityChecker\Semantic\LaravelSemanticIndex;
+use Rampart\QualityChecker\Semantic\MiddlewareEvidence;
+use Rampart\QualityChecker\Semantic\MiddlewareInspector;
+use Rampart\QualityChecker\Semantic\MiddlewareRegistry;
 use Rampart\QualityChecker\Semantic\MiddlewareTaxonomy;
 use Rampart\QualityChecker\Semantic\RouteNode;
 
@@ -80,6 +83,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
     public function analyze(array $files): array
     {
         $index = $this->routeMiddleware ? (new LaravelSemanticIndex())->build($files) : null;
+        $registry = $this->routeMiddleware ? (new MiddlewareRegistry())->build($files) : null;
         $formRequestAuth = $this->buildFormRequestAuthMap($files);
 
         $issues = [];
@@ -87,7 +91,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
             if (!$this->supports($file)) {
                 continue;
             }
-            foreach ($this->analyzeFile($file, $index, $formRequestAuth) as $issue) {
+            foreach ($this->analyzeFile($file, $index, $registry, $formRequestAuth) as $issue) {
                 $issues[] = $issue;
             }
         }
@@ -183,8 +187,12 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
     /**
      * @param array<string, true> $formRequestAuth
      */
-    private function analyzeFile(string $file, ?LaravelSemanticIndex $index, array $formRequestAuth = []): array
-    {
+    private function analyzeFile(
+        string $file,
+        ?LaravelSemanticIndex $index,
+        ?MiddlewareRegistry $registry,
+        array $formRequestAuth = []
+    ): array {
         $ast = $this->parse($this->readFile($file));
         if ($ast === null) {
             return [];
@@ -199,7 +207,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
             if (!$class instanceof Node\Stmt\Class_ || !$this->isControllerClass($class)) {
                 continue;
             }
-            foreach ($this->analyzeController($class, $file, $index, $namespace, $uses, $formRequestAuth) as $issue) {
+            foreach ($this->analyzeController($class, $file, $index, $registry, $namespace, $uses, $formRequestAuth) as $issue) {
                 $issues[] = $issue;
             }
         }
@@ -230,6 +238,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
         Node\Stmt\Class_ $class,
         string $file,
         ?LaravelSemanticIndex $index,
+        ?MiddlewareRegistry $registry,
         ?string $namespace,
         array $uses = [],
         array $formRequestAuth = []
@@ -261,7 +270,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
                 continue;
             }
 
-            $decision = $this->decide($controller, $methodName, $index);
+            $decision = $this->decide($controller, $methodName, $index, $registry);
             if ($decision->status === AccessDecision::PROTECTED) {
                 continue;
             }
@@ -277,8 +286,12 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
      * Contexts are never merged: one public route among protected ones
      * still yields an EXPOSED finding citing that route.
      */
-    private function decide(string $controller, string $method, ?LaravelSemanticIndex $index): AccessDecision
-    {
+    private function decide(
+        string $controller,
+        string $method,
+        ?LaravelSemanticIndex $index,
+        ?MiddlewareRegistry $registry
+    ): AccessDecision {
         if ($index === null) {
             return new AccessDecision(AccessDecision::UNKNOWN, null, [], []);
         }
@@ -287,9 +300,12 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
             return new AccessDecision(AccessDecision::UNKNOWN, null, [], []);
         }
 
+        $inspector = new MiddlewareInspector();
+        /** @var array<string, MiddlewareEvidence|null> $inspected */
+        $inspected = [];
         $decisions = [];
         foreach ($routes as $route) {
-            $decisions[] = $this->decideRoute($route);
+            $decisions[] = $this->decideRoute($route, $registry, $inspector, $inspected);
         }
         foreach ($decisions as $candidate) {
             if ($candidate->status === AccessDecision::EXPOSED) {
@@ -305,19 +321,44 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
         return $decisions[0];
     }
 
-    private function decideRoute(RouteNode $route): AccessDecision
-    {
+    /**
+     * @param array<string, MiddlewareEvidence|null> $inspected memoized per run
+     */
+    private function decideRoute(
+        RouteNode $route,
+        ?MiddlewareRegistry $registry,
+        MiddlewareInspector $inspector,
+        array &$inspected
+    ): AccessDecision {
         $evidence = [];
+        $resolutions = [];
         $authenticated = false;
         $gated = false;
         foreach ($route->middleware as $middleware) {
             $kind = MiddlewareTaxonomy::classify($middleware, $this->extraMiddleware);
             if ($kind === MiddlewareTaxonomy::AUTHORIZATION) {
                 $evidence[] = $middleware;
-            } elseif ($kind === MiddlewareTaxonomy::AUTHENTICATION) {
+                continue;
+            }
+            if ($kind === MiddlewareTaxonomy::AUTHENTICATION) {
                 $authenticated = true;
-            } elseif ($kind === MiddlewareTaxonomy::GATE) {
-                $gated = true;
+                continue;
+            }
+            if ($kind !== MiddlewareTaxonomy::GATE) {
+                continue;
+            }
+            $gated = true;
+            $alias = strtolower(trim(explode(':', $middleware, 2)[0]));
+            $routeAbility = $this->routeAbility($middleware);
+            $resolution = $this->resolveMiddleware($alias, $routeAbility, $registry, $inspector, $inspected);
+            if ($resolution['evidence'] instanceof MiddlewareEvidence) {
+                $evidence[] = $resolution['evidence']->toArray();
+                continue;
+            }
+            // Resolved but not understood (or not registered at all):
+            // keep the trail for human review instead of guessing.
+            if ($resolution['trail'] !== null) {
+                $resolutions[] = $resolution['trail'];
             }
         }
 
@@ -328,13 +369,71 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
             'line' => $route->line,
         ];
         if ($evidence !== []) {
-            return new AccessDecision(AccessDecision::PROTECTED, $routeRef, $route->middleware, $evidence);
+            return new AccessDecision(AccessDecision::PROTECTED, $routeRef, $route->middleware, $evidence, []);
         }
         if ($authenticated || $gated) {
-            return new AccessDecision(AccessDecision::REVIEW, $routeRef, $route->middleware, []);
+            return new AccessDecision(AccessDecision::REVIEW, $routeRef, $route->middleware, [], $resolutions);
         }
 
-        return new AccessDecision(AccessDecision::EXPOSED, $routeRef, $route->middleware, []);
+        return new AccessDecision(AccessDecision::EXPOSED, $routeRef, $route->middleware, [], []);
+    }
+
+    private function routeAbility(string $middleware): ?string
+    {
+        $parts = explode(':', $middleware, 2);
+        $ability = trim($parts[1] ?? '');
+
+        return $ability === '' ? null : $ability;
+    }
+
+    /**
+     * Tier 1 + tier 2 for one gate middleware: alias → class → handle()
+     * evidence. Inspector outcomes are memoized per alias within the run.
+     *
+     * @param array<string, MiddlewareEvidence|null> $inspected
+     * @return array{evidence: MiddlewareEvidence|null, trail: array{alias: string, class: string|null, method: string|null, source: string|null, mechanism: string}|null}
+     */
+    private function resolveMiddleware(
+        string $alias,
+        ?string $routeAbility,
+        ?MiddlewareRegistry $registry,
+        MiddlewareInspector $inspector,
+        array &$inspected
+    ): array {
+        $registration = $registry?->resolve($alias);
+        if ($registration === null || $registry === null) {
+            return [
+                'evidence' => null,
+                'trail' => [
+                    'alias' => $alias,
+                    'class' => $registration['class'] ?? null,
+                    'method' => null,
+                    'source' => null,
+                    'mechanism' => 'unregistered',
+                ],
+            ];
+        }
+        if (!array_key_exists($alias, $inspected)) {
+            $classFile = $registry->classFile($registration['class']);
+            $inspected[$alias] = $classFile === null
+                ? null
+                : $inspector->inspect($classFile, $registration['class'], $alias, $routeAbility);
+        }
+        $evidence = $inspected[$alias];
+        if ($evidence instanceof MiddlewareEvidence) {
+            return ['evidence' => $evidence, 'trail' => null];
+        }
+
+        return [
+            'evidence' => null,
+            'trail' => [
+                'alias' => $alias,
+                'class' => $registration['class'],
+                'method' => 'handle',
+                'source' => $registration['file'] . ':' . ($registration['line'] ?? 0),
+                'mechanism' => 'unrecognized',
+            ],
+        ];
     }
 
     private function decisionIssue(
@@ -350,6 +449,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
             'route' => $decision->route,
             'middleware' => $decision->middleware,
             'authorization_evidence' => $decision->authorizationEvidence,
+            'middleware_resolution' => $decision->middlewareResolution,
             'semantic_status' => $decision->status,
         ];
         if ($decision->status === AccessDecision::REVIEW) {

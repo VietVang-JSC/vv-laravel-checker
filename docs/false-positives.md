@@ -135,6 +135,29 @@ php artisan quality:check --tier=all --fail-on=none
   `link-id` middleware — both human-verified as real authorization — plus 10
   auth-only studio/auth endpoints including genuine IDOR surface such as
   `UserController@deleteLink`; 6 kept unchanged).
+- **Middleware semantic resolution (v0.3.3)**: `review` findings behind custom
+  middleware are re-examined in two tiers. Tier 1 resolves the alias to a class
+  (`App\Http\Kernel::$routeMiddleware` / `$middlewareAliases`,
+  `bootstrap/app.php` `$middleware->alias([...])`) and locates the class file by
+  `*Middleware/<Short>.php` convention — symbol resolution only. Tier 2 inspects
+  `handle()` for bounded patterns: `Gate::allows()/authorize()`, `$user->can()`
+  with a deny-shape (`abort*()`, `throw`, HTTP 403) on the failing path, and
+  role-literal guards (`->role`/`is_admin` vs literal) passing to `$next()` with a
+  deny (high confidence) or redirect (medium) fallback. A trigger only counts when
+  it structurally gates `$next()` — nested inside unrelated conditions (e.g. a role
+  check conjoined with a maintenance flag) it gates a branch, not the request, and
+  stays review. Ownership checks (`$user->id != $link->user_id`), redirect-only
+  fallbacks, truthy flags, and inverted role checks are explicitly out of scope.
+  Proven middleware suppresses with composable evidence
+  (`type`/`alias`/`class`/`method`/`mechanism`/`ability`/`source`/`confidence`);
+  resolved-but-unrecognized middleware is attached to `review` findings as
+  `middleware_resolution` so humans can clear it in seconds. `extra_middleware`
+  remains the escape hatch for middleware static analysis cannot understand.
+- **Pilot case (v0.3.3)**: Snipe-it 31 → 7 (24 `authorize:superuser` proven via
+  `CheckPermissions::handle()` → `Gate::allows()` + 403; 3 genuine `review` kept).
+  Linkstack 30 → 19 (11 `admin` proven via role guard; the 3 `link-id` ownership
+  routes — including the `UserController@deleteLink` IDOR surface — correctly stay
+  `review`; 0 new findings on both pilots).
 
 ### `OWASP_SSRF` / `OWASP_COMMAND_INJECTION` / `OWASP_SSTI`
 - The engine only reports when the URL/template/command is **not a literal** and shows
@@ -458,6 +481,27 @@ php artisan quality:check --ci --baseline-file=baseline.json
 
 Commit `baseline.json` so the whole team shares the same threshold. Only run
 `--baseline-update` after re-reviewing the full new report.
+
+## 6. Performance budget (semantic engine)
+
+Optimization stays P2 — no caching layers before profiling. Budgets (Snipe-it,
+713 files, measured):
+
+| Stage | Warm | Notes |
+|---|---|---|
+| Semantic index build | ~0.2s | 26 route/provider files, AstPool 25 hits / 26 misses |
+| BAC analyze (incl. registry + handle inspection) | ~3.0s | per-file parse dominates; middleware inspection parses one file per distinct alias |
+| Cold full BAC scan | < 30s | first-touch outlier 28.7s (file cache + autoload); warm ~3–4s |
+
+Rules going forward:
+
+- Index build once per run; AST parse once per file per run (AstPool).
+- Middleware inspection parses at most one file per distinct alias, memoized.
+- If a wave pushes the cold full scan past ~50s, stop features and optimize
+  (shared parser/AstPool across analyzers is the known lever: raw re-parse of
+  ~7k files costs ~110s today because every analyzer constructs its own
+  `ParserFactory` per file).
+- No complex caching before a profile proves where time goes.
 
 ## 5. Don'ts
 

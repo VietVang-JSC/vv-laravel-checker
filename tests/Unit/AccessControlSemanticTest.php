@@ -277,6 +277,112 @@ final class AccessControlSemanticTest extends TestCase
         self::assertSame([], $this->rules($issues));
     }
 
+    public function testMiddlewareAliasEvidenceSuppresses(): void
+    {
+        $paths = $this->project([
+            'app/Http/Controllers/BackupController.php' => $this->controller(),
+            'app/Http/Kernel.php' => "<?php\nnamespace App\\Http;\n" .
+                "use App\\Http\\Middleware\\CheckPermissions;\n" .
+                "class Kernel {\n" .
+                "    protected \$routeMiddleware = ['authorize' => CheckPermissions::class];\n" .
+                "}\n",
+            'app/Http/Middleware/CheckPermissions.php' => "<?php\nnamespace App\\Http\\Middleware;\n" .
+                "use Closure;\nuse Illuminate\\Http\\Request;\nuse Illuminate\\Support\\Facades\\Gate;\n" .
+                "class CheckPermissions {\n" .
+                "    public function handle(Request \$request, Closure \$next, \$section = null) {\n" .
+                "        if (Gate::allows(\$section)) {\n" .
+                "            return \$next(\$request);\n" .
+                "        }\n" .
+                "        return response()->view('x', [], 403);\n" .
+                "    }\n" .
+                "}\n",
+            'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+                "Route::middleware(['auth', 'authorize:superuser'])->group(function () {\n" .
+                "    Route::post('/backup', 'App\\Http\\Controllers\\BackupController@update');\n" .
+                "});\n",
+        ]);
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze($paths);
+
+        // alias → CheckPermissions::handle() → Gate::allows + 403 → protected.
+        self::assertSame([], $this->rules($issues));
+    }
+
+    public function testOwnershipMiddlewareStaysReviewGolden(): void
+    {
+        // Real-world golden case (Linkstack deleteLink): the `link-id`
+        // middleware verifies ownership ($user->id vs $link->user_id) —
+        // object-level authorization is out of scope, so this MUST stay
+        // review and must never be silently suppressed.
+        $paths = $this->project([
+            'app/Http/Controllers/UserController.php' => "<?php\nnamespace App\\Http\\Controllers;\n" .
+                "class UserController extends Controller {\n" .
+                "    public function deleteLink(\\Illuminate\\Http\\Request \$request) {\n" .
+                "        \\App\\Models\\Link::where('id', \$request->id)->delete();\n" .
+                "        return redirect('/studio/links');\n" .
+                "    }\n" .
+                "}\n",
+            'app/Http/Kernel.php' => "<?php\nnamespace App\\Http;\n" .
+                "class Kernel {\n" .
+                "    protected \$routeMiddleware = [\n" .
+                "        'auth' => \\App\\Http\\Middleware\\Authenticate::class,\n" .
+                "        'link-id' => \\App\\Http\\Middleware\\LinkId::class,\n" .
+                "    ];\n" .
+                "}\n",
+            'app/Http/Middleware/LinkId.php' => "<?php\nnamespace App\\Http\\Middleware;\n" .
+                "use Auth;\nuse Closure;\nuse App\\Models\\Link;\n" .
+                "class LinkId {\n" .
+                "    public function handle(\$request, Closure \$next) {\n" .
+                "        \$link = Link::find(\$request->route('id'));\n" .
+                "        if (!\$link) {\n" .
+                "            return abort(404);\n" .
+                "        }\n" .
+                "        if (Auth::user()->id != \$link->user_id) {\n" .
+                "            return abort(403);\n" .
+                "        }\n" .
+                "        return \$next(\$request);\n" .
+                "    }\n" .
+                "}\n",
+            'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+                "Route::middleware(['auth', 'link-id'])->group(function () {\n" .
+                "    Route::get('/deleteLink/{id}', 'App\\Http\\Controllers\\UserController@deleteLink');\n" .
+                "});\n",
+        ]);
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze($paths);
+
+        self::assertCount(1, $issues);
+        self::assertSame('review', $issues[0]->metadata['semantic_status'] ?? null);
+        $trails = $issues[0]->metadata['middleware_resolution'] ?? [];
+        self::assertNotEmpty($trails);
+        $linkId = null;
+        foreach ($trails as $trail) {
+            if (($trail['alias'] ?? null) === 'link-id') {
+                $linkId = $trail;
+            }
+        }
+        self::assertNotNull($linkId);
+        self::assertSame('App\\Http\\Middleware\\LinkId', $linkId['class'] ?? null);
+        self::assertSame('unrecognized', $linkId['mechanism'] ?? null);
+    }
+
+    public function testUnregisteredAliasStaysReviewWithTrail(): void
+    {
+        $paths = $this->project([
+            'app/Http/Controllers/BackupController.php' => $this->controller(),
+            'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+                "Route::post('/backup', 'App\\Http\\Controllers\\BackupController@update')->middleware('owner');\n",
+        ]);
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze($paths);
+
+        self::assertCount(1, $issues);
+        self::assertSame('review', $issues[0]->metadata['semantic_status'] ?? null);
+        $trails = $issues[0]->metadata['middleware_resolution'] ?? [];
+        self::assertSame('unregistered', $trails[0]['mechanism'] ?? null);
+        self::assertSame('owner', $trails[0]['alias'] ?? null);
+    }
+
     /**
      * @return iterable<string, array{string, string}>
      */
