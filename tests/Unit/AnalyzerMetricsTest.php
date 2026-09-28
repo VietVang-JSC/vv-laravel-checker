@@ -8,6 +8,7 @@ use Closure;
 use PHPUnit\Framework\TestCase;
 use VietVang\QualityChecker\Analyzers\AbstractAnalyzer;
 use VietVang\QualityChecker\Analyzers\Laravel\MigrationAnalyzer;
+use VietVang\QualityChecker\Analyzers\Laravel\RouteValidationAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspAccessControlAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer;
@@ -93,6 +94,20 @@ final class AnalyzerMetricsTest extends TestCase
             [
                 'app/Http/Controllers/PostController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Http\\Request;\nclass PostController extends Controller {\n    public function update(Request \$request, \$id) {\n        \$post = Post::findOrFail(\$id);\n        \$request->user()->can('update', \$post);\n        \$post->save();\n    }\n}\n",
             ],
+            null,
+        ];
+        yield 'bac_fp_provider_group_middleware' => [
+            static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
+            [
+                'app/Http/Controllers/Api/BackupController.php' => "<?php\nnamespace App\\Http\\Controllers\\Api;\nclass BackupController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
+                'routes/api.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\nRoute::post('/backup', 'App\\Http\\Controllers\\Api\\BackupController@store');\n",
+                'app/Providers/RouteServiceProvider.php' => "<?php\nnamespace App\\Providers;\nuse Illuminate\\Support\\Facades\\Route;\nclass RouteServiceProvider {\n    public function boot(): void {\n        Route::group(['middleware' => 'auth:api', 'prefix' => 'api'], function () {\n            require base_path('routes/api.php');\n        });\n    }\n}\n",
+            ],
+            null,
+        ];
+        yield 'validation_fp_use_imported_formrequest' => [
+            static fn (): AbstractAnalyzer => new RouteValidationAnalyzer(),
+            ['app/Api/V1/Controllers/AccountController.php' => "<?php\nnamespace App\\Api\\V1\\Controllers;\nuse App\\Api\\V1\\Requests\\StoreRequest;\nclass AccountController extends Controller {\n    public function store(StoreRequest \$request) {\n        return \$this->repository->store(\$request->getAllAccountData());\n    }\n}\n"],
             null,
         ];
 
@@ -259,6 +274,11 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Services/ExternalService.php' => "<?php\n\$fp = fsockopen('localhost', 80);\n"],
             null,
         ];
+        yield 'ssrf_fp_glob_loop' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Console/Commands/MoveUploads.php' => "<?php\n\$logos = glob('public/uploads/*.*');\nforeach (\$logos as \$logo) {\n    \$contents = file_get_contents(\$logo);\n}\n"],
+            null,
+        ];
 
         // --- SSTI ---
         yield 'ssti_tp_input_var' => [
@@ -304,6 +324,11 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'ssti_fp_view_composer_literal' => [
             static fn (): AbstractAnalyzer => new OwaspSstiAnalyzer(),
             ['app/Providers/ViewServiceProvider.php' => "<?php\n\\View::composer('admin.*', function (\$v) {});\n"],
+            null,
+        ];
+        yield 'ssti_fp_in_array_allow_list' => [
+            static fn (): AbstractAnalyzer => new OwaspSstiAnalyzer(),
+            ['app/Http/Controllers/ModalController.php' => "<?php\nclass ModalController {\n    public function show(string \$type) {\n        \$allowed = ['a', 'b'];\n        if (in_array(\$type, \$allowed)) {\n            return view(\"x.{\$type}\");\n        }\n        abort(404);\n    }\n}\n"],
             null,
         ];
 
@@ -383,6 +408,11 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'eval_fp_call_user_func_literal' => [
             static fn (): UnsafeEvalAnalyzer => new UnsafeEvalAnalyzer(),
             ['app/Services/ActionService.php' => "<?php\nnamespace App\\Services;\nclass ActionService {\n    public function run(\\Illuminate\\Http\\Request \$request): void {\n        call_user_func([\$this, 'handle'], \$request->input('x'));\n    }\n}\n"],
+            null,
+        ];
+        yield 'eval_fp_this_callback_property' => [
+            static fn (): UnsafeEvalAnalyzer => new UnsafeEvalAnalyzer(),
+            ['app/Services/ImportService.php' => "<?php\nnamespace App\\Services;\nclass ImportService {\n    protected \$progressCallback;\n    public function run(): void {\n        if (\$this->progressCallback) {\n            call_user_func(\$this->progressCallback, 1);\n        }\n    }\n}\n"],
             null,
         ];
         yield 'deser_tp_yaml_parse_input' => [
@@ -582,6 +612,26 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/AuthController.php' => "<?php\nreturn response('', 302)->header('Location', '/home');\n"],
             null,
         ];
+        yield 'openredirect_fp_route_concat_path' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\n\$from = \$request->input('_from', '');\nreturn redirect(route('index') . \$from);\n"],
+            null,
+        ];
+        yield 'openredirect_fp_presigned_url' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Services/StreamerAdapter.php' => "<?php\nreturn redirect(\$this->storage->getPresignedUrl(\$path));\n"],
+            null,
+        ];
+        yield 'openredirect_fp_storage_temporary_url' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nuse Illuminate\\Support\\Facades\\Storage;\nreturn redirect()->away(Storage::disk(\$disk)->temporaryUrl(\$file, now()->addMinutes(5)));\n"],
+            null,
+        ];
+        yield 'openredirect_fp_safe_method' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nreturn redirect(\$this->getSafePreviousUrl());\n"],
+            null,
+        ];
 
         // --- Path traversal ---
         yield 'traversal_tp_response_download' => [
@@ -662,6 +712,11 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'traversal_fp_file_delete' => [
             static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
             ['app/Http/Controllers/TempFileController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\File;\nclass TempFileController extends Controller {\n    public function destroy(\\Illuminate\\Http\\Request \$request): void {\n        File::delete(storage_path('tmp/' . \$request->name));\n    }\n}\n"],
+            null,
+        ];
+        yield 'traversal_fp_tempnam_unlink' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Helpers/ExportHelper.php' => "<?php\nclass ExportHelper {\n    public function stage(string \$extension): ?string {\n        \$tmp = tempnam(sys_get_temp_dir(), 'export');\n        if (\$tmp === false) {\n            return null;\n        }\n        @unlink(\$tmp);\n        return \$tmp;\n    }\n}\n"],
             null,
         ];
 
@@ -749,6 +804,21 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'bladexss_fp_includewhen_literal_view' => [
             static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
             ['resources/views/pages/show.blade.php' => "@includeWhen(\$showBanner, 'partials.banner')\n"],
+            null,
+        ];
+        yield 'bladexss_fp_number_currency' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/orders/show.blade.php' => "<div>{!! Number::currency(\$order->total, 'USD') !!}</div>\n"],
+            null,
+        ];
+        yield 'bladexss_fp_amount_formatter' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/reports/budget.blade.php' => "<div>{!! format_amount_by_symbol(\$row['sum'], \$row['currency_symbol'], 2) !!}</div>\n"],
+            null,
+        ];
+        yield 'bladexss_fp_amount_formatter_family' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/reports/budget.blade.php' => "<div>{!! format_amount_by_currency(\$currency, \$account['max_amount']) !!}</div>\n"],
             null,
         ];
 

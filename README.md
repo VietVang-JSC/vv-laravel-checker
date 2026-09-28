@@ -335,9 +335,8 @@ The **tier** controls what the gate fails on:
 Custom analyzers only (phpcs/phpstan/phpunit excluded), `tier=security`,
 `fail-on=none`, cold runs without cache. Quality is pinned by a labeled
 corpus (`tests/Unit/AnalyzerMetricsTest.php`): **precision 1.000 / recall 1.000**
-across 67 true/false-positive cases (24 TP + 43 TN), so the reductions below
+across 146 true/false-positive cases (56 TP + 90 TN), so the reductions below
 cannot regress silently.
-
 | Pilot | Stack | Files | Before | After | Signal left |
 |---|---|---|---|---|---|
 | A — e-commerce monolith | Laravel 11 | 3,283 | 1,246 (7 / 466 / 773) | **1,077** (3 / 301 / 773) | 101 blade + public routes + Docs sample |
@@ -357,6 +356,9 @@ cannot regress silently.
 | N — OSS accounting app | Laravel | ~1,500 | — | **559** (1 / 523 / 35) | 500 blade + 3 unserialize TP + preg-guarded eval |
 | O — OSS starter kit | Laravel | ~400 | — | **57** (0 / 16 / 41) | clean baseline |
 | P — OSS ticketing app | Laravel | ~900 | — | **112** (0 / 57 / 55) | Form:: builders + installer CSRF |
+| Q — OSS asset-mgmt app | Laravel | ~8,600 | — | **586** (6 / 291 / 289) | RSP-wrapped API auth + Storage temp URLs + dynamic-class call TP |
+| R — OSS finance app | Laravel | ~1,700 | — | **473** (0 / 111 / 362) | amount formatters + Safe-URL redirects + FormRequest use-imports |
+| S — OSS music app | Laravel | ~1,500 | — | **320** (12 / 16 / 292) | default-credential TP + presigned-URL redirects |
 
 *(severity split: critical / error / warning)*
 

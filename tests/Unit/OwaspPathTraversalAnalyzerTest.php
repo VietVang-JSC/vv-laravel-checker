@@ -194,4 +194,31 @@ final class OwaspPathTraversalAnalyzerTest extends TestCase
 
         self::assertCount(0, $issues);
     }
+
+    public function testSkipsTempnamBackedUnlink(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass ExportHelper {\n    public function stage(string \$extension): ?string {\n" .
+            "        \$tmp = tempnam(sys_get_temp_dir(), 'export');\n" .
+            "        if (\$tmp === false) {\n            return null;\n        }\n" .
+            "        @unlink(\$tmp);\n        return \$tmp;\n    }\n}\n",
+            'app/Helpers/ExportHelper.php'
+        );
+
+        $issues = (new OwaspPathTraversalAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testStillFlagsPlainVariableUnlink(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass ExportHelper {\n    public function clean(string \$record): void {\n        @unlink(\$record);\n    }\n}\n",
+            'app/Helpers/ExportHelper.php'
+        );
+
+        $issues = (new OwaspPathTraversalAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_PATH_TRAVERSAL', $this->rules($issues)[0] ?? null);
+    }
 }

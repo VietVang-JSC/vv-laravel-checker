@@ -82,6 +82,15 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             }
         }
         $origins = $this->variableOrigins($nodes);
+        // Loop-carried origins are invisible to the shared assignment scan:
+        // foreach ($files as $file) and $uploads['k'] = glob(...) must map
+        // the loop variable / array to its source expression, otherwise
+        // directory listings look like unknown (flaggable) input.
+        foreach ($this->loopOrigins($nodes) as $name => $rhsList) {
+            foreach ($rhsList as $rhs) {
+                $origins[$name][] = $rhs;
+            }
+        }
 
         $issues = [];
         $calls = $this->finder()->find($nodes, function (Node $node): bool {
@@ -257,6 +266,16 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
      */
     private function isPotentialUserInput(Node\Expr $expr, array $origins): bool
     {
+        // $files[$i] carries the safety of $files (directory listings,
+        // deploy-time arrays, ...): judge the base expression.
+        while ($expr instanceof Node\Expr\ArrayDimFetch) {
+            $expr = $expr->var;
+        }
+
+        if ($this->isDirectoryListing($expr)) {
+            return false;
+        }
+
         if ($this->isLiteralString($expr)) {
             return false;
         }
@@ -297,6 +316,70 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         }
 
         return $this->isTaintedExpr($expr);
+    }
+
+    /**
+     * Extra origins the assignment scan misses: foreach value/key variables
+     * (`foreach ($files as $file)` maps $file to $files) and array-element
+     * assignments (`$uploads['k'] = glob(...)` maps $uploads to the RHS).
+     * Only adds origins (silencing direction) — never removes any.
+     *
+     * @param list<Node> $nodes
+     * @return array<string, list<Node\Expr>>
+     */
+    private function loopOrigins(array $nodes): array
+    {
+        $origins = [];
+        $loops = $this->finder()->find($nodes, static function (Node $node): bool {
+            return $node instanceof Node\Stmt\Foreach_
+                || $node instanceof Node\Expr\Assign;
+        });
+        foreach ($loops as $node) {
+            if ($node instanceof Node\Stmt\Foreach_) {
+                if ($node->valueVar instanceof Node\Expr\Variable && is_string($node->valueVar->name)) {
+                    $origins[$node->valueVar->name][] = $node->expr;
+                }
+                if ($node->keyVar instanceof Node\Expr\Variable && is_string($node->keyVar->name)) {
+                    $origins[$node->keyVar->name][] = $node->expr;
+                }
+                continue;
+            }
+            if (
+                $node instanceof Node\Expr\Assign
+                && $node->var instanceof Node\Expr\ArrayDimFetch
+                && $node->var->var instanceof Node\Expr\Variable
+                && is_string($node->var->var->name)
+            ) {
+                $origins[$node->var->var->name][] = $node->expr;
+            }
+        }
+
+        return $origins;
+    }
+
+    /**
+     * Directory listings return server-side paths, never remote URLs:
+     * glob()/scandir(), Storage::files()/allFiles(), File::files().
+     */
+    private function isDirectoryListing(Node\Expr $expr): bool
+    {
+        if (
+            $expr instanceof Node\Expr\FuncCall
+            && $expr->name instanceof Node\Name
+            && in_array(strtolower($expr->name->toString()), ['glob', 'scandir'], true)
+        ) {
+            return true;
+        }
+
+        if (
+            ($expr instanceof Node\Expr\MethodCall || $expr instanceof Node\Expr\StaticCall)
+            && $expr->name instanceof Node\Identifier
+            && in_array(strtolower($expr->name->toString()), ['files', 'allfiles', 'listcontents'], true)
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -469,6 +552,9 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
                 if (!$this->isSafeVariable($rhs->name, $origins, $seen)) {
                     return false;
                 }
+                continue;
+            }
+            if ($this->isDirectoryListing($rhs)) {
                 continue;
             }
             if (!$this->isLiteralString($rhs) && !$this->hasFixedHost($rhs) && !$this->isLocalPath($rhs)) {

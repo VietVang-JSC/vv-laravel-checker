@@ -60,12 +60,13 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
 
         $issues = [];
         $classes = $this->finder()->findInstanceOf($ast, Node\Stmt\Class_::class);
+        $useMap = $this->useMap($ast);
 
         foreach ($classes as $class) {
             if (!$class instanceof Node\Stmt\Class_ || !$this->isControllerClass($class)) {
                 continue;
             }
-            foreach ($this->analyzeController($class, $file) as $issue) {
+            foreach ($this->analyzeController($class, $file, $useMap) as $issue) {
                 $issues[] = $issue;
             }
         }
@@ -83,9 +84,10 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
     }
 
     /**
+     * @param array<string, string> $useMap
      * @return Issue[]
      */
-    private function analyzeController(Node\Stmt\Class_ $class, string $file): array
+    private function analyzeController(Node\Stmt\Class_ $class, string $file, array $useMap): array
     {
         $issues = [];
 
@@ -99,7 +101,7 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
                 continue;
             }
 
-            if ($this->hasFormRequest($stmt) || $this->bodyHasValidation($stmt)) {
+            if ($this->hasFormRequest($stmt, $useMap) || $this->bodyHasValidation($stmt)) {
                 continue;
             }
 
@@ -117,7 +119,10 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
         return $issues;
     }
 
-    private function hasFormRequest(Node\Stmt\ClassMethod $method): bool
+    /**
+     * @param array<string, string> $useMap alias => FQCN
+     */
+    private function hasFormRequest(Node\Stmt\ClassMethod $method, array $useMap): bool
     {
         foreach ($method->params as $param) {
             if (!$param->type instanceof Node\Name) {
@@ -125,6 +130,12 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
             }
 
             $type = $param->type->toString();
+            // Resolve short names through use-imports: `store(StoreRequest
+            // $request)` with `use App\Http\Requests\StoreRequest;` is a
+            // FormRequest even though the hint has no backslash.
+            if (!str_contains($type, '\\') && isset($useMap[$type])) {
+                $type = $useMap[$type];
+            }
 
             // Real FormRequest: either the Laravel base class or a custom
             // *Request inside a `Requests\` namespace. Plain `Illuminate\Http\Request`
@@ -143,6 +154,27 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
         }
 
         return false;
+    }
+
+    /**
+     * @param list<Node> $ast
+     * @return array<string, string> alias => FQCN
+     */
+    private function useMap(array $ast): array
+    {
+        $map = [];
+        /** @var list<Node\Stmt\Use_> $uses */
+        $uses = $this->finder()->findInstanceOf($ast, Node\Stmt\Use_::class);
+        foreach ($uses as $use) {
+            foreach ($use->uses as $useUse) {
+                $alias = $useUse->alias !== null
+                    ? $useUse->alias->toString()
+                    : $useUse->name->getLast();
+                $map[$alias] = $useUse->name->toString();
+            }
+        }
+
+        return $map;
     }
 
     private function bodyHasValidation(Node\Stmt\ClassMethod $method): bool

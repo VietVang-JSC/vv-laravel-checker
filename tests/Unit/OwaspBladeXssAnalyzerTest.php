@@ -324,4 +324,52 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
 
         self::assertCount(0, $issues);
     }
+
+    public function testSkipsNumberCurrencyHelper(): void
+    {
+        $file = $this->temp(
+            "<div>{!! Number::currency(\$order->total, 'USD') !!}</div>\n",
+            'resources/views/orders/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsVerifiedAmountFormatter(): void
+    {
+        $file = $this->temp(
+            "<div>{!! format_amount_by_symbol(\$row['sum'], \$row['currency_symbol'], 2) !!}</div>\n",
+            'resources/views/reports/budget.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsAmountFormatterFamily(): void
+    {
+        $file = $this->temp(
+            "<div>{!! format_amount_by_currency(\$currency, \$account['max_amount']) !!}</div>\n<div>{!! format_amount_by_account(\$account, \$clearedAmount) !!}</div>\n",
+            'resources/views/reports/budget.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testStillFlagsUnknownFormatter(): void
+    {
+        $file = $this->temp(
+            "<div>{!! format_html(\$user->bio) !!}</div>\n",
+            'resources/views/users/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_BLADE_XSS', $this->rules($issues)[0] ?? null);
+    }
 }

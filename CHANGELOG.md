@@ -64,6 +64,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SSRF: `readfile()`/`file()`/`fsockopen()`/`pfsockopen()`/
   `stream_socket_client()` added as sinks (local-path and literal hosts
   stay silent).
+- SSRF: directory listings (`glob()`/`scandir()`, `Storage::files()`) are
+  server-side paths — loop variables and `$list[$i]` element reads over them
+  stay silent; `$request` arrays still flag.
+- Open redirect: `route('home') . $path` concatenations (host pinned by the
+  framework), SDK-signed storage URLs (`temporaryUrl()`/`getPresignedUrl()`),
+  and `*Safe*` methods (`getSafeUrl()`) skipped; `url($dynamic)` still flags
+  (Laravel returns already-valid URLs unchanged).
+- Broken access control: route files required from a `*ServiceProvider`
+  (`Route::group(['middleware' => ...], fn () => require
+  base_path('routes/api.php'))`) inherit the provider's middleware stack.
+- Request validation: FormRequest short names resolved through `use` imports.
+- Unsafe eval: `$this->callback` handler properties skipped as fixed callables
+  (dynamic `[$class, 'method']` pairs still flag).
+- SSTI: `in_array()` allow-list gates (inline or literal-array variables)
+  silence the guarded variable in the same function.
+- Blade: `Number::` helpers and the verified `format_amount_by_*` currency
+  formatter family skipped (NumberFormatter float-cast output).
+- Traversal: `tempnam()`/`tmpfile()`/`sys_get_temp_dir()` origins are
+  server-side temp paths.
 
 ### Fixed (new public pilots audit)
 

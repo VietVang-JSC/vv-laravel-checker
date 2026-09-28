@@ -303,9 +303,15 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
     private function buildRouteAuthMap(array $files): array
     {
         $routeFiles = [];
+        $providerFiles = [];
         foreach ($files as $file) {
-            if ($this->supports($file) && $this->isRouteFile($file)) {
+            if (!$this->supports($file)) {
+                continue;
+            }
+            if ($this->isRouteFile($file)) {
                 $routeFiles[] = $file;
+            } elseif (str_ends_with(strtolower(str_replace('\\', '/', $file)), 'serviceprovider.php')) {
+                $providerFiles[] = $file;
             }
         }
 
@@ -313,7 +319,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
         // stack, so they are parsed through the importer — not as standalone roots
         // (a root parse would record phantom unprotected entries).
         $included = [];
-        foreach ($routeFiles as $file) {
+        foreach (array_merge($routeFiles, $providerFiles) as $file) {
             $ast = $this->parse($this->readFile($file));
             if ($ast === null) {
                 continue;
@@ -338,7 +344,82 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
             $this->collectRouteAuth($nodes, [], $map, $file, $visited, null, $this->useMap($nodes), $this->namespaceOf($nodes));
         }
 
+        // RouteServiceProvider-style loading: Route::group(['middleware' =>
+        // ...], fn () => require base_path('routes/api.php')). Only group
+        // calls are processed as roots — inner verbs are reached through the
+        // group recursion with the provider's middleware stack, so processing
+        // them here as well would record phantom unprotected entries.
+        foreach ($providerFiles as $file) {
+            $ast = $this->parse($this->readFile($file));
+            if ($ast === null) {
+                continue;
+            }
+            $nodes = $this->nodeList($ast);
+            $real = function_exists('realpath') ? (realpath($file) ?: $file) : $file;
+            $visited = [$real => true];
+            $uses = $this->useMap($nodes);
+            $namespace = $this->namespaceOf($nodes);
+            $calls = $this->finder()->find($nodes, static function (Node $node): bool {
+                return $node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall;
+            });
+            // Calls nested inside a Route::group closure are reached through
+            // the group recursion with the provider's middleware stack —
+            // processing them here as well would record phantom unprotected
+            // entries, so only outermost calls are processed as roots.
+            $nested = [];
+            foreach ($calls as $call) {
+                if (
+                    ($call instanceof Node\Expr\MethodCall || $call instanceof Node\Expr\StaticCall)
+                    && $this->isRouteGroupCall($call)
+                ) {
+                    // All calls inside the group closure are reached through
+                    // the group recursion — never process them as roots.
+                    $inners = $this->finder()->find($call->args, static function (Node $node): bool {
+                        return $node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall;
+                    });
+                    foreach ($inners as $inner) {
+                        $nested[spl_object_id($inner)] = true;
+                    }
+                }
+            }
+            foreach ($calls as $call) {
+                if (!($call instanceof Node\Expr\MethodCall || $call instanceof Node\Expr\StaticCall)) {
+                    continue;
+                }
+                if (isset($nested[spl_object_id($call)])) {
+                    continue;
+                }
+                $this->processRouteCall($call, [], $map, $file, $visited, null, $uses, $namespace);
+            }
+        }
+
         return $map;
+    }
+
+    /**
+     * A Route::group(...) call (terminal static or chained
+     * Route::middleware(...)->group(...)).
+     */
+    private function isRouteGroupCall(Node\Expr $node): bool
+    {
+        $current = $node;
+        $sawGroup = $current instanceof Node\Expr\StaticCall
+            && $current->name instanceof Node\Identifier
+            && strtolower($current->name->toString()) === 'group';
+        while ($current instanceof Node\Expr\MethodCall) {
+            if (
+                $current->name instanceof Node\Identifier
+                && strtolower($current->name->toString()) === 'group'
+            ) {
+                $sawGroup = true;
+            }
+            $current = $current->var;
+        }
+
+        return $sawGroup
+            && $current instanceof Node\Expr\StaticCall
+            && $current->class instanceof Node\Name
+            && $this->shortClass($current->class->toString()) === 'Route';
     }
 
     /**
@@ -451,20 +532,61 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
 
     private function includePath(Node\Expr\Include_ $include, string $dir): ?string
     {
-        if (!$include->expr instanceof Node\Scalar\String_) {
+        $target = $this->includeTarget($include);
+        if ($target === null) {
             return null;
         }
-        $target = $include->expr->value;
-        if ($target === '') {
-            return null;
-        }
+        // Plain relative require: resolve against the including file's dir.
         $candidate = $dir . DIRECTORY_SEPARATOR . $target;
-        if (!is_file($candidate)) {
-            return null;
-        }
-        $real = realpath($candidate);
+        if (is_file($candidate)) {
+            $real = realpath($candidate);
 
-        return $real === false ? null : $real;
+            return $real === false ? null : $real;
+        }
+        // base_path('routes/api.php') inside a RouteServiceProvider group:
+        // walk up from the including file until the project-root-relative
+        // path exists (…/app/Providers → …/routes/api.php).
+        $relative = ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $target), DIRECTORY_SEPARATOR);
+        $probe = $dir;
+        for ($depth = 0; $depth < 8; $depth++) {
+            $candidate = $probe . DIRECTORY_SEPARATOR . $relative;
+            if (is_file($candidate)) {
+                $real = realpath($candidate);
+
+                return $real === false ? null : $real;
+            }
+            $parent = dirname($probe);
+            if ($parent === $probe) {
+                break;
+            }
+            $probe = $parent;
+        }
+
+        return null;
+    }
+
+    /**
+     * A require/include target: a string literal, or a single-argument
+     * base_path()/app_path()/database_path()/etc. helper call.
+     */
+    private function includeTarget(Node\Expr\Include_ $include): ?string
+    {
+        if ($include->expr instanceof Node\Scalar\String_) {
+            return $include->expr->value === '' ? null : $include->expr->value;
+        }
+
+        if (
+            $include->expr instanceof Node\Expr\FuncCall
+            && $include->expr->name instanceof Node\Name
+            && in_array(strtolower($include->expr->name->toString()), ['base_path', 'app_path', 'database_path', 'resource_path', 'config_path', 'lang_path', 'public_path', 'storage_path'], true)
+        ) {
+            $arg = $include->expr->args[0] ?? null;
+            if ($arg instanceof Node\Arg && $arg->value instanceof Node\Scalar\String_ && $arg->value->value !== '') {
+                return $arg->value->value;
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -42,6 +42,13 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
      */
     private const SAFE_FUNCS = ['route', 'back', 'config', 'env', 'url'];
 
+    /**
+     * Method names that by construction return a provider-hosted signed URL,
+     * never an attacker-steered host. `getUrl()` is deliberately excluded —
+     * generic URL builders can return anything.
+     */
+    private const SIGNED_URL_METHODS = ['temporaryurl', 'presignedurl', 'getpresignedurl', 'temporary_url', 'presigned_url'];
+
     public function analyze(array $files): array
     {
         $issues = [];
@@ -77,6 +84,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
             }
         }
         $known = $this->safeTargetVars($nodes);
+        $pinned = $this->pinnedHostVars($nodes, $known);
 
         $issues = [];
         $calls = $this->finder()->find($nodes, function (Node $node): bool {
@@ -96,6 +104,11 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
                 continue;
             }
             if ($this->isSafeTarget($target, $known)) {
+                continue;
+            }
+            // Host-pinned lead: route('home').$path or signed storage URLs
+            // keep the host even when the tail is dynamic.
+            if ($this->hasPinnedHostLead($target, $pinned)) {
                 continue;
             }
             if (!$this->isFlaggableTarget($target)) {
@@ -346,6 +359,99 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
     }
 
     /**
+     * Variables whose value starts with a host-pinning expression
+     * (`$base = route('index')`), so `$base . $userPath` keeps the host.
+     *
+     * @param list<Node> $nodes
+     * @param array<string, true> $known
+     * @return array<string, true>
+     */
+    private function pinnedHostVars(array $nodes, array $known): array
+    {
+        $pinned = [];
+        $assigns = $this->finder()->find($nodes, static function (Node $node): bool {
+            return $node instanceof Node\Expr\Assign;
+        });
+        foreach ($assigns as $assign) {
+            if (
+                $assign instanceof Node\Expr\Assign
+                && $assign->var instanceof Node\Expr\Variable
+                && is_string($assign->var->name)
+                && $this->isHostPinned($assign->expr, $known, $pinned)
+            ) {
+                $pinned[$assign->var->name] = true;
+            }
+        }
+
+        return $pinned;
+    }
+
+    /**
+     * True when the expression's host cannot be steered: a route()/url()/
+     * config()/env() call, a signed-URL method, a pinned variable, or a
+     * concatenation whose left side is pinned.
+     *
+     * @param array<string, true> $known
+     * @param array<string, true> $pinned
+     */
+    private function isHostPinned(Node\Expr $expr, array $known, array $pinned): bool
+    {
+        if (
+            $expr instanceof Node\Expr\FuncCall
+            && $expr->name instanceof Node\Name
+            && in_array(strtolower($expr->name->toString()), self::SAFE_FUNCS, true)
+        ) {
+            return true;
+        }
+
+        if (
+            $expr instanceof Node\Expr\MethodCall
+            && $expr->name instanceof Node\Identifier
+            && in_array(strtolower($expr->name->toString()), self::SIGNED_URL_METHODS, true)
+        ) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+            return isset($pinned[$expr->name]);
+        }
+
+        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
+            return $this->isHostPinned($expr->left, $known, $pinned);
+        }
+
+        return false;
+    }
+
+    /**
+     * A concatenation/interpolation whose leading part pins the host
+     * (`route('index') . $from`) cannot redirect off-site no matter how
+     * dynamic the tail is.
+     *
+     * @param array<string, true> $pinned
+     */
+    private function hasPinnedHostLead(Node\Expr $expr, array $pinned): bool
+    {
+        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
+            return $this->isHostPinned($expr->left, [], $pinned);
+        }
+
+        if ($expr instanceof Node\Scalar\InterpolatedString) {
+            foreach ($expr->parts as $part) {
+                if ($part instanceof Node\InterpolatedStringPart) {
+                    if ($part->value !== '') {
+                        return false;
+                    }
+                    continue;
+                }
+                return $this->isHostPinned($part, [], $pinned);
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @param array<string, true> $known
      */
     private function isSafeTarget(Node\Expr $expr, array $known = []): bool
@@ -369,6 +475,9 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
             && $expr->name instanceof Node\Name
             && in_array(strtolower($expr->name->toString()), self::SAFE_FUNCS, true)
         ) {
+            // route() pins the application host, but url($dynamic) is NOT
+            // safe: UrlGenerator returns already-valid URLs unchanged, so a
+            // dynamic argument can still steer off-site.
             if (strtolower($expr->name->toString()) === 'url') {
                 foreach ($expr->args as $arg) {
                     if ($arg instanceof Node\Arg && !$this->isSafeTarget($arg->value, $known)) {
@@ -385,6 +494,29 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
             && $expr->name instanceof Node\Identifier
             && strtolower($expr->name->toString()) === 'previous'
             && $this->isUrlHelper($expr->var)
+        ) {
+            return true;
+        }
+
+        // SDK-signed storage URLs (Storage::disk()->temporaryUrl(...),
+        // $storage->getPresignedUrl(...)): the host is the configured
+        // storage provider, never attacker-controlled.
+        if (
+            $expr instanceof Node\Expr\MethodCall
+            && $expr->name instanceof Node\Identifier
+            && in_array(strtolower($expr->name->toString()), self::SIGNED_URL_METHODS, true)
+        ) {
+            return true;
+        }
+
+        // *Safe* naming convention (getSafeUrl(), getSafePreviousUrl(), ...):
+        // the callee asserts a validated URL, mirroring the *Html/*Sanitized
+        // convention for pre-rendered Blade output. A lying name would hide a
+        // finding — accepted trade-off, documented.
+        if (
+            ($expr instanceof Node\Expr\MethodCall || $expr instanceof Node\Expr\StaticCall)
+            && $expr->name instanceof Node\Identifier
+            && stripos($expr->name->toString(), 'safe') !== false
         ) {
             return true;
         }

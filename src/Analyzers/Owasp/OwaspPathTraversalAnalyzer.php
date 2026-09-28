@@ -450,7 +450,7 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
             && $expr->name instanceof Node\Name
             && in_array(
                 strtolower($expr->name->toString()),
-                array_merge(['basename'], self::PATH_HELPERS, self::CONFIG_FUNCS),
+                array_merge(['basename', 'tempnam', 'tmpfile', 'sys_get_temp_dir'], self::PATH_HELPERS, self::CONFIG_FUNCS),
                 true
             )
         ) {

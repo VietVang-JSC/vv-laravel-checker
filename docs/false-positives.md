@@ -92,6 +92,9 @@ php artisan quality:check --tier=all --fail-on=none
   directly as statics), `Route::controller(X::class)` with the action as a bare string,
   `Route::resource()`/`apiResource()`, and `require`/`include` of route files inside
   a group closure (a required file inherits the middleware stack, it is not parsed standalone).
+  Route files pulled in by a `*ServiceProvider` (`Route::group(['middleware' => ...],
+  fn () => require base_path('routes/api.php'))`) inherit the provider's stack too —
+  `base_path()`/`app_path()` targets are resolved by walking up to the project root.
   Both the legacy array syntax (`['as' => ..., 'uses' => 'FQCN@method']`) and
   `[Controller::class, 'method']` are resolved.
   Middleware names containing `auth`/`can`/`permission`/`role`/`gate`/`admin`/`bouncer`/
@@ -167,12 +170,21 @@ php artisan quality:check --tier=all --fail-on=none
   - XXE: `LIBXML_NOENT` is not protection — it substitutes entities (enables
     XXE). Only `LIBXML_NONET` / `libxml_disable_entity_loader(true)` silence
     a file.
+  - SSRF: directory listings are server-side paths, never remote URLs —
+    `glob()`/`scandir()` (including via `foreach` loop variables and
+    `$list[$i]` element reads: `foreach (glob(...) as $f)`,
+    `$uploads['k'] = glob(...)`), `Storage::files()`/`allFiles()`,
+    `File::files()`.
   - SSTI: template variables assigned a string literal — or a concatenation
     composed solely of literals, numbers, class constants and known variables
     (`$viewName = 'front.pos_' . $industry`, `Blade::render('...' . Color::Gray[400])`),
-    template registry properties (`$this->views['show']`, `$this->template`), and
+    template registry properties (`$this->views['show']`, `$this->template`),
     non-public helpers where every same-file call site passes a literal for the
-    template parameter (public helpers are not exempted because they can be called from another file).
+    template parameter (public helpers are not exempted because they can be called from another file),
+    and variables gated by an `in_array()` allow-list of literals in the same
+    function (`if (in_array($type, ['a', 'b'])) { view("x.{$type}"); }` — the
+    list may be inline or a variable assigned only literal arrays; a dynamic
+    list variable stays flaggable).
   - SSTI sinks include `View::make()/composer()/creator()` in addition to
     `view()`/`Blade::render()`; named `url:`/`uri:`/`path:` arguments are read
     as the SSRF target instead of the first positional argument.
@@ -195,6 +207,14 @@ php artisan quality:check --tier=all --fail-on=none
 - **Automatically skipped**: files mentioning `pwnedpasswords` — HIBP k-anonymity only sends
   the first 5 characters of the SHA-1 hash to the API, it does not store passwords with SHA-1.
 
+### `ROUTE_MISSING_VALIDATION`
+- **Reported when**: a mutating controller action (`store`/`update`/`delete`/...)
+  shows no `$request->validate()`/`validated()`/`Validator::make()` call and no
+  FormRequest parameter.
+- **Automatically skipped**: FormRequest type-hints resolved through `use`
+  imports (`store(StoreRequest $request)` with
+  `use App\Http\Requests\StoreRequest;` — the short name alone used to miss).
+
 ### `MIGRATION_DESTRUCTIVE_UP`
 - **True positive when**: `up()` drops a table/column that `down()` does not restore —
   including raw `DROP TABLE/DATABASE`, `TRUNCATE`, and `ALTER TABLE ... DROP COLUMN`
@@ -215,7 +235,13 @@ php artisan quality:check --tier=all --fail-on=none
   string literals, `url()->previous()`, `config()`/`env()` (including concatenation where
   every leaf is safe, e.g. `redirect(config('app.url') . '/done')` — including via
   an intermediate variable `$url = config(...) . '/login'`),
-  `url()` with all-literal arguments.
+  `url()` with all-literal arguments, concatenations led by a host-pinning call
+  (`redirect(route('index') . $from)` — the framework host cannot change, only the
+  path varies; note `url($dynamic)` is NOT safe because `url()` returns
+  already-valid URLs unchanged), SDK-signed storage URLs
+  (`Storage::disk()->temporaryUrl()`, `->getPresignedUrl()` — the host is the
+  configured provider), and `*Safe*` methods (`getSafeUrl()`,
+  `getSafePreviousUrl()` — same naming-convention trade-off as `*Html`).
 - **Confidence**: plain variable / `$request->input()` / dynamic concatenation = High;
   `redirect($page->getUrl())` (method/property/static — usually an internal
   URL builder) = Medium. Run `--min-confidence=high` to see only the
@@ -230,7 +256,8 @@ php artisan quality:check --tier=all --fail-on=none
 - **Automatically skipped**: literals (including `storage_path()` with literal arguments),
   `basename()`-wrapped values, `env()`/`config()`, local-named variables (`$file`, `$path`,
   `$outputDir`...) except when rooted at `$request`, `getRealPath()/getPathname()` methods,
-  and `File::`/`Storage::delete()` (deleting a file cannot exfiltrate or include its contents).
+  `File::`/`Storage::delete()` (deleting a file cannot exfiltrate or include its contents),
+  and paths from `tempnam()`/`tmpfile()`/`sys_get_temp_dir()` (fresh server-side temp files).
 - **No write-mode exemption**: `fopen($x, 'wb')` is still reported — writing a file to the
   wrong place is a real vulnerability (unlike read-only SSRF). Use an inline-ignore once reviewed.
 - **Correct fix**: apply `basename()` to the input or pin the base directory:
@@ -250,7 +277,9 @@ php artisan quality:check --tier=all --fail-on=none
   framework event hooks (`view_render_event(...)` — output from internal
   listeners), form builders (`Form::`/`Html::` — values escaped by the
   builder), paginator `->links()` / `->appends()->render()`, `{{ ... }}`
-  (escaped syntax), and sanitized-HTML conventions: `*Html`/`*Rendered`/`*Sanitized`
+  (escaped syntax), numeric formatters (`Number::currency()`/`format()`/...,
+  `format_amount_by_symbol()`/`_code`/`_currency`/`_account` — NumberFormatter
+  float-cast output cannot carry markup), and sanitized-HTML conventions: `*Html`/`*Rendered`/`*Sanitized`
   variables or `->getHtml()`/`->renderedHTML` methods/properties
   (markdown rendered and purified at the model layer).
 - **Correct fix**: switch to `{{ ... }}`; only use `{!! ... !!}` + an inline
@@ -277,9 +306,10 @@ php artisan quality:check --tier=all --fail-on=none
 - **Reported when**: `eval()`/`assert()`/`create_function()`/`call_user_func()`/
   `call_user_func_array()` receive a non-literal first argument. Only the callable
   position is checked — tainted *arguments* to a literal callable are the callee's business.
-- **Automatically skipped**: literals, and expressions whose every dynamic leaf
-  was validated by `preg_match()`/`preg_match_all()` in the same function
-  (e.g. a math expression allow-listed before eval). Filter strength itself is
+- **Automatically skipped**: literals, fixed callables (`[$this, 'handle']`,
+  `$this->callback` properties holding internally-assigned handlers), and expressions
+  whose every dynamic leaf was validated by `preg_match()`/`preg_match_all()` in the
+  same function (e.g. a math expression allow-listed before eval). Filter strength itself is
   not verified — review the regex.
 
 ### `UNSAFE_UNSERIALIZE`

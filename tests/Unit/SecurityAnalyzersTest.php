@@ -187,6 +187,33 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testUnsafeEvalSkipsThisCallbackProperty(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\n" .
+            "class ImportService {\n    /** @var callable */\n    protected \$progressCallback;\n    public function run(): void {\n        if (\$this->progressCallback) {\n            call_user_func(\$this->progressCallback, 1);\n        }\n    }\n}\n",
+            'app/Services/ImportService.php'
+        );
+
+        $issues = (new UnsafeEvalAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testUnsafeEvalStillFlagsDynamicClassCallable(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\n" .
+            "class ViewService {\n    public function show(string \$type, int \$id) {\n        return call_user_func(['App\\\\Models\\\\' . \$type, 'find'], \$id);\n    }\n}\n",
+            'app/Services/ViewService.php'
+        );
+
+        $issues = (new UnsafeEvalAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'UNSAFE_EVAL', Severity::Critical));
+    }
+
     /** HardcodedSecretAnalyzer */
 
     public function testHardcodedSecretFlagsOpenAiKey(): void

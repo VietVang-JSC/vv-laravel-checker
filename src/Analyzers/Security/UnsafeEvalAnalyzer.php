@@ -157,6 +157,18 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
             return true;
         }
 
+        // $this->callback properties hold internally-assigned callables
+        // (e.g. progress handlers set via setters), not request input —
+        // same registry rationale as SSTI template registries.
+        if (
+            $expr instanceof Node\Expr\PropertyFetch
+            && $expr->var instanceof Node\Expr\Variable
+            && $expr->var->name === 'this'
+            && $expr->name instanceof Node\Identifier
+        ) {
+            return true;
+        }
+
         if (!$expr instanceof Node\Expr\Array_ || $expr->items === []) {
             return false;
         }

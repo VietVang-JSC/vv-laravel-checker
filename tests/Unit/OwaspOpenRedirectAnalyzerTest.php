@@ -309,4 +309,88 @@ final class OwaspOpenRedirectAnalyzerTest extends TestCase
 
         self::assertCount(0, $issues);
     }
+
+    public function testSkipsRouteConcatWithDynamicPath(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$from = \$request->input('_from', '');\nreturn redirect(route('index') . \$from);\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testFlagsConcatWithDynamicHost(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn redirect(\$base . '/done');\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_OPEN_REDIRECT', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testSkipsStorageTemporaryUrl(): void
+    {
+        $file = $this->temp(
+            "<?php\nuse Illuminate\\Support\\Facades\\Storage;\nreturn redirect()->away(Storage::disk(\$disk)->temporaryUrl(\$file, now()->addMinutes(5)));\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsPresignedUrl(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn redirect(\$this->storage->getPresignedUrl(\$path));\n",
+            'app/Services/StreamerAdapter.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testStillFlagsGetUrlBuilder(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn redirect(\$page->getUrl());\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_OPEN_REDIRECT', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testSkipsSafeNamedMethod(): void
+    {
+        $file = $this->temp(
+            "<?php\nreturn redirect(\$this->getSafePreviousUrl());\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsSafeStaticCall(): void
+    {
+        $file = $this->temp(
+            "<?php\nuse App\\Support\\Facades\\Steam;\nreturn redirect(Steam::getSafeUrl(\$url, route('index')));\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
 }

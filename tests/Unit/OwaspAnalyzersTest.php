@@ -534,6 +534,62 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testAccessControlSkipsProviderWrappedRouteMiddleware(): void
+    {
+        // RouteServiceProvider-style: routes/api.php is required inside a
+        // middleware group (base_path() target resolved by walking up).
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-owasp-rsp-' . uniqid('', true);
+        $files = [
+            'app/Http/Controllers/Api/BackupController.php' => "<?php\nnamespace App\\Http\\Controllers\\Api;\n" .
+                "class BackupController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
+            'routes/api.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+                "Route::post('/backup', 'App\\Http\\Controllers\\Api\\BackupController@store');\n",
+            'app/Providers/RouteServiceProvider.php' => "<?php\nnamespace App\\Providers;\nuse Illuminate\\Support\\Facades\\Route;\n" .
+                "class RouteServiceProvider {\n    public function boot(): void {\n" .
+                "        Route::group(['middleware' => 'auth:api', 'prefix' => 'api'], function () {\n" .
+                "            require base_path('routes/api.php');\n" .
+                "        });\n    }\n}\n",
+        ];
+        $paths = [];
+        foreach ($files as $rel => $content) {
+            $path = $dir . DIRECTORY_SEPARATOR . $rel;
+            @mkdir(dirname($path), 0777, true);
+            file_put_contents($path, $content);
+            $paths[] = $path;
+        }
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze($paths);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testAccessControlStillFlagsProviderGroupWithoutAuth(): void
+    {
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-owasp-rsp-' . uniqid('', true);
+        $files = [
+            'app/Http/Controllers/Api/BackupController.php' => "<?php\nnamespace App\\Http\\Controllers\\Api;\n" .
+                "class BackupController extends Controller {\n    public function store() {\n        \$this->model->save();\n    }\n}\n",
+            'routes/api.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+                "Route::post('/backup', 'App\\Http\\Controllers\\Api\\BackupController@store');\n",
+            'app/Providers/RouteServiceProvider.php' => "<?php\nnamespace App\\Providers;\nuse Illuminate\\Support\\Facades\\Route;\n" .
+                "class RouteServiceProvider {\n    public function boot(): void {\n" .
+                "        Route::group(['prefix' => 'api'], function () {\n" .
+                "            require base_path('routes/api.php');\n" .
+                "        });\n    }\n}\n",
+        ];
+        $paths = [];
+        foreach ($files as $rel => $content) {
+            $path = $dir . DIRECTORY_SEPARATOR . $rel;
+            @mkdir(dirname($path), 0777, true);
+            file_put_contents($path, $content);
+            $paths[] = $path;
+        }
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze($paths);
+
+        self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $this->rules($issues)[0] ?? null);
+    }
+
     public function testAccessControlStillFlagsThrottleOnlyRoute(): void
     {
         $controller = $this->temp(
@@ -1202,6 +1258,42 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertContains('OWASP_SSRF', $this->rules($issues));
     }
 
+    public function testSsrfSkipsGlobDirectoryListing(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$logos = glob('public/uploads/*.*');\nforeach (\$logos as \$logo) {\n    \$contents = file_get_contents(\$logo);\n}\n",
+            'app/Console/Commands/MoveUploads.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSsrfSkipsGlobElementAssignment(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$uploads['a'] = glob('public/uploads/a/*.*');\nforeach (\$uploads as \$type => \$list) {\n    \$contents = file_get_contents(\$list[0]);\n}\n",
+            'app/Console/Commands/MoveUploads.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSsrfStillFlagsRequestArrayElement(): void
+    {
+        $file = $this->temp(
+            "<?php\n\$data = \$request->input('files');\n\$contents = file_get_contents(\$data[0]);\n",
+            'app/Services/ExternalService.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertContains('OWASP_SSRF', $this->rules($issues));
+    }
+
     public function testSstiFlagsViewFacadeMake(): void
     {
         $file = $this->temp(
@@ -1248,5 +1340,41 @@ final class OwaspAnalyzersTest extends TestCase
         $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
 
         self::assertCount(0, $issues);
+    }
+
+    public function testSstiSkipsInArrayAllowListedView(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass ModalController {\n    public function show(string \$type) {\n        \$allowed = ['manufacturer', 'model', 'user'];\n        if (in_array(\$type, \$allowed)) {\n            return view(\"blade.modals.{\$type}\");\n        }\n        abort(404);\n    }\n}\n",
+            'app/Http/Controllers/ModalController.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSstiSkipsInlineInArrayAllowList(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass ModalController {\n    public function show(string \$type) {\n        if (in_array(\$type, ['a', 'b'], true)) {\n            return view(\$type);\n        }\n        abort(404);\n    }\n}\n",
+            'app/Http/Controllers/ModalController.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSstiStillFlagsDynamicListGuard(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass ModalController {\n    public function show(string \$type, array \$list) {\n        if (in_array(\$type, \$list)) {\n            return view(\"blade.modals.{\$type}\");\n        }\n        abort(404);\n    }\n}\n",
+            'app/Http/Controllers/ModalController.php'
+        );
+
+        $issues = (new OwaspSstiAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_SSTI', $this->rules($issues)[0] ?? null);
     }
 }

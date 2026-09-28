@@ -222,4 +222,33 @@ final class LaravelAnalyzerTest extends TestCase
 
         self::assertCount(0, $issues);
     }
+
+    public function testRouteValidationSkipsUseImportedFormRequest(): void
+    {
+        // API-style: short type-hint resolved through the use-import
+        // (no validate()/validated() call in the body at all).
+        $file = $this->temp(
+            "<?php\nnamespace App\\Api\\V1\\Controllers;\nuse App\\Api\\V1\\Requests\\StoreRequest;\n" .
+            "class AccountController extends Controller {\n    public function store(StoreRequest \$request) {\n        return \$this->repository->store(\$request->getAllAccountData());\n    }\n}\n",
+            'app/Api/V1/Controllers/AccountController.php'
+        );
+
+        $issues = (new RouteValidationAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testRouteValidationStillFlagsPlainRequest(): void
+    {
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Http\\Request;\n" .
+            "class OrderController extends Controller {\n    public function store(Request \$request) {\n        return Order::create(\$request->getAllAccountData());\n    }\n}\n",
+            'app/Http/Controllers/OrderController.php'
+        );
+
+        $issues = (new RouteValidationAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertSame('ROUTE_MISSING_VALIDATION', $issues[0]->rule);
+    }
 }

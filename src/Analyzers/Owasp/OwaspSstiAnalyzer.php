@@ -67,6 +67,7 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
             }
         }
         $scopes = $this->literalVarScopes($nodes);
+        $allowLists = $this->allowListedVarScopes($nodes);
 
         $issues = [];
         $calls = $this->finder()->find($nodes, function (Node $node): bool {
@@ -99,6 +100,11 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
                 continue;
             }
             if ($this->isViewRegistry($arg)) {
+                continue;
+            }
+            // in_array($type, ['a', 'b']) allow-list in the same function:
+            // the variable provably holds one of the listed literals.
+            if ($this->isAllowListed($arg, $call, $allowLists)) {
                 continue;
             }
 
@@ -233,6 +239,203 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
         }
 
         return false;
+    }
+
+    /**
+     * Variables guarded by an in_array() allow-list of literals in the same
+     * function (`if (in_array($type, ['a', 'b'])) { view("x.{$type}"); }`),
+     * so they provably hold no user input. The list may be inline or a
+     * variable assigned only inline literal arrays in the same function.
+     *
+     * @param list<Node> $nodes
+     * @return array<int, array<string, true>> call id => guarded var names
+     */
+    private function allowListedVarScopes(array $nodes): array
+    {
+        $byCall = [];
+        $funcs = $this->finder()->find($nodes, function (Node $node): bool {
+            return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
+        });
+
+        $scopes = [];
+        foreach ($funcs as $func) {
+            if ($func instanceof Node\Stmt\ClassMethod || $func instanceof Node\Stmt\Function_) {
+                $scopes[] = $func;
+            }
+        }
+        $scopes[] = null;
+
+        foreach ($scopes as $scope) {
+            $haystack = $scope ?? $nodes;
+            $guarded = [];
+            $checks = $this->finder()->find($haystack, static function (Node $node): bool {
+                return $node instanceof Node\Expr\FuncCall
+                    && $node->name instanceof Node\Name
+                    && strtolower($node->name->toString()) === 'in_array';
+            });
+            foreach ($checks as $check) {
+                if (!$check instanceof Node\Expr\FuncCall) {
+                    continue;
+                }
+                // Top-level scope only sees top-level guards — a guard inside
+                // one function must never silence a sink in another.
+                if ($scope === null) {
+                    $inside = false;
+                    foreach ($funcs as $func) {
+                        if (
+                            ($func instanceof Node\Stmt\ClassMethod || $func instanceof Node\Stmt\Function_)
+                            && $this->nodeContains($func, $check)
+                        ) {
+                            $inside = true;
+                            break;
+                        }
+                    }
+                    if ($inside) {
+                        continue;
+                    }
+                }
+                $varArg = $check->args[0] ?? null;
+                $listArg = $check->args[1] ?? null;
+                if (
+                    !$varArg instanceof Node\Arg
+                    || !$varArg->value instanceof Node\Expr\Variable
+                    || !is_string($varArg->value->name)
+                    || !$listArg instanceof Node\Arg
+                ) {
+                    continue;
+                }
+                if ($this->isLiteralStringList($listArg->value, $haystack)) {
+                    $guarded[$varArg->value->name] = true;
+                }
+            }
+            if ($guarded === []) {
+                continue;
+            }
+            $calls = $this->finder()->find($haystack, static function (Node $node): bool {
+                return $node instanceof Node\Expr\StaticCall
+                    || $node instanceof Node\Expr\MethodCall
+                    || $node instanceof Node\Expr\FuncCall;
+            });
+            foreach ($calls as $call) {
+                // Skip calls that belong to a different function — each
+                // function gets its own scope (and top-level guards never
+                // leak into functions).
+                if ($call instanceof Node) {
+                    $nested = false;
+                    foreach ($funcs as $func) {
+                        if (
+                            ($func instanceof Node\Stmt\ClassMethod || $func instanceof Node\Stmt\Function_)
+                            && ($scope === null || $func !== $scope)
+                            && $this->nodeContains($func, $call)
+                        ) {
+                            $nested = true;
+                            break;
+                        }
+                    }
+                    if ($nested) {
+                        continue;
+                    }
+                }
+                $byCall[spl_object_id($call)] = $guarded;
+            }
+        }
+
+        return $byCall;
+    }
+
+    private function nodeContains(Node $haystack, Node $needle): bool
+    {
+        $target = spl_object_id($needle);
+        $found = $this->finder()->find($haystack, static function (Node $node) use ($target): bool {
+            return spl_object_id($node) === $target;
+        });
+
+        return $found !== [];
+    }
+
+    /**
+     * An inline array of literal strings/numbers, or a variable assigned
+     * only such arrays in the same scope.
+     *
+     * @param Node|list<Node> $scope
+     */
+    private function isLiteralStringList(Node\Expr $expr, Node|array $scope): bool
+    {
+        if ($expr instanceof Node\Expr\Array_) {
+            foreach ($expr->items as $item) {
+                if (
+                    !$item instanceof Node\Expr\ArrayItem
+                    || !($item->value instanceof Node\Scalar\String_
+                        || $item->value instanceof Node\Scalar\LNumber
+                        || $item->value instanceof Node\Scalar\DNumber
+                        || $item->value instanceof Node\Expr\ConstFetch
+                        || $item->value instanceof Node\Expr\ClassConstFetch)
+                ) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+            $assigns = $this->finder()->find($scope, static function (Node $node): bool {
+                return $node instanceof Node\Expr\Assign;
+            });
+            $found = false;
+            foreach ($assigns as $assign) {
+                if (
+                    !$assign instanceof Node\Expr\Assign
+                    || !$assign->var instanceof Node\Expr\Variable
+                    || $assign->var->name !== $expr->name
+                ) {
+                    continue;
+                }
+                $found = true;
+                if (!$assign->expr instanceof Node\Expr\Array_ || !$this->isLiteralStringList($assign->expr, $scope)) {
+                    return false;
+                }
+            }
+
+            return $found;
+        }
+
+        return false;
+    }
+
+    /**
+     * Every dynamic leaf of the template argument is an allow-listed
+     * variable — e.g. view("blade.modals.{$type}") with $type checked by
+     * in_array() against literals in the same function.
+     *
+     * @param array<int, array<string, true>> $allowLists
+     */
+    private function isAllowListed(Node\Expr $arg, Node $call, array $allowLists): bool
+    {
+        $guarded = $allowLists[spl_object_id($call)] ?? [];
+        if ($guarded === []) {
+            return false;
+        }
+        $names = [];
+        foreach (
+            $this->finder()->find($arg, static function (Node $node): bool {
+                return $node instanceof Node\Expr\Variable;
+            }) as $var
+        ) {
+            if ($var instanceof Node\Expr\Variable && is_string($var->name)) {
+                $names[$var->name] = true;
+            }
+        }
+        if ($names === []) {
+            return false;
+        }
+        foreach ($names as $name => $_) {
+            if (!isset($guarded[$name])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

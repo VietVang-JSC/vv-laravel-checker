@@ -49,7 +49,15 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
      * Laravel Collective `{!! Form::open(...) !!}` / `{!! Html::link(...) !!}`,
      * and paginator `{!! $rows->links() !!}` / `{!! $rows->appends([...])->render() !!}`.
      */
-    private const EVENT_FUNCS = ['view_render_event', 'form::', 'html::'];
+    private const EVENT_FUNCS = ['view_render_event', 'form::', 'html::', 'number::'];
+
+    /**
+     * Verified numeric formatter functions whose output is HTML-safe by
+     * construction (NumberFormatter float-cast): the amount is numeric and
+     * the symbol is admin-configured data. Laravel's Number:: helper is
+     * covered by the number:: prefix in EVENT_FUNCS above.
+     */
+    private const FORMATTER_FUNCS = ['format_amount_by_'];
 
     /**
      * View-name directives whose argument selects a template file. The
@@ -311,6 +319,14 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
         $lower = strtolower($inner);
         foreach (self::EVENT_FUNCS as $fn) {
             $needle = str_ends_with($fn, '::') ? $fn : $fn . '(';
+            if (str_contains($lower, $needle)) {
+                return true;
+            }
+        }
+        foreach (self::FORMATTER_FUNCS as $fn) {
+            // Prefix entries (ending in _) match the family:
+            // format_amount_by_ covers _symbol/_code/_currency/_account.
+            $needle = str_ends_with($fn, '_') ? $fn : $fn . '(';
             if (str_contains($lower, $needle)) {
                 return true;
             }
