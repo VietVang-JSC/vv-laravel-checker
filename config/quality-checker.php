@@ -63,6 +63,10 @@ return [
             'mass_assignment' => true,
             'unsafe_unserialize' => true,
             'insecure_hash' => true,
+            // Programmatic cookies without an explicit Secure flag.
+            'insecure_cookie' => true,
+            // Login without session rotation + weak password length floors.
+            'auth_hardening' => true,
             'laravel_taint' => true,
             'disabled_csrf' => true,
             'taint_engine' => false,

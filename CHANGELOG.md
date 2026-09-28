@@ -118,6 +118,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Blade: `safe_raw_html()` family, all-literal ternary branches (Elvis still
   flags), shared local-path hints extended (`tmp`, `temp`, `dest`).
 - Secrets: obvious fixtures in test paths skipped (test/fake/example/... markers).
+- New rule `INSECURE_COOKIE`: `Cookie::queue()/make()/forever()`, the
+  `cookie()` helper and `->cookie()` without an explicit Secure flag
+  (Warning) or with literal `false` (Error).
+- New rules `SESSION_FIXATION` (login without session rotation in the same
+  function) and `WEAK_PASSWORD_POLICY` (`Password::min(N<8)`, short or missing
+  `min:` on password fields).
 - Configurable heuristics (previously hardcoded): `cache.enabled`/`cache.ttl`
   for the result cache; `analyzers.models_dirs` for Eloquent model lookup
   (DDD layouts); `analyzers.extra_middleware` for custom protective middleware;

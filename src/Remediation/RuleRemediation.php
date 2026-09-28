@@ -257,6 +257,40 @@ final class RuleRemediation
                     CODE,
                 'docs' => '#insecure_hash',
             ],
+            'INSECURE_COOKIE' => [
+                'why' => 'A cookie without the Secure flag is sent over plain HTTP, so session and auth cookies leak to network attackers.',
+                'fix' => <<<'CODE'
+                    // WRONG: Secure flag missing (or false) — cookie leaks over HTTP
+                    Cookie::queue('theme', $value, 60);
+
+                    // RIGHT: explicit Secure flag (plus HttpOnly/SameSite)
+                    Cookie::queue('theme', $value, 60, null, null, true, true);
+                    CODE,
+                'docs' => '#insecure_cookie',
+            ],
+            'SESSION_FIXATION' => [
+                'why' => 'Logging in without rotating the session ID lets an attacker plant a known session (fixation) and ride it after the victim authenticates.',
+                'fix' => <<<'CODE'
+                    // WRONG: session ID stays the pre-login one
+                    Auth::attempt($credentials);
+
+                    // RIGHT: rotate on login
+                    Auth::attempt($credentials);
+                    $request->session()->regenerate();
+                    CODE,
+                'docs' => '#session_fixation',
+            ],
+            'WEAK_PASSWORD_POLICY' => [
+                'why' => 'Short passwords without a length floor fall to brute force and credential stuffing; length is the cheapest effective control.',
+                'fix' => <<<'CODE'
+                    // WRONG: 4-char minimum (or no minimum at all)
+                    'password' => ['required', 'min:4'],
+
+                    // RIGHT: 8+ chars (or Password::min(8)->uncompromised())
+                    'password' => ['required', Password::min(8)->confirmed()],
+                    CODE,
+                'docs' => '#weak_password_policy',
+            ],
             'DISABLED_CSRF_AUTHORIZE_TRUE' => [
                 'why' => 'CSRF protection disabled — attackers can forge state-changing requests from victims’ browsers.',
                 'fix' => <<<'CODE'

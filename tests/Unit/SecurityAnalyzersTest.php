@@ -7,6 +7,7 @@ namespace VietVang\QualityChecker\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 use VietVang\QualityChecker\Analyzers\Security\DisabledCsrfAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\HardcodedSecretAnalyzer;
+use VietVang\QualityChecker\Analyzers\Security\InsecureCookieAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\InsecureHashAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\LaravelTaintAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\MassAssignmentAnalyzer;
@@ -821,6 +822,90 @@ final class SecurityAnalyzersTest extends TestCase
         );
 
         $issues = (new MassAssignmentAnalyzer())->analyze([$controller, $model]);
+
+        self::assertCount(0, $issues);
+    }
+
+    /** InsecureCookieAnalyzer */
+
+    public function testInsecureCookieFlagsQueueWithoutSecure(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\Cookie;\n" .
+            "class ThemeController {\n    public function store(): void {\n        Cookie::queue('theme', 'dark', 60);\n    }\n}\n",
+            'app/Http/Controllers/ThemeController.php'
+        );
+
+        $issues = (new InsecureCookieAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'INSECURE_COOKIE', Severity::Warning));
+    }
+
+    public function testInsecureCookieFlagsQueueWithFalseSecure(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\Cookie;\n" .
+            "class ThemeController {\n    public function store(): void {\n        Cookie::queue('theme', 'dark', 60, null, null, false);\n    }\n}\n",
+            'app/Http/Controllers/ThemeController.php'
+        );
+
+        $issues = (new InsecureCookieAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'INSECURE_COOKIE', Severity::Error));
+    }
+
+    public function testInsecureCookieSkipsQueueWithTrueSecure(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\Cookie;\n" .
+            "class ThemeController {\n    public function store(): void {\n        Cookie::queue('theme', 'dark', 60, null, null, true);\n    }\n}\n",
+            'app/Http/Controllers/ThemeController.php'
+        );
+
+        $issues = (new InsecureCookieAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testInsecureCookieFlagsResponseCookieWithoutSecure(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\n" .
+            "class ThemeController {\n    public function store() {\n        return response()->cookie('theme', 'dark', 60);\n    }\n}\n",
+            'app/Http/Controllers/ThemeController.php'
+        );
+
+        $issues = (new InsecureCookieAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'INSECURE_COOKIE', Severity::Warning));
+    }
+
+    public function testInsecureCookieFlagsHelperWithoutSecure(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\n" .
+            "class ThemeController {\n    public function store() {\n        return cookie('theme', 'dark', 60);\n    }\n}\n",
+            'app/Http/Controllers/ThemeController.php'
+        );
+
+        $issues = (new InsecureCookieAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'INSECURE_COOKIE', Severity::Warning));
+    }
+
+    public function testInsecureCookieSkipsTestPath(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace Tests\\Feature;\nuse Illuminate\\Support\\Facades\\Cookie;\n" .
+            "class CookieTest {\n    public function test_queue(): void {\n        Cookie::queue('theme', 'dark', 60);\n    }\n}\n",
+            'tests/Feature/CookieTest.php'
+        );
+
+        $issues = (new InsecureCookieAnalyzer())->analyze([$file]);
 
         self::assertCount(0, $issues);
     }

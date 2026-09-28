@@ -20,8 +20,10 @@ use VietVang\QualityChecker\Analyzers\Owasp\OwaspPathTraversalAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspSstiAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspXxeAnalyzer;
+use VietVang\QualityChecker\Analyzers\Security\AuthHardeningAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\DisabledCsrfAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\HardcodedSecretAnalyzer;
+use VietVang\QualityChecker\Analyzers\Security\InsecureCookieAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\InsecureHashAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\LaravelTaintAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\MassAssignmentAnalyzer;
@@ -148,6 +150,8 @@ final class CustomAnalyzerChecker implements CheckerInterface
             )),
             $this->entry($analyzers, 'security.unsafe_unserialize', new UnsafeDeserializationAnalyzer()),
             $this->entry($analyzers, 'security.insecure_hash', new InsecureHashAnalyzer()),
+            $this->entry($analyzers, 'security.insecure_cookie', new InsecureCookieAnalyzer()),
+            $this->entry($analyzers, 'security.auth_hardening', new AuthHardeningAnalyzer()),
             $this->entry($analyzers, 'security.laravel_taint', new LaravelTaintAnalyzer()),
             $this->entry($analyzers, 'security.disabled_csrf', new DisabledCsrfAnalyzer()),
             $this->entry($analyzers, 'owasp.broken_access_control', new OwaspAccessControlAnalyzer(

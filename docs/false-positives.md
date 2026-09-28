@@ -221,6 +221,22 @@ php artisan quality:check --tier=all --fail-on=none
 - **Automatically skipped**: files mentioning `pwnedpasswords` — HIBP k-anonymity only sends
   the first 5 characters of the SHA-1 hash to the API, it does not store passwords with SHA-1.
 
+### `INSECURE_COOKIE`
+- **Reported when**: `Cookie::queue()/make()/forever()`, the `cookie()` helper,
+  or `->cookie()` on a response omits the `$secure` flag (Warning — relies on
+  `session.secure_cookie`, verify it) or passes literal `false` (Error).
+  Literal `true` or a config-driven expression stays silent.
+
+### `SESSION_FIXATION`
+- **Reported when**: a login call (`Auth::attempt()`, `->login()`/
+  `->loginUsingId()`) has no session rotation in the same function. Either
+  `session()->regenerate()` or `regenerateToken()` counts.
+
+### `WEAK_PASSWORD_POLICY`
+- **Reported when**: `Password::min(N)` with N < 8, a `password` validation rule
+  with `min:N` below 8, or a `password` rule with no length floor at all.
+  Non-password fields and `min:8+` stay silent.
+
 ### `ROUTE_MISSING_VALIDATION`
 - **Reported when**: a mutating controller action (`store`/`update`/`delete`/...)
   shows no `$request->validate()`/`validated()`/`Validator::make()` call and no

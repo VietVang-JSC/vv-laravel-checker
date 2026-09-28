@@ -18,7 +18,9 @@ use VietVang\QualityChecker\Analyzers\Owasp\OwaspPathTraversalAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspSstiAnalyzer;
 use VietVang\QualityChecker\Analyzers\Owasp\OwaspXxeAnalyzer;
+use VietVang\QualityChecker\Analyzers\Security\AuthHardeningAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\HardcodedSecretAnalyzer;
+use VietVang\QualityChecker\Analyzers\Security\InsecureCookieAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\InsecureHashAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\MassAssignmentAnalyzer;
 use VietVang\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer;
@@ -39,7 +41,7 @@ use VietVang\QualityChecker\Result\Issue;
 final class AnalyzerMetricsTest extends TestCase
 {
     /**
-     * @return iterable<string, array{Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|UnsafeDeserializationAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer|MassAssignmentAnalyzer), array<string, string>, string|null}>
+     * @return iterable<string, array{Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|InsecureCookieAnalyzer|AuthHardeningAnalyzer|UnsafeDeserializationAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer|MassAssignmentAnalyzer), array<string, string>, string|null}>
      */
     public static function corpus(): iterable
     {
@@ -1012,10 +1014,49 @@ final class AnalyzerMetricsTest extends TestCase
             ['config/session.php' => "<?php\nreturn [\n    'secure' => true,\n    'http_only' => true,\n];\n"],
             null,
         ];
+
+        // --- Insecure cookie ---
+        yield 'cookie_tp_missing_secure' => [
+            static fn (): InsecureCookieAnalyzer => new InsecureCookieAnalyzer(),
+            ['app/Services/ThemeService.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Support\\Facades\\Cookie;\nclass ThemeService {\n    public function remember(string \$theme): void {\n        Cookie::queue('theme', \$theme, 60);\n    }\n}\n"],
+            'INSECURE_COOKIE',
+        ];
+        yield 'cookie_tp_explicit_false' => [
+            static fn (): InsecureCookieAnalyzer => new InsecureCookieAnalyzer(),
+            ['app/Services/ThemeService.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Support\\Facades\\Cookie;\nclass ThemeService {\n    public function remember(string \$theme): void {\n        Cookie::queue('theme', \$theme, 60, null, null, false);\n    }\n}\n"],
+            'INSECURE_COOKIE',
+        ];
+        yield 'cookie_fp_explicit_true' => [
+            static fn (): InsecureCookieAnalyzer => new InsecureCookieAnalyzer(),
+            ['app/Services/ThemeService.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Support\\Facades\\Cookie;\nclass ThemeService {\n    public function remember(string \$theme): void {\n        Cookie::queue('theme', \$theme, 60, null, null, true, true);\n    }\n}\n"],
+            null,
+        ];
+
+        // --- Auth hardening ---
+        yield 'auth_tp_login_no_regenerate' => [
+            static fn (): AuthHardeningAnalyzer => new AuthHardeningAnalyzer(),
+            ['app/Http/Controllers/Auth/LoginController.php' => "<?php\nnamespace App\\Http\\Controllers\\Auth;\nuse Illuminate\\Support\\Facades\\Auth;\nclass LoginController extends Controller {\n    public function store(\\App\\Http\\Requests\\LoginRequest \$request) {\n        Auth::attempt(\$request->only('email', 'password'));\n        return redirect('/dashboard');\n    }\n}\n"],
+            'SESSION_FIXATION',
+        ];
+        yield 'auth_fp_login_regenerated' => [
+            static fn (): AuthHardeningAnalyzer => new AuthHardeningAnalyzer(),
+            ['app/Http/Controllers/Auth/LoginController.php' => "<?php\nnamespace App\\Http\\Controllers\\Auth;\nuse Illuminate\\Support\\Facades\\Auth;\nclass LoginController extends Controller {\n    public function store(\\App\\Http\\Requests\\LoginRequest \$request) {\n        Auth::attempt(\$request->only('email', 'password'));\n        \$request->session()->regenerate();\n        return redirect('/dashboard');\n    }\n}\n"],
+            null,
+        ];
+        yield 'auth_tp_short_min' => [
+            static fn (): AuthHardeningAnalyzer => new AuthHardeningAnalyzer(),
+            ['app/Http/Requests/RegisterRequest.php' => "<?php\nnamespace App\\Http\\Requests;\nclass RegisterRequest extends \\Illuminate\\Foundation\\Http\\FormRequest {\n    public function rules(): array {\n        return ['password' => 'required|min:4'];\n    }\n}\n"],
+            'WEAK_PASSWORD_POLICY',
+        ];
+        yield 'auth_fp_strong_min' => [
+            static fn (): AuthHardeningAnalyzer => new AuthHardeningAnalyzer(),
+            ['app/Http/Requests/RegisterRequest.php' => "<?php\nnamespace App\\Http\\Requests;\nclass RegisterRequest extends \\Illuminate\\Foundation\\Http\\FormRequest {\n    public function rules(): array {\n        return ['password' => ['required', 'min:8', 'confirmed']];\n    }\n}\n"],
+            null,
+        ];
     }
 
     /**
-     * @param Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|UnsafeDeserializationAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer|MassAssignmentAnalyzer) $factory
+     * @param Closure(): (AbstractAnalyzer|InsecureHashAnalyzer|InsecureCookieAnalyzer|AuthHardeningAnalyzer|UnsafeDeserializationAnalyzer|UnsafeEvalAnalyzer|HardcodedSecretAnalyzer|MassAssignmentAnalyzer) $factory
      * @param array<string, string> $files
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('corpus')]
