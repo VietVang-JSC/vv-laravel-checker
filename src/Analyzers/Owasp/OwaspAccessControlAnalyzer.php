@@ -690,8 +690,59 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
                 $this->processRouteCall($expr, $stack, $map, $file, $visited, $controller, $uses, $namespace);
             } elseif ($expr instanceof Node\Expr\Include_) {
                 $this->collectRequiredRouteFile($expr, $stack, $map, $file, $visited, $controller);
+            } else {
+                // Route groups nested in top-level guards (installer checks,
+                // maintenance mode, feature flags) inherit the ambient stack.
+                foreach ($this->blockChildLists($stmt) as $child) {
+                    $this->collectRouteAuth($child, $stack, $map, $file, $visited, $controller, $uses, $namespace);
+                }
             }
         }
+    }
+
+    /**
+     * Statement lists nested in block statements (if/try/loops) — same
+     * middleware stack as the enclosing scope.
+     *
+     * @return list<array<int, Node>>
+     */
+    private function blockChildLists(Node $stmt): array
+    {
+        $out = [];
+        if ($stmt instanceof Node\Stmt\If_) {
+            $out[] = $stmt->stmts;
+            foreach ($stmt->elseifs as $elseif) {
+                $out[] = $elseif->stmts;
+            }
+            if ($stmt->else instanceof Node\Stmt\Else_) {
+                $out[] = $stmt->else->stmts;
+            }
+
+            return $out;
+        }
+        if ($stmt instanceof Node\Stmt\TryCatch) {
+            $out[] = $stmt->stmts;
+            foreach ($stmt->catches as $catch) {
+                $out[] = $catch->stmts;
+            }
+            if ($stmt->finally instanceof Node\Stmt\Finally_) {
+                $out[] = $stmt->finally->stmts;
+            }
+
+            return $out;
+        }
+        if (
+            $stmt instanceof Node\Stmt\Foreach_
+            || $stmt instanceof Node\Stmt\For_
+            || $stmt instanceof Node\Stmt\While_
+            || $stmt instanceof Node\Stmt\Do_
+        ) {
+            $out[] = $stmt->stmts;
+
+            return $out;
+        }
+
+        return $out;
     }
 
     /**

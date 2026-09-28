@@ -673,6 +673,30 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testAccessControlSkipsGroupNestedInInstallerGuard(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\n" .
+            "class LinkController extends Controller {\n    public function sort(\\Illuminate\\Http\\Request \$request) {\n        \\App\\Models\\Link::query()->update(['sort' => 1]);\n    }\n}\n",
+            'app/Http/Controllers/LinkController.php'
+        );
+        $routes = $this->temp(
+            "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+            "if (file_exists(base_path('INSTALLERLOCK'))) {\n" .
+            "    Route::middleware(['auth'])->group(function () {\n" .
+            "        Route::post('/sort', 'App\\Http\\Controllers\\LinkController@sort');\n" .
+            "    });\n" .
+            "} else {\n" .
+            "    Route::get('/install', 'App\\Http\\Controllers\\InstallerController@show');\n" .
+            "}\n",
+            'routes/web.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller, $routes]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testAccessControlSkipsHashEqualsCapability(): void
     {
         $controller = $this->temp(

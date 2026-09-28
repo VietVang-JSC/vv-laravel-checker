@@ -106,6 +106,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   authorization (`return true` alone still flags).
 - Mass assignment: `Model::unguard()` in seed-data paths (seeders, factories,
   migrations, tests) skipped — jobs and console commands still flag.
+- Broken access control: route groups nested in top-level installer/maintenance
+  guards are descended with the ambient middleware stack.
 - Broken access control: credential verification (`$request->authenticate()`,
   `Auth::attempt()`, `hasValidSignature()`, `hash_equals()` capability checks)
   and enforcing gate branches (`if (Gate::denies()) { throw }`) count as

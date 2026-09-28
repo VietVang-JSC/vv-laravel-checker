@@ -96,6 +96,8 @@ php artisan quality:check --tier=all --fail-on=none
   Route files pulled in by a `*ServiceProvider` (`Route::group(['middleware' => ...],
   fn () => require base_path('routes/api.php'))`) inherit the provider's stack too —
   `base_path()`/`app_path()` targets are resolved by walking up to the project root.
+  Groups nested in top-level guards (installer checks, maintenance mode) are
+  descended with the ambient stack.
   Both the legacy array syntax (`['as' => ..., 'uses' => 'FQCN@method']`) and
   `[Controller::class, 'method']` are resolved.
   Credential verification counts as authorization context

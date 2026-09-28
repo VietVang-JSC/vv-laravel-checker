@@ -144,6 +144,14 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/OpenController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass OpenController extends Controller {\n    public function update(int \$id, string \$hash) {\n        \$thread = \\App\\Models\\Thread::findOrFail(\$id);\n        if (!\\Helper::hashEquals(\$hash, \\App\\Models\\Thread::trackingHash(\$thread))) {\n            throw new \\RuntimeException('bad signature');\n        }\n        \$thread->save();\n    }\n}\n"],
             null,
         ];
+        yield 'bac_fp_if_nested_group' => [
+            static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
+            [
+                'app/Http/Controllers/LinkController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass LinkController extends Controller {\n    public function sort(\\Illuminate\\Http\\Request \$request) {\n        \\App\\Models\\Link::query()->update(['sort' => 1]);\n    }\n}\n",
+                'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\nif (file_exists(base_path('INSTALLERLOCK'))) {\n    Route::middleware(['auth'])->group(function () {\n        Route::post('/sort', 'App\\Http\\Controllers\\LinkController@sort');\n    });\n}\n",
+            ],
+            null,
+        ];
         yield 'bac_tp_unknown_middleware' => [
             static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(true, ['extra_middleware' => ['verified-staff']]),
             [
