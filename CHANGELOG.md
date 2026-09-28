@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (source hygiene)
+- PHPStan 1.12 (EOL) → 2.0; `treatPhpDocTypesAsCertain: false` (finder
+  generics already narrow node types — defensive `instanceof` stays).
+- Fixed 3 real findings: TaintEngine by-ref tainted-map type, BladeXss
+  preg-match offset phpdoc, convoluted last-element lookup in XxeAnalyzer.
+- Regenerated `phpstan-baseline.neon` (stale entries dropped).
+- Deferred: phpstan level bump 6 → max, own-code coverage gate (no driver).
+
 ### Fixed (proactive edge-case review)
 
 - Command injection: backtick shell execution with any dynamic part is always

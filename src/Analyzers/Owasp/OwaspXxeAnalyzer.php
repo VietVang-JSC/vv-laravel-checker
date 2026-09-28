@@ -105,7 +105,7 @@ final class OwaspXxeAnalyzer extends AbstractAnalyzer
 
         if ($node instanceof Node\Expr\New_ && $node->class instanceof Node\Name) {
             $class = $node->class->toString();
-            $lastNewSink = (string) (array_values(self::NEW_SINKS)[array_key_last(self::NEW_SINKS)] ?? '');
+            $lastNewSink = self::NEW_SINKS[count(self::NEW_SINKS) - 1];
 
             if (
                 in_array($class, self::NEW_SINKS, true)

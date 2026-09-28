@@ -140,9 +140,9 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
             return [];
         }
 
-        /** @var list<array{string, int}> $blocks */
+        /** @var list<array{string, int<-1, max>}> $blocks */
         $blocks = $matches[1];
-        /** @var list<array{string, int}> $fullMatches */
+        /** @var list<array{string, int<-1, max>}> $fullMatches */
         $fullMatches = $matches[0];
 
         $issues = [];

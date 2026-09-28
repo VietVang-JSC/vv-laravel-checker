@@ -275,10 +275,14 @@ final class TaintEngine
 
     private function analyzeCallable(string $file, Node $callable): void
     {
+        /** @var array<string, bool> $tainted */
         $tainted = [];
         $this->walkCallable($file, $callable, $tainted);
     }
 
+    /**
+     * @param array<string, bool> $tainted
+     */
     private function walkCallable(string $file, Node $callable, array &$tainted): void
     {
         $budget = self::MAX_STATEMENTS_PER_FILE;
