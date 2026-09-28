@@ -567,6 +567,11 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/AuthController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass AuthController {\n    public function login(object \$user, string \$password) {\n        if (\$user->password === \$password) {\n            return true;\n        }\n        return false;\n    }\n}\n"],
             null,
         ];
+        yield 'secret_fp_identifier_constant' => [
+            static fn (): HardcodedSecretAnalyzer => new HardcodedSecretAnalyzer(),
+            ['app/Models/Account.php' => "<?php\nnamespace App\\Models;\nclass Account {\n    public const FEATURE_CLIENT_PORTAL_PASSWORD = 'client_portal_password';\n}\n"],
+            null,
+        ];
 
         // --- Mass assignment ---
         yield 'mass_tp_update_or_create' => [

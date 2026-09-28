@@ -52,14 +52,14 @@ final class MissingTestAnalyzer extends AbstractAnalyzer
             $issues[] = $this->makeIssue(
                 $rule,
                 sprintf(
-                    'No test file found for %s (%s). Expected a test named %s.php.',
+                    'No directly associated test detected for %s (%s). Expected a test named %s.php.',
                     $classBase,
                     $scope,
                     $testClassBase
                 ),
                 $file,
                 1,
-                Severity::Warning,
+                Severity::Info,
                 ['class' => $classBase, 'scope' => $scope, 'expected_test' => $testClassBase],
                 Confidence::Low
             );

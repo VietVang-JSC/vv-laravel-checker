@@ -197,13 +197,18 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
                 $sink = substr($sink, 0, 117) . '...';
             }
 
+            // Request-derived output (direct user input) is the high-risk sink;
+            // plain variables may still be tainted, but with lower confidence.
+            $requestDerived = $this->isRequestDerived($inner);
+
             $issues[] = $this->makeIssue(
                 self::RULE,
                 'Potential Blade XSS: unescaped output {!! ... !!} contains dynamic data.',
                 $file,
                 $line,
-                Severity::Error,
-                ['sink' => $sink]
+                $requestDerived ? Severity::Error : Severity::Warning,
+                ['sink' => $sink],
+                $requestDerived ? Confidence::High : Confidence::Medium
             );
         }
 
@@ -334,6 +339,19 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
         }
 
         return false;
+    }
+    /**
+     * Request-derived output (request() helper, $request, superglobals) flows
+     * directly from user input and is the high-risk XSS sink. Plain variables
+     * may still be tainted, but are reported with lower severity/confidence.
+     */
+    private function isRequestDerived(string $inner): bool
+    {
+        return str_contains($inner, 'request(')
+            || str_contains($inner, '$request')
+            || str_contains($inner, '$_GET')
+            || str_contains($inner, '$_POST')
+            || str_contains($inner, '$_REQUEST');
     }
 
     private function isSanitized(string $inner): bool

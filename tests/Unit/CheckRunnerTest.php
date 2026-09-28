@@ -145,6 +145,96 @@ final class CheckRunnerTest extends TestCase
         }
     }
 
+    public function testIgnoredRulesAreDroppedFromResults(): void
+    {
+        $ctx = new CheckContext(
+            sys_get_temp_dir(),
+            ['app'],
+            ['quality_gate' => ['ignore' => ['MISSING_MODEL_TEST']]],
+            sys_get_temp_dir() . '/reports',
+            failOn: 'error',
+        );
+        $ignored = new Issue('MISSING_MODEL_TEST', 'message', 'file.php', 1, Severity::Warning, 'custom');
+        $kept = new Issue('OWASP_SSRF', 'message', 'file.php', 2, Severity::Error, 'custom');
+        $checker = new class ([$ignored, $kept]) implements CheckerInterface {
+            /** @var Issue[] */
+            private array $issues;
+
+            /** @param Issue[] $issues */
+            public function __construct(array $issues)
+            {
+                $this->issues = $issues;
+            }
+
+            public function name(): string
+            {
+                return 'stub';
+            }
+
+            public function description(): string
+            {
+                return 'Stub checker';
+            }
+
+            public function isAvailable(CheckContext $ctx): bool
+            {
+                return true;
+            }
+
+            public function run(CheckContext $ctx): CheckResult
+            {
+                return new CheckResult('stub', 'failed', 0.01, $this->issues, null, null);
+            }
+
+            /** @return array<string, mixed> */
+            public function config(): array
+            {
+                return [];
+            }
+        };
+
+        $results = (new CheckRunner($ctx))->run([$checker]);
+
+        self::assertCount(1, $results);
+        self::assertCount(1, $results[0]->issues);
+        self::assertSame('OWASP_SSRF', $results[0]->issues[0]->rule);
+    }
+
+    public function testEmptyIgnoreListKeepsEverything(): void
+    {
+        $runner = new CheckRunner($this->context('error'));
+
+        $results = $runner->run([new class implements CheckerInterface {
+            public function name(): string
+            {
+                return 'stub';
+            }
+
+            public function description(): string
+            {
+                return 'Stub checker';
+            }
+
+            public function isAvailable(CheckContext $ctx): bool
+            {
+                return true;
+            }
+
+            public function run(CheckContext $ctx): CheckResult
+            {
+                return new CheckResult('stub', 'failed', 0.01, [], null, null);
+            }
+
+            /** @return array<string, mixed> */
+            public function config(): array
+            {
+                return [];
+            }
+        }]);
+
+        self::assertCount(1, $results);
+    }
+
     private function removeDir(string $dir): void
     {
         if (!is_dir($dir)) {

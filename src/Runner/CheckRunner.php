@@ -101,6 +101,50 @@ final class CheckRunner
             $results[] = $result;
         }
 
+        return $this->withoutIgnoredRules($results);
+    }
+
+    /**
+     * Drop issues whose rule is listed in quality_gate.ignore (config or
+     * --ignore=). Applied after caching so the cache stays valid.
+     *
+     * @param CheckResult[] $results
+     * @return CheckResult[]
+     */
+    private function withoutIgnoredRules(array $results): array
+    {
+        $gate = $this->ctx->config['quality_gate'] ?? [];
+        $ignore = is_array($gate) ? ($gate['ignore'] ?? []) : [];
+        if (!is_array($ignore)) {
+            $ignore = [];
+        }
+        $ignored = [];
+        foreach ($ignore as $rule) {
+            $rule = strtoupper(trim((string) $rule));
+            if ($rule !== '') {
+                $ignored[$rule] = true;
+            }
+        }
+        if ($ignored === []) {
+            return $results;
+        }
+
+        foreach ($results as $result) {
+            $kept = [];
+            foreach ($result->issues as $issue) {
+                if ($issue instanceof Issue && isset($ignored[strtoupper($issue->rule)])) {
+                    continue;
+                }
+                $kept[] = $issue;
+            }
+            if (count($kept) !== count($result->issues)) {
+                $result->issues = $kept;
+                if ($result->issues === []) {
+                    $result->status = 'passed';
+                }
+            }
+        }
+
         return $results;
     }
 

@@ -147,6 +147,13 @@ final class HtmlReporter implements ReporterInterface
     .bar-row .bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
     .bar-row .bar-track { background: var(--page); border: 1px solid var(--border); border-radius: 9999px; height: 12px; overflow: hidden; }
     .bar-row .bar-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 9999px; }
+    .bar-row .bar-fill.score-fill { background: linear-gradient(90deg, #10b981, #34d399); }
+    .bar-row .bar-val small { color: var(--muted); font-weight: 400; }
+    .gate { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 12px; border-radius: 9999px; margin-left: 8px; vertical-align: middle; }
+    .gate.pass { background: var(--pass); color: #fff; }
+    .gate.blocked { background: var(--error); color: #fff; }
+    .must-fix { margin: 8px 0 0 18px; font-size: 13px; }
+    .must-fix li { margin-bottom: 2px; }
     .bar-row .bar-val { text-align: right; font-weight: 600; }
     .checker-section { margin-bottom: 32px; }
     .checker-head { margin-bottom: 12px; }
@@ -735,6 +742,7 @@ final class HtmlReporter implements ReporterInterface
             . $this->buildHeader($ctx, $this->overallStatus($results))
             . $this->buildToolbar()
             . $this->buildSummaryGrid($summary, $rules)
+            . $this->buildQualityScore(QualityScore::score($results))
             . $this->buildRulesTable($rules)
             . $this->buildOwaspSection($owasp, $owaspIssues, $ctx)
             . $this->buildCheckerTable($checkers)
@@ -797,6 +805,7 @@ final class HtmlReporter implements ReporterInterface
             . '<h3>Contents</h3>' . "\n"
             . '<nav aria-label="Report sections"><ul>' . "\n"
             . '<li><a href="#summary">Summary</a></li>' . "\n"
+            . '<li><a href="#quality-score">Quality Score</a></li>' . "\n"
             . '<li><a href="#top-rules">Top Rules</a></li>' . "\n"
             . '<li><a href="#owasp">OWASP</a></li>' . "\n"
             . '<li><a href="#checkers">Per-Checker</a></li>' . "\n"
@@ -961,6 +970,50 @@ final class HtmlReporter implements ReporterInterface
             . '</div>' . "\n"
             . $this->charts($summary, $rules)
             . '</div>' . "\n";
+    }
+
+    /**
+     * Confidence-weighted quality score dashboard. Deductions are
+     * severity x confidence, so 137 medium-confidence Blade echoes can
+     * never nuke the score the way a raw Critical x 10 formula would.
+     *
+     * @param array{overall: int, gate: string, dimensions: array<string, array{score: int, findings: int}>, must_fix: int, review: int, tech_debt: int, top_must_fix: list<array{rule: string, count: int}>} $score
+     */
+    private function buildQualityScore(array $score): string
+    {
+        $gateClass = $score['gate'] === 'BLOCKED' ? 'blocked' : 'pass';
+        $html = '<div class="card" id="quality-score">' . "\n"
+            . '<h2>Quality Score <span class="gate ' . $gateClass . '">'
+            . $this->escape($score['gate'] === 'BLOCKED' ? 'Release Gate: BLOCKED' : 'Release Gate: PASS')
+            . '</span></h2>' . "\n"
+            . '<div class="summary-grid">' . "\n"
+            . $this->stat('Overall', (int) $score['overall'])
+            . $this->stat('Must Fix', (int) $score['must_fix'])
+            . $this->stat('Review', (int) $score['review'])
+            . $this->stat('Tech Debt', (int) $score['tech_debt'])
+            . '</div>' . "\n";
+
+        foreach ($score['dimensions'] as $name => $dim) {
+            $pct = max(0, min(100, (int) $dim['score']));
+            $html .= '<div class="bar-row">'
+                . '<span class="bar-label" title="' . $this->escape($name) . '">'
+                . $this->escape($name) . '</span>'
+                . '<span class="bar-track"><span class="bar-fill score-fill" style="width:'
+                . (string) $pct . '%"></span></span>'
+                . '<span class="bar-val">' . (string) $pct . ' <small>('
+                . (int) $dim['findings'] . ')</small></span>'
+                . '</div>' . "\n";
+        }
+
+        if ($score['top_must_fix'] !== []) {
+            $items = '';
+            foreach ($score['top_must_fix'] as $entry) {
+                $items .= '<li>' . $this->escape($entry['rule']) . ' × ' . (int) $entry['count'] . '</li>';
+            }
+            $html .= '<h3>Must Fix</h3>' . "\n" . '<ul class="must-fix">' . $items . '</ul>' . "\n";
+        }
+
+        return $html . '</div>' . "\n";
     }
 
     /**

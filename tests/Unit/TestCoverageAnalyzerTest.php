@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Rampart\QualityChecker\Analyzers\TestCoverage\ControllerTestAnalyzer;
+use Rampart\QualityChecker\Analyzers\TestCoverage\MissingTestAnalyzer;
 use Rampart\QualityChecker\Analyzers\TestCoverage\TestCoverageAnalyzer;
+use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Severity;
 
 final class TestCoverageAnalyzerTest extends TestCase
@@ -109,5 +112,26 @@ final class TestCoverageAnalyzerTest extends TestCase
         $issues = (new TestCoverageAnalyzer())->analyze([$test]);
 
         self::assertCount(0, $issues);
+    }
+
+    public function testMissingTestIssuesAreInfoLow(): void
+    {
+        $svc = $this->service('app/Services/PaymentService.php', 'App\Services', 'PaymentService');
+        $svcIssues = (new MissingTestAnalyzer(['services']))->analyze([$svc]);
+
+        self::assertNotEmpty($svcIssues);
+        self::assertSame('MISSING_SERVICE_TEST', $svcIssues[0]->rule);
+        self::assertSame(Severity::Info, $svcIssues[0]->severity);
+        self::assertSame(Confidence::Low, $svcIssues[0]->confidence);
+        self::assertStringContainsString('No directly associated test detected', $svcIssues[0]->message);
+
+        $ctrl = $this->controller('app/Http/Controllers/PinController.php', 'App\Http\Controllers', 'PinController');
+        $ctrlIssues = (new ControllerTestAnalyzer())->analyze([$ctrl]);
+
+        self::assertNotEmpty($ctrlIssues);
+        self::assertSame('MISSING_CONTROLLER_TEST', $ctrlIssues[0]->rule);
+        self::assertSame(Severity::Info, $ctrlIssues[0]->severity);
+        self::assertSame(Confidence::Low, $ctrlIssues[0]->confidence);
+        self::assertStringContainsString('No directly associated', $ctrlIssues[0]->message);
     }
 }

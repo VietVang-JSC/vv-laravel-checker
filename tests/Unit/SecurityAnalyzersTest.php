@@ -934,4 +934,101 @@ final class SecurityAnalyzersTest extends TestCase
 
         self::assertCount(0, $issues);
     }
+
+    /** HardcodedSecretAnalyzer identifier constants and evidence */
+
+    public function testHardcodedSecretSkipsIdentifierConstantValue(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Support;\nclass FeatureFlags {\n    public const FEATURE_CLIENT_PORTAL_PASSWORD = 'client_portal_password';\n}\n",
+            'app/Support/FeatureFlags.php'
+        );
+
+        $issues = (new HardcodedSecretAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testHardcodedSecretSkipsPasswordFieldAndResetRouteConsts(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Support;\nclass FieldNames {\n    public const PASSWORD_FIELD = 'password';\n    public const PASSWORD_RESET_ROUTE = 'password.reset';\n}\n",
+            'app/Support/FieldNames.php'
+        );
+
+        $issues = (new HardcodedSecretAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testHardcodedSecretStillFlagsRealConstSecret(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Support;\nclass Credentials {\n    public const DEFAULT_PASSWORD = 'admin123';\n}\n",
+            'app/Support/Credentials.php'
+        );
+
+        $issues = (new HardcodedSecretAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'HARDCODED_SECRET', Severity::Critical));
+    }
+
+    public function testHardcodedSecretStillFlagsVariableAssignment(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nclass AuthService {\n    public function login(): string {\n        \$password = 'admin123';\n        return \$password;\n    }\n}\n",
+            'app/Services/AuthService.php'
+        );
+
+        $issues = (new HardcodedSecretAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'HARDCODED_SECRET', Severity::Critical));
+    }
+
+    public function testHardcodedSecretEvidenceMetadata(): void
+    {
+        $random = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nclass AuthController {\n    public function login(array \$credentials) {\n        if (\$credentials['password'] == '!S3cretMaster2024#Admin') {\n            return true;\n        }\n        return false;\n    }\n}\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new HardcodedSecretAnalyzer())->analyze([$random]);
+
+        self::assertNotEmpty($issues);
+        self::assertArrayHasKey('kind', $issues[0]->metadata);
+        self::assertArrayHasKey('hint', $issues[0]->metadata);
+        $evidence = $issues[0]->metadata['evidence'] ?? null;
+        self::assertIsArray($evidence);
+        self::assertSame('!S3cretMaster2024#Admin', $evidence['matched'] ?? null);
+        self::assertSame(strlen('!S3cretMaster2024#Admin'), $evidence['length'] ?? null);
+        self::assertGreaterThan(3.0, $evidence['entropy'] ?? 0.0);
+        self::assertNull($evidence['known_prefix'] ?? null);
+        self::assertFalse($evidence['test_fixture'] ?? null);
+
+        $stripe = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nclass StripeService {\n    private string \$key = 'sk_live_aB3x9QwE7rT2yU4iO6pQ8s';\n}\n",
+            'app/Services/StripeService.php'
+        );
+
+        $stripeIssues = (new HardcodedSecretAnalyzer())->analyze([$stripe]);
+
+        self::assertNotEmpty($stripeIssues);
+        $stripeEvidence = $stripeIssues[0]->metadata['evidence'] ?? null;
+        self::assertIsArray($stripeEvidence);
+        self::assertSame('sk_live_', $stripeEvidence['known_prefix'] ?? null);
+
+        $fixture = $this->tempPhp(
+            "<?php\n\$key = env('PAYMENT_API_KEY', 'whsec_test_secret');\n",
+            'tests/Feature/PaymentTest.php'
+        );
+
+        $fixtureIssues = (new HardcodedSecretAnalyzer())->analyze([$fixture]);
+
+        self::assertNotEmpty($fixtureIssues);
+        $fixtureEvidence = $fixtureIssues[0]->metadata['evidence'] ?? null;
+        self::assertIsArray($fixtureEvidence);
+        self::assertTrue($fixtureEvidence['test_fixture'] ?? null);
+    }
 }

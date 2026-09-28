@@ -307,4 +307,16 @@ final class HtmlReporterTest extends TestCase
         self::assertStringContainsString('data-q="owasp_ssrf"', $html);
         self::assertStringContainsString('UserController.php:7', $html);
     }
+
+    public function testQualityScoreSectionPresent(): void
+    {
+        $html = $this->renderHtml();
+
+        // Fixture: 1 Critical/High (SQLI) + 1 Error/High (SSRF) + 1 Info/Low.
+        // Must-fix = 2 -> gate BLOCKED; Security dimension below 100.
+        self::assertStringContainsString('id="quality-score"', $html);
+        self::assertStringContainsString('Release Gate: BLOCKED', $html);
+        self::assertStringContainsString('Must Fix', $html);
+        self::assertStringContainsString('href="#quality-score"', $html);
+    }
 }

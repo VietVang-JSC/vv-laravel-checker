@@ -7,6 +7,7 @@ namespace Rampart\QualityChecker\Analyzers\TestCoverage;
 use PhpParser\Node;
 use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
+use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 
@@ -77,15 +78,16 @@ final class ControllerTestAnalyzer
                     $issues[] = new Issue(
                         self::RULE,
                         sprintf(
-                            'Controller method %s::%s() has no asserting Feature test that calls it.',
+                            'No directly associated asserting Feature test detected for controller method %s::%s().',
                             $className ?? '(anonymous)',
                             $methodName
                         ),
                         $file,
                         $method->getStartLine(),
-                        Severity::Warning,
+                        Severity::Info,
                         'custom',
-                        ['controller' => $className, 'method' => $methodName]
+                        ['controller' => $className, 'method' => $methodName],
+                        Confidence::Low
                     );
                 }
             }

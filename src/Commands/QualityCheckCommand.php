@@ -24,6 +24,7 @@ final class QualityCheckCommand extends Command
         {--format=console : Comma-separated report formats: console,json,html,md,sarif or "all".}
         {--only= : Only run these checkers (comma-separated): phpcs,phpstan,phpunit,composer_audit,trivy,custom.}
         {--exclude= : Skip these checkers (comma-separated).}
+        {--ignore= : Skip these rules (comma-separated, e.g. MISSING_MODEL_TEST).}
         {--path=* : Override scan paths (repeatable).}
         {--fail-on=error : Fail threshold: none|info|warning|error|critical.}
         {--tier= : Quality gate tier: security|quality|all (default: config tier).}
@@ -94,6 +95,21 @@ final class QualityCheckCommand extends Command
 
         $only = $this->splitOption('only');
         $exclude = $this->splitOption('exclude');
+
+        // Rule-level ignore: config quality_gate.ignore plus --ignore=.
+        $gate = $config['quality_gate'] ?? [];
+        if (!is_array($gate)) {
+            $gate = [];
+        }
+        $gateIgnore = $gate['ignore'] ?? [];
+        if (!is_array($gateIgnore)) {
+            $gateIgnore = [];
+        }
+        $gate['ignore'] = array_values(array_unique(array_merge(
+            array_map('strval', $gateIgnore),
+            $this->splitOption('ignore')
+        )));
+        $config['quality_gate'] = $gate;
 
         $packageVersion = $this->packageVersion();
 

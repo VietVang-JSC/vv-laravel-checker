@@ -308,6 +308,9 @@ php artisan quality:check --tier=all --fail-on=none
   `@extends('layouts.' . $theme)`). A steerable template name loads and
   executes unintended PHP, so it is reported with Medium confidence (Blade has
   no data-flow analysis — string literals and `config()`/`env()` stay silent).
+- **Severity split**: request-derived output (`request(...)`, `$request`,
+  `$_GET`/`$_POST`) is Error/High; other dynamic output is Warning/Medium —
+  it may be pre-sanitized or intentionally trusted HTML.
 - **Automatically skipped**: `{!! csrf_field() !!}` (no dynamic data),
   explicit sanitizers (`e()`, `sanitizeHtml()`, `strip_tags()`,
   `htmlspecialchars()`, `purify()`, `clean()`, `md_to_html()`,
@@ -335,9 +338,17 @@ php artisan quality:check --tier=all --fail-on=none
   placeholder/xxx). Production values with those markers still flag. For other
   test fixtures, either use clearly fake values, or exclude the test directory
   from the security scan paths.
+- **Identifier constants are skipped**: `FEATURE_X = 'x_value'` /
+  `PASSWORD_FIELD = 'password'` / `define('ROUTE', 'route.name')` where the
+  UPPER_SNAKE name and the slug value name each other (either normalized form
+  contains the other). Real secrets in constants (`API_KEY = 'sk-live-...'`,
+  `DEFAULT_PASSWORD = 'admin123'`) still flag — as do variable assignments.
 - **Password comparisons** (`$credentials['password'] == 'long-literal'`) are
   reported as master-password pattern — including Yoda order. Variable-to-variable
   comparisons stay silent.
+- Every finding carries `evidence`: matched prefix (first 32 chars), length,
+  Shannon entropy, known token prefix (`sk_live_`, `ghp_`, ...) or null, and
+  whether it looks like a test fixture.
 - Field-name constants (e.g. `OPT_DB_PASSWORD = 'db-password'`) are skipped —
   the right side names a CLI option, it is not a credential.
 - Placeholders such as `xxx`, `changeme`, or empty strings in config files are reported
@@ -380,6 +391,20 @@ php artisan quality:check --tier=all --fail-on=none
 - Disabled by default (**OFF**) (`analyzers.test_coverage.*`, `analyzers.convention.*` =
   `false`). If you enable them and see a flood of warnings, that is expected —
   do not baseline them in bulk, turn them back off and only enable them for themed cleanup.
+- `MISSING_*_TEST` means "no directly associated test detected", not "untested":
+  the class may be covered by feature/API/E2E suites under unrelated names.
+  They report at Info/Low for exactly this reason — wire real coverage data
+  instead of gating on filenames.
+
+## CI gate & exit codes
+
+- Exit codes: `0` = gate passed, `1` = quality gate failed, `2` = checker or
+  internal error (e.g. context build failure). Safe for GitHub Actions, GitLab
+  CI, Jenkins, pre-commit and pre-push hooks.
+- `quality_gate.ignore` (config) and `--ignore=` (CLI, comma-separated) hide
+  rules from reports and the gate, e.g. `MISSING_MODEL_TEST` noise on legacy
+  projects. `--fail-on=` sets the severity threshold, `--min-confidence=`
+  drops low-confidence findings from the gate.
 
 ## 4. Suggested review flow
 

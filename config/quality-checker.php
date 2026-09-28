@@ -130,6 +130,12 @@ return [
 
     'fail_on' => 'error',
 
+    // Quality gate: rules listed here never fail the gate and are hidden
+    // from reports (e.g. ['MISSING_MODEL_TEST']). Same as --ignore=.
+    'quality_gate' => [
+        'ignore' => [],
+    ],
+
     'output_dir' => 'reports/quality-checker',
 
     // HTML report extras. Set repo_url after publishing (or via

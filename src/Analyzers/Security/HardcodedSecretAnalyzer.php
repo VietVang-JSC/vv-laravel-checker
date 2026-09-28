@@ -49,6 +49,29 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
         'changeme', 'placeholder', 'xxx',
     ];
 
+    /**
+     * Well-known secret prefixes used to tag evidence without ever storing
+     * the full secret value.
+     *
+     * @var list<string>
+     */
+    private const KNOWN_SECRET_PREFIXES = [
+        'sk_live_',
+        'sk_test_',
+        'ghp_',
+        'github_pat_',
+        'AKIA',
+        'AIza',
+        'xoxb-',
+        'xoxp-',
+        'xoxa-',
+        'xoxr-',
+        'xoxs-',
+        'pk_live_',
+        'whsec_',
+        '-----BEGIN',
+    ];
+
     public function analyze(array $files): array
     {
         $issues = [];
@@ -82,19 +105,27 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
             if ($this->isFieldNameDeclaration($line)) {
                 continue;
             }
-            if ($this->isEnvDefaultSecret($line)) {
+            $envSecret = $this->envDefaultSecret($line);
+            if ($envSecret !== null) {
                 $issues[] = $this->makeIssue(
                     self::RULE,
                     'Possible hardcoded secret detected: default secret in env().',
                     $file,
                     $index + 1,
                     Severity::Critical,
-                    ['kind' => 'env default secret', 'hint' => mb_substr(trim($line), 0, 120)]
+                    [
+                        'kind' => 'env default secret',
+                        'hint' => mb_substr(trim($line), 0, 120),
+                        'evidence' => $this->buildEvidence($envSecret),
+                    ]
                 );
                 break;
             }
             foreach (self::PATTERNS as $pattern => $label) {
                 if (preg_match($pattern, $line, $m) === 1) {
+                    if ($this->isIdentifierConstant($line, $m[0])) {
+                        break;
+                    }
                     if ($isTest && $this->isFakeFixture($m[0])) {
                         break;
                     }
@@ -104,13 +135,20 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
                         $file,
                         $index + 1,
                         Severity::Critical,
-                        ['kind' => $label, 'hint' => mb_substr(trim($line), 0, 120)]
+                        [
+                            'kind' => $label,
+                            'hint' => mb_substr(trim($line), 0, 120),
+                            'evidence' => $this->buildEvidence($m[0]),
+                        ]
                     );
                     break;
                 }
             }
             $comparison = $this->hardcodedPasswordComparison($line);
             if ($comparison !== null) {
+                if ($this->isIdentifierConstant($line, $comparison)) {
+                    continue;
+                }
                 if ($isTest && $this->isFakeFixture($comparison)) {
                     continue;
                 }
@@ -120,7 +158,11 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
                     $file,
                     $index + 1,
                     Severity::Critical,
-                    ['kind' => 'hardcoded password comparison', 'hint' => mb_substr(trim($line), 0, 120)]
+                    [
+                        'kind' => 'hardcoded password comparison',
+                        'hint' => mb_substr(trim($line), 0, 120),
+                        'evidence' => $this->buildEvidence($comparison),
+                    ]
                 );
             }
         }
@@ -174,18 +216,115 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
     /**
      * Catches real secrets hiding as env() defaults, e.g.
      * env('PAYMENT_API_KEY', 'aB3x9...'). Skips obvious placeholders.
+     * Returns the default value when it looks like a real secret, null
+     * otherwise.
      */
-    private function isEnvDefaultSecret(string $line): bool
+    private function envDefaultSecret(string $line): ?string
     {
         if (preg_match('/\benv\(\s*[\'"]([^\'"]*(?:KEY|SECRET|PASSWORD|TOKEN|PASSWD)[^\'"]*)[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]\s*\)/i', $line, $m) !== 1) {
-            return false;
+            return null;
         }
 
-        $value = $m[2];
+        $value = (string) $m[2];
         if (preg_match('/^[A-Za-z0-9_\-]{16,}$/', $value) !== 1) {
+            return null;
+        }
+
+        if (preg_match('/^(xxx|changeme|password|secret|test|testing|local|dev|example|null|none|default)/i', $value) === 1) {
+            return null;
+        }
+
+        return $value;
+    }
+
+    /**
+     * Identifier constants name a field or option key rather than holding a
+     * credential, e.g. `const FEATURE_CLIENT_PORTAL_PASSWORD =
+     * 'client_portal_password'`. When the line declares an UPPER_SNAKE class
+     * constant (or define()) and the matched secret text is name-like — its
+     * normalized form is a substring of (or contains) the normalized const
+     * name — the match is skipped.
+     */
+    private function isIdentifierConstant(string $line, string $matched): bool
+    {
+        if (preg_match('/(?:const\s+([A-Z][A-Z0-9_]*)|define\s*\(\s*[\'"]([A-Z][A-Z0-9_]*)[\'"])/', $line, $constant) !== 1) {
             return false;
         }
 
-        return preg_match('/^(xxx|changeme|password|secret|test|testing|local|dev|example|null|none|default)/i', $value) !== 1;
+        $name = $constant[1] !== '' ? (string) $constant[1] : (string) $constant[2];
+        $normalizedName = $this->normalizeIdentifier($name);
+        if ($normalizedName === '') {
+            return false;
+        }
+
+        $values = [$matched];
+        if (preg_match_all('/[\'"]([^\'"]+)[\'"]/', $matched, $quoted) > 0) {
+            $values = $quoted[1];
+        }
+
+        foreach ($values as $value) {
+            $normalizedValue = $this->normalizeIdentifier((string) $value);
+            if ($normalizedValue === '') {
+                continue;
+            }
+            if (str_contains($normalizedName, $normalizedValue) || str_contains($normalizedValue, $normalizedName)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeIdentifier(string $value): string
+    {
+        $stripped = preg_replace('/[^a-z0-9]/', '', strtolower($value));
+
+        return is_string($stripped) ? $stripped : '';
+    }
+
+    /**
+     * Short, non-sensitive evidence about a matched secret: a truncated
+     * preview plus length, Shannon entropy, well-known prefix and fixture
+     * flag. The full secret value is never stored.
+     *
+     * @return array{matched: string, length: int, entropy: float, known_prefix: ?string, test_fixture: bool}
+     */
+    private function buildEvidence(string $matched): array
+    {
+        return [
+            'matched' => mb_substr($matched, 0, 32),
+            'length' => strlen($matched),
+            'entropy' => $this->shannonEntropy($matched),
+            'known_prefix' => $this->knownPrefix($matched),
+            'test_fixture' => $this->isFakeFixture($matched),
+        ];
+    }
+
+    private function shannonEntropy(string $value): float
+    {
+        $length = strlen($value);
+        if ($length === 0) {
+            return 0.0;
+        }
+
+        $frequencies = array_count_values(str_split($value));
+        $entropy = 0.0;
+        foreach ($frequencies as $count) {
+            $probability = $count / $length;
+            $entropy -= $probability * log($probability, 2);
+        }
+
+        return round($entropy, 2);
+    }
+
+    private function knownPrefix(string $matched): ?string
+    {
+        foreach (self::KNOWN_SECRET_PREFIXES as $prefix) {
+            if (str_contains($matched, $prefix)) {
+                return $prefix;
+            }
+        }
+
+        return null;
     }
 }

@@ -123,6 +123,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Blade: `safe_raw_html()` family, all-literal ternary branches (Elvis still
   flags), shared local-path hints extended (`tmp`, `temp`, `dest`).
 - Secrets: obvious fixtures in test paths skipped (test/fake/example/... markers).
+- Secrets: UPPER_SNAKE identifier constants naming their own value
+  (`FEATURE_X = 'x_value'`) skipped; every finding carries `evidence`
+  (matched prefix, length, entropy, known token prefix, fixture flag).
+- Blade: request-derived output stays Error/High, other dynamic output is now
+  Warning/Medium.
+- MISSING_*_TEST reworded ("no directly associated test detected") and
+  downgraded to Info/Low.
+- CI gate: `quality_gate.ignore` config + `--ignore=` CLI to hide rules;
+  exit codes documented (0 pass / 1 gate failed / 2 internal error).
+- HTML report: confidence-weighted Quality Score dashboard (per-dimension
+  scores, release gate, Must Fix / Review / Tech Debt buckets).
 - Secrets: password-vs-long-literal comparisons (`==`/`===`/`!=`/`!==`, either
   order) reported as master-password pattern; variable-to-variable stays silent.
 - SSRF: `$this->prop` (assignments + declaration defaults) origin tracking —

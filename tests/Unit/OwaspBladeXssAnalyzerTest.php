@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer;
+use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 
@@ -41,7 +42,8 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
 
         self::assertCount(1, $issues);
         self::assertSame('OWASP_BLADE_XSS', $issues[0]->rule);
-        self::assertSame(Severity::Error, $issues[0]->severity);
+        self::assertSame(Severity::Warning, $issues[0]->severity);
+        self::assertSame(Confidence::Medium, $issues[0]->confidence);
     }
 
     public function testFlagsRequestHelper(): void
@@ -55,6 +57,8 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
 
         self::assertCount(1, $issues);
         self::assertSame('OWASP_BLADE_XSS', $issues[0]->rule);
+        self::assertSame(Severity::Error, $issues[0]->severity);
+        self::assertSame(Confidence::High, $issues[0]->confidence);
     }
 
     public function testSkipsCsrfField(): void
@@ -491,5 +495,35 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
         $issues = (new OwaspBladeXssAnalyzer(['extra_sanitizers' => ['mySanitize']]))->analyze([$file]);
 
         self::assertSame('OWASP_BLADE_XSS', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testRequestDerivedEchoStaysErrorHigh(): void
+    {
+        $file = $this->temp(
+            "<div>{!! \$request->input('q') !!}</div>\n",
+            'resources/views/search/results.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(1, $issues);
+        self::assertSame('OWASP_BLADE_XSS', $issues[0]->rule);
+        self::assertSame(Severity::Error, $issues[0]->severity);
+        self::assertSame(Confidence::High, $issues[0]->confidence);
+    }
+
+    public function testPlainVariableEchoIsWarningMedium(): void
+    {
+        $file = $this->temp(
+            "<div>{!! \$user->bio !!}</div>\n",
+            'resources/views/users/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(1, $issues);
+        self::assertSame('OWASP_BLADE_XSS', $issues[0]->rule);
+        self::assertSame(Severity::Warning, $issues[0]->severity);
+        self::assertSame(Confidence::Medium, $issues[0]->confidence);
     }
 }
