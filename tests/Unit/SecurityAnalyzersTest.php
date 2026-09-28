@@ -307,6 +307,31 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testHardcodedSecretSkipsTestFixture(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace Tests\\Support;\nclass WebhookSignerTest {\n    public function data(): array {\n        \$secret = 'whsec_test_secret';\n        return [\$secret];\n    }\n}\n",
+            'tests/Support/WebhookSignerTest.php'
+        );
+
+        $issues = (new HardcodedSecretAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testHardcodedSecretStillFlagsProductionTestMarker(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Services;\nclass WebhookService {\n    private string \$secret = 'whsec_aB3x9QwE7rT2yU4iO6pQ8s';\n}\n",
+            'app/Services/WebhookService.php'
+        );
+
+        $issues = (new HardcodedSecretAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'HARDCODED_SECRET', Severity::Critical));
+    }
+
     public function testHardcodedSecretFlagsEnvDefaultSecret(): void
     {
         $file = $this->tempPhp(

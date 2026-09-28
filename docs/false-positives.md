@@ -98,6 +98,10 @@ php artisan quality:check --tier=all --fail-on=none
   `base_path()`/`app_path()` targets are resolved by walking up to the project root.
   Both the legacy array syntax (`['as' => ..., 'uses' => 'FQCN@method']`) and
   `[Controller::class, 'method']` are resolved.
+  Credential verification counts as authorization context
+  (`$request->authenticate()`, `Auth::attempt()`, `$request->hasValidSignature()`,
+  `hash_equals()` capability checks), as do enforcing gate branches
+  (`if (Gate::...->denies(...)) { throw ...; }` — a bare `allows()` still flags).
   A mutating action is also skipped when it type-hints a FormRequest whose
   `authorize()` does real checks (resolved through `use` imports against the
   scanned files) — a lone `return true;` (or no `authorize()`) still flags.
@@ -176,10 +180,13 @@ php artisan quality:check --tier=all --fail-on=none
     XXE). Only `LIBXML_NONET` / `libxml_disable_entity_loader(true)` silence
     a file.
   - SSRF: directory listings are server-side paths, never remote URLs —
-    `glob()`/`scandir()` (including via `foreach` loop variables and
+    `glob()`/`scandir()`/`readdir()` (including via `foreach` loop variables and
     `$list[$i]` element reads: `foreach (glob(...) as $f)`,
     `$uploads['k'] = glob(...)`), `Storage::files()`/`allFiles()`,
-    `File::files()`.
+    `File::files()`. Deploy-time path builders count too: `dirname()`/
+    `basename()`/`realpath()` over deploy-time values, `__DIR__`/`__FILE__`.
+    URLs gated by a `*sanitiz*()` call in the same function stay silent
+    (`if (!sanitizeRemoteUrl($url)) throw ...;`).
   - SSTI: template variables assigned a string literal — or a concatenation
     composed solely of literals, numbers, class constants and known variables
     (`$viewName = 'front.pos_' . $industry`, `Blade::render('...' . Color::Gray[400])`),
@@ -299,10 +306,12 @@ php artisan quality:check --tier=all --fail-on=none
   ignore for reviewed HTML.
 
 ### `HARDCODED_SECRET`
-- The regex matches `sk-`, `AIza`, `AKIA`, private keys, ... **Test/fixture strings
-  are also matched** — this is intentional. For test fixtures, either use clearly
-  fake values that do not match the pattern, or exclude the test directory from the
-  security scan paths.
+- The regex matches `sk-`, `AIza`, `AKIA`, private keys, ... **Obvious fixtures
+  in test paths are skipped** (`whsec_test_secret`, `AKIA...EXAMPLE` — matched
+  values containing test/fake/example/sample/demo/mock/dummy/changeme/
+  placeholder/xxx). Production values with those markers still flag. For other
+  test fixtures, either use clearly fake values, or exclude the test directory
+  from the security scan paths.
 - Field-name constants (e.g. `OPT_DB_PASSWORD = 'db-password'`) are skipped —
   the right side names a CLI option, it is not a credential.
 - Placeholders such as `xxx`, `changeme`, or empty strings in config files are reported

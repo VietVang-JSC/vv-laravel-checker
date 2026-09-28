@@ -129,6 +129,21 @@ final class AnalyzerMetricsTest extends TestCase
             ],
             'OWASP_BROKEN_ACCESS_CONTROL',
         ];
+        yield 'bac_fp_gate_denies_throw' => [
+            static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
+            ['app/Http/Controllers/PostController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\Gate;\nclass PostController extends Controller {\n    public function store(\\App\\Models\\Post \$post) {\n        if (Gate::forUser(auth()->user())->denies('update', \$post)) {\n            throw new \\RuntimeException('forbidden');\n        }\n        \$post->save();\n    }\n}\n"],
+            null,
+        ];
+        yield 'bac_fp_authenticate_call' => [
+            static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
+            ['app/Http/Controllers/Auth/LoginController.php' => "<?php\nnamespace App\\Http\\Controllers\\Auth;\nclass LoginController extends Controller {\n    public function store(\\App\\Http\\Requests\\LoginRequest \$request) {\n        \$request->authenticate();\n        return redirect('/dashboard');\n    }\n}\n"],
+            null,
+        ];
+        yield 'bac_fp_hash_equals_capability' => [
+            static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
+            ['app/Http/Controllers/OpenController.php' => "<?php\nnamespace App\\Http\\Controllers;\nclass OpenController extends Controller {\n    public function update(int \$id, string \$hash) {\n        \$thread = \\App\\Models\\Thread::findOrFail(\$id);\n        if (!\\Helper::hashEquals(\$hash, \\App\\Models\\Thread::trackingHash(\$thread))) {\n            throw new \\RuntimeException('bad signature');\n        }\n        \$thread->save();\n    }\n}\n"],
+            null,
+        ];
         yield 'bac_tp_unknown_middleware' => [
             static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(true, ['extra_middleware' => ['verified-staff']]),
             [
@@ -304,6 +319,21 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'ssrf_fp_fsockopen_literal' => [
             static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
             ['app/Services/ExternalService.php' => "<?php\n\$fp = fsockopen('localhost', 80);\n"],
+            null,
+        ];
+        yield 'ssrf_fp_sanitizer_gate' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Services/RemoteHelper.php' => "<?php\nclass RemoteHelper {\n    public static function fetch(string \$url): array {\n        if (!self::sanitizeRemoteUrl(\$url)) {\n            throw new \\Exception('bad url');\n        }\n        return get_headers(\$url);\n    }\n}\n"],
+            null,
+        ];
+        yield 'ssrf_fp_dirname_deploy' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Console/PublishCommand.php' => "<?php\ncopy(dirname(__DIR__, 2) . '/resources/stubs/x.stub', \$target);\n"],
+            null,
+        ];
+        yield 'ssrf_fp_readdir_listing' => [
+            static fn (): AbstractAnalyzer => new OwaspSsrfAnalyzer(),
+            ['app/Services/ThemeService.php' => "<?php\nclass ThemeService {\n    public function scan(): void {\n        if (\$handle = opendir('themes')) {\n            while (false !== (\$entry = readdir(\$handle))) {\n                \$text = file_get_contents('themes/' . \$entry . '/readme.md');\n            }\n        }\n    }\n}\n"],
             null,
         ];
         yield 'ssrf_fp_glob_loop' => [
@@ -494,8 +524,18 @@ final class AnalyzerMetricsTest extends TestCase
         ];
         yield 'secret_fp_env_placeholder_default' => [
             static fn (): HardcodedSecretAnalyzer => new HardcodedSecretAnalyzer(),
-            ['config/app.php' => "<?php\nreturn ['url' => env('APP_URL', 'http://localhost'), 'key' => env('APP_KEY', '')];\n"],
+            ['config/services.php' => "<?php\n'key' => env('SERVICE_API_KEY', 'changeme12345678'),\n"],
             null,
+        ];
+        yield 'secret_fp_test_fixture' => [
+            static fn (): HardcodedSecretAnalyzer => new HardcodedSecretAnalyzer(),
+            ['tests/Support/WebhookSignerTest.php' => "<?php\nnamespace Tests\\Support;\nclass WebhookSignerTest {\n    public function data(): array {\n        \$secret = 'whsec_test_secret';\n        return [\$secret];\n    }\n}\n"],
+            null,
+        ];
+        yield 'secret_tp_production_webhook_secret' => [
+            static fn (): HardcodedSecretAnalyzer => new HardcodedSecretAnalyzer(),
+            ['app/Services/WebhookService.php' => "<?php\nnamespace App\\Services;\nclass WebhookService {\n    private string \$secret = 'whsec_aB3x9QwE7rT2yU4iO6pQ8s';\n}\n"],
+            'HARDCODED_SECRET',
         ];
 
         // --- Mass assignment ---
@@ -800,6 +840,16 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Helpers/ExportHelper.php' => "<?php\nclass ExportHelper {\n    public function stage(string \$extension): ?string {\n        \$tmp = tempnam(sys_get_temp_dir(), 'export');\n        if (\$tmp === false) {\n            return null;\n        }\n        @unlink(\$tmp);\n        return \$tmp;\n    }\n}\n"],
             null,
         ];
+        yield 'traversal_fp_readdir_listing' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Services/ThemeService.php' => "<?php\nclass ThemeService {\n    public function scan(): void {\n        if (\$handle = opendir('themes')) {\n            while (false !== (\$entry = readdir(\$handle))) {\n                \$text = file_get_contents('themes/' . \$entry . '/readme.md');\n            }\n        }\n    }\n}\n"],
+            null,
+        ];
+        yield 'traversal_fp_tmp_hint' => [
+            static fn (): AbstractAnalyzer => new OwaspPathTraversalAnalyzer(),
+            ['app/Helpers/ExportHelper.php' => "<?php\nclass ExportHelper {\n    public function clean(string \$tmp): void {\n        @unlink(\$tmp);\n    }\n}\n"],
+            null,
+        ];
 
         // --- Blade XSS ---
         yield 'bladexss_tp_variable' => [
@@ -920,6 +970,11 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'bladexss_fp_md_to_html' => [
             static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
             ['resources/views/articles/show.blade.php' => "<div>{!! md_to_html(\$article->body()) !!}</div>\n"],
+            null,
+        ];
+        yield 'bladexss_fp_safe_raw_html' => [
+            static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
+            ['resources/views/partials/flash.blade.php' => "<div>{!! safe_raw_html(\$flash['text']) !!}</div>\n"],
             null,
         ];
         yield 'bladexss_fp_extra_sanitizer' => [

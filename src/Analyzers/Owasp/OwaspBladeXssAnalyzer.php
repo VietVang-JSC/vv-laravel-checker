@@ -34,11 +34,12 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
      * Explicit sanitizer/escaper calls wrapping the output. Verified safe
      * renderers are listed by name: md_to_html() (CommonMark with
      * html_input=escape), markdownHelp()/markdownNotes() (HTMLPurifier),
+     * safe_raw_html() (tag stripper — also covers __safe_raw_html()),
      * excerpt() (tag-stripped plain-text summary by convention).
      */
     private const SANITIZER_FUNCS = [
         'e', 'sanitizehtml', 'strip_tags', 'htmlspecialchars', 'htmlentities', 'purify', 'clean',
-        'md_to_html', 'markdownhelp', 'markdownnotes', 'excerpt',
+        'md_to_html', 'markdownhelp', 'markdownnotes', 'safe_raw_html', '__safe_raw_html', 'excerpt',
     ];
 
     /**

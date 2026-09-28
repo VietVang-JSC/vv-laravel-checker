@@ -35,7 +35,11 @@ use VietVang\QualityChecker\Result\Severity;
  * that cannot be qualified fall back to short-name matching.
  *
  * In-body authorization covers `authorize*()`, `middleware()`, `abort*()`,
- * and exact `can()`/`cannot()` calls (e.g. `$request->user()->can(...)`).
+ * and exact `can()`/`cannot()` calls (e.g. `$request->user()->can(...)`),
+ * credential verification (`$request->authenticate()`, `Auth::attempt()`),
+ * capability proofs (`$request->hasValidSignature()`, `hash_equals()`),
+ * plus enforcing gate branches (`if (Gate::...->denies(...)) { throw ...; }`
+ * — a bare `allows()` without throw/abort still flags).
  */
 final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
 {
@@ -338,7 +342,18 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
                 if (
                     $node instanceof Node\Expr\MethodCall
                     && $node->name instanceof Node\Identifier
-                    && in_array($node->name->toString(), ['authorize', 'authorizeResource', 'middleware', 'abort', 'abortIf', 'abortUnless', 'can', 'cannot'], true)
+                    && in_array($node->name->toString(), ['authorize', 'authorizeResource', 'middleware', 'abort', 'abortIf', 'abortUnless', 'can', 'cannot', 'hasValidSignature'], true)
+                ) {
+                    return true;
+                }
+
+                // Performing authentication IS authorization context:
+                // $request->authenticate(), Auth::attempt(...) verify
+                // credentials before mutating (login actions).
+                if (
+                    $node instanceof Node\Expr\MethodCall
+                    && $node->name instanceof Node\Identifier
+                    && in_array(strtolower($node->name->toString()), ['authenticate', 'attempt'], true)
                 ) {
                     return true;
                 }
@@ -353,10 +368,30 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
                     return true;
                 }
 
+                // Auth::attempt(...) verifies credentials (Bus::attemptBulk
+                // dispatches jobs instead — deliberately not covered).
+                if (
+                    $node instanceof Node\Expr\StaticCall
+                    && $node->name instanceof Node\Identifier
+                    && strtolower($node->name->toString()) === 'attempt'
+                    && $node->class instanceof Node\Name
+                    && in_array(strtolower(ltrim($node->class->toString(), '\\')), ['auth', 'authmanager'], true)
+                ) {
+                    return true;
+                }
+
                 if (
                     $node instanceof Node\Expr\FuncCall
                     && $node->name instanceof Node\Name
-                    && in_array($node->name->toString(), ['abort', 'abort_if', 'abort_unless'], true)
+                    && in_array($node->name->toString(), ['abort', 'abort_if', 'abort_unless', 'hash_equals'], true)
+                ) {
+                    return true;
+                }
+
+                if (
+                    ($node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall)
+                    && $node->name instanceof Node\Identifier
+                    && in_array(strtolower($node->name->toString()), ['hashequals'], true)
                 ) {
                     return true;
                 }
@@ -365,6 +400,72 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
             });
 
             if ($found !== []) {
+                return true;
+            }
+        }
+
+        return $this->hasEnforcingGateCheck($stmts);
+    }
+
+    /**
+     * Enforcing gate pattern: if (...->denies(...)/allows(...)) { throw ...; }
+     * or { abort(...); }. A bare Gate::allows() without an enforcing branch
+     * stays flaggable — the check alone enforces nothing.
+     *
+     * @param array<Node\Stmt> $stmts
+     */
+    private function hasEnforcingGateCheck(array $stmts): bool
+    {
+        $ifs = $this->finder()->find($stmts, static function (Node $node): bool {
+            return $node instanceof Node\Stmt\If_;
+        });
+        foreach ($ifs as $if) {
+            if (!$if instanceof Node\Stmt\If_) {
+                continue;
+            }
+            $cond = $this->finder()->find($if->cond, function (Node $node): bool {
+                if (
+                    $node instanceof Node\Expr\MethodCall
+                    && $node->name instanceof Node\Identifier
+                    && in_array(strtolower($node->name->toString()), ['denies', 'allows', 'authorize', 'can', 'cannot'], true)
+                ) {
+                    return true;
+                }
+                if (
+                    $node instanceof Node\Expr\StaticCall
+                    && $node->name instanceof Node\Identifier
+                    && in_array(strtolower($node->name->toString()), ['denies', 'allows'], true)
+                ) {
+                    return true;
+                }
+
+                return false;
+            });
+            if ($cond === []) {
+                continue;
+            }
+            $enforcing = $this->finder()->find($if->stmts, function (Node $node): bool {
+                if ($node instanceof Node\Expr\Throw_) {
+                    return true;
+                }
+                if (
+                    $node instanceof Node\Expr\FuncCall
+                    && $node->name instanceof Node\Name
+                    && in_array($node->name->toString(), ['abort', 'abort_if', 'abort_unless'], true)
+                ) {
+                    return true;
+                }
+                if (
+                    $node instanceof Node\Expr\MethodCall
+                    && $node->name instanceof Node\Identifier
+                    && in_array($node->name->toString(), ['abort', 'abortIf', 'abortUnless'], true)
+                ) {
+                    return true;
+                }
+
+                return false;
+            });
+            if ($enforcing !== []) {
                 return true;
             }
         }

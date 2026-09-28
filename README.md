@@ -335,7 +335,7 @@ The **tier** controls what the gate fails on:
 Custom analyzers only (phpcs/phpstan/phpunit excluded), `tier=security`,
 `fail-on=none`, cold runs without cache. Quality is pinned by a labeled
 corpus (`tests/Unit/AnalyzerMetricsTest.php`): **precision 1.000 / recall 1.000**
-across 164 true/false-positive cases (62 TP + 102 TN), so the reductions below
+across 175 true/false-positive cases (63 TP + 112 TN), so the reductions below
 cannot regress silently.
 | Pilot | Stack | Files | Before | After | Signal left |
 |---|---|---|---|---|---|
@@ -362,6 +362,9 @@ cannot regress silently.
 | T — OSS billing app | Laravel | ~4,100 | — | **654** (10 / 257 / 387) | seeder unguard + OAuth fixed-host redirects + FormRequest authorize |
 | U — OSS admin package | Laravel | ~300 | — | **96** (17 / 49 / 30) | dynamic dispatch review + ternary-literal blade |
 | V — OSS forum app | Laravel | ~450 | — | **53** (0 / 6 / 47) | assert/callable cleanup + markdown/excerpt renderers |
+| W — OSS helpdesk app | Laravel | ~500 | — | **81** (4 / 42 / 35) | safe_raw_html + signed tracking links + module SSRF review |
+| X — OSS blog package | Laravel | ~300 | — | **38** (1 / 6 / 31) | Gate-denies-throw + test fixtures + trivial authorize TP |
+| Y — OSS link manager | Laravel | ~230 | — | **92** (0 / 64 / 28) | login auth + theme directory reads + plugin includes |
 
 *(severity split: critical / error / warning)*
 

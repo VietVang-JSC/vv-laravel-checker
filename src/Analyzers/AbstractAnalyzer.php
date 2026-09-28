@@ -113,9 +113,11 @@ abstract class AbstractAnalyzer
      * traversal analyzers so both stay silent on the same naming convention.
      * Note: 'dir' also matches words like 'dirty' — accepted trade-off, the
      * heuristic only silences (never confirms) and reviewers see the rest.
+     * Deliberately absent: 'from'/'to' (would silence $token, $photo, ...).
      */
     private const LOCAL_NAME_HINTS = [
         'path', 'file', 'filepath', 'filename', 'fullpath', 'source', 'target', 'local', 'dir',
+        'tmp', 'temp', 'dest',
     ];
 
     private const REMOTE_NAME_HINTS = [

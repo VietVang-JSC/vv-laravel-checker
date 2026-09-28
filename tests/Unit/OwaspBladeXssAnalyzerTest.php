@@ -433,6 +433,18 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testSkipsSafeRawHtml(): void
+    {
+        $file = $this->temp(
+            "<div>{!! safe_raw_html(\$flash['text']) !!}</div>\n<div>{!! __safe_raw_html('key', ['count' => \$n]) !!}</div>\n",
+            'resources/views/partials/flash.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testSkipsExtraSanitizerNeedle(): void
     {
         $file = $this->temp(

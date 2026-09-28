@@ -221,4 +221,16 @@ final class OwaspPathTraversalAnalyzerTest extends TestCase
 
         self::assertSame('OWASP_PATH_TRAVERSAL', $this->rules($issues)[0] ?? null);
     }
+
+    public function testSkipsReaddirListing(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass ThemeService {\n    public function scan(): void {\n        if (\$handle = opendir('themes')) {\n            while (false !== (\$entry = readdir(\$handle))) {\n                \$text = file_get_contents('themes/' . \$entry . '/readme.md');\n            }\n        }\n    }\n}\n",
+            'app/Services/ThemeService.php'
+        );
+
+        $issues = (new OwaspPathTraversalAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
 }

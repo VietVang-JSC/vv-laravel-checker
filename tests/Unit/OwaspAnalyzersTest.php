@@ -634,6 +634,58 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $this->rules($issues)[0] ?? null);
     }
 
+    public function testAccessControlSkipsEnforcingGateDenies(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\Gate;\n" .
+            "class PostController extends Controller {\n    public function store(\\App\\Models\\Post \$post) {\n        if (Gate::forUser(auth()->user())->denies('update', \$post)) {\n            throw (new \\Illuminate\\Database\\Eloquent\\ModelNotFoundException)->setModel(\\App\\Models\\Post::class, [\$post->id]);\n        }\n        \$post->save();\n    }\n}\n",
+            'app/Http/Controllers/PostController.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testAccessControlStillFlagsBareGateAllows(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\Gate;\n" .
+            "class PostController extends Controller {\n    public function store(\\App\\Models\\Post \$post) {\n        Gate::allows('update', \$post);\n        \$post->save();\n    }\n}\n",
+            'app/Http/Controllers/PostController.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller]);
+
+        self::assertSame('OWASP_BROKEN_ACCESS_CONTROL', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testAccessControlSkipsAuthenticateCall(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers\\Auth;\n" .
+            "class LoginController extends Controller {\n    public function store(\\App\\Http\\Requests\\LoginRequest \$request) {\n        \$request->authenticate();\n        return redirect('/dashboard');\n    }\n}\n",
+            'app/Http/Controllers/Auth/LoginController.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testAccessControlSkipsHashEqualsCapability(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\n" .
+            "class OpenController extends Controller {\n    public function update(int \$id, string \$hash) {\n        \$thread = \\App\\Models\\Thread::findOrFail(\$id);\n        if (!\\Helper::hashEquals(\$hash, \\App\\Models\\Thread::trackingHash(\$thread))) {\n            throw new \\RuntimeException('bad signature');\n        }\n        \$thread->markAsRead();\n        \$thread->save();\n    }\n}\n",
+            'app/Http/Controllers/OpenController.php'
+        );
+
+        $issues = (new OwaspAccessControlAnalyzer())->analyze([$controller]);
+
+        self::assertCount(0, $issues);
+    }
+
     public function testAccessControlStillFlagsThrottleOnlyRoute(): void
     {
         $controller = $this->temp(
@@ -1336,6 +1388,54 @@ final class OwaspAnalyzersTest extends TestCase
         $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
 
         self::assertContains('OWASP_SSRF', $this->rules($issues));
+    }
+
+    public function testSsrfSkipsSanitizerGatedUrl(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass RemoteHelper {\n    public static function fetch(string \$url): array {\n        if (!self::sanitizeRemoteUrl(\$url)) {\n            throw new \\Exception('bad url');\n        }\n        return get_headers(\$url);\n    }\n}\n",
+            'app/Services/RemoteHelper.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSsrfSanitizerGateDoesNotLeakAcrossFunctions(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass A {\n    public static function clean(string \$u): ?string {\n        if (!self::sanitizeRemoteUrl(\$u)) {\n            return null;\n        }\n        return \$u;\n    }\n}\nclass H {\n    public static function get(string \$url): array {\n        return get_headers(\$url);\n    }\n}\n",
+            'app/Services/RemoteHelper.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertContains('OWASP_SSRF', $this->rules($issues));
+    }
+
+    public function testSsrfSkipsDirnameDeployTime(): void
+    {
+        $file = $this->temp(
+            "<?php\ncopy(dirname(__DIR__, 2) . '/resources/stubs/x.stub', \$target);\n",
+            'app/Console/PublishCommand.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSsrfSkipsReaddirListing(): void
+    {
+        $file = $this->temp(
+            "<?php\nif (\$handle = opendir('themes')) {\n    while (false !== (\$entry = readdir(\$handle))) {\n        \$text = file_get_contents('themes/' . \$entry . '/readme.md');\n    }\n}\n",
+            'app/Services/ThemeService.php'
+        );
+
+        $issues = (new OwaspSsrfAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
     }
 
     public function testSstiFlagsViewFacadeMake(): void

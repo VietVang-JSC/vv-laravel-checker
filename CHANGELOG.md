@@ -106,6 +106,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   authorization (`return true` alone still flags).
 - Mass assignment: `Model::unguard()` in seed-data paths (seeders, factories,
   migrations, tests) skipped — jobs and console commands still flag.
+- Broken access control: credential verification (`$request->authenticate()`,
+  `Auth::attempt()`, `hasValidSignature()`, `hash_equals()` capability checks)
+  and enforcing gate branches (`if (Gate::denies()) { throw }`) count as
+  authorization; bare `Gate::allows()` still flags.
+- SSRF: `*sanitiz*()`-gated URLs, `dirname()`/`basename()`/`realpath()` over
+  deploy-time values, `__DIR__`/`__FILE__`, and `readdir()`/`opendir()` listings
+  skipped; concatenations whose every dynamic leaf is safe stay silent.
+- Blade: `safe_raw_html()` family, all-literal ternary branches (Elvis still
+  flags), shared local-path hints extended (`tmp`, `temp`, `dest`).
+- Secrets: obvious fixtures in test paths skipped (test/fake/example/... markers).
 - Configurable heuristics (previously hardcoded): `cache.enabled`/`cache.ttl`
   for the result cache; `analyzers.models_dirs` for Eloquent model lookup
   (DDD layouts); `analyzers.extra_middleware` for custom protective middleware;

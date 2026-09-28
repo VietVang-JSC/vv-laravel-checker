@@ -91,6 +91,7 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
                 $origins[$name][] = $rhs;
             }
         }
+        $sanitizedScopes = $this->sanitizedVarScopes($nodes);
 
         $issues = [];
         $calls = $this->finder()->find($nodes, function (Node $node): bool {
@@ -116,7 +117,7 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
                 continue;
             }
 
-            if (!$this->isPotentialUserInput($urlArg, $origins)) {
+            if (!$this->isPotentialUserInput($urlArg, $origins, $call, $sanitizedScopes)) {
                 continue;
             }
 
@@ -264,7 +265,11 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
     /**
      * @param array<string, list<Node\Expr>> $origins
      */
-    private function isPotentialUserInput(Node\Expr $expr, array $origins): bool
+    /**
+     * @param array<string, list<Node\Expr>> $origins
+     * @param array<int, array<string, true>> $sanitizedScopes call id => sanitized var names
+     */
+    private function isPotentialUserInput(Node\Expr $expr, array $origins, ?Node $call = null, array $sanitizedScopes = []): bool
     {
         // $files[$i] carries the safety of $files (directory listings,
         // deploy-time arrays, ...): judge the base expression.
@@ -277,6 +282,17 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         }
 
         if ($this->isLiteralString($expr)) {
+            return false;
+        }
+
+        // Validator-gated in the same function: if (!sanitizeRemoteUrl($url))
+        // throw ...; get_headers($url). The sanitizer, not the sink, decides.
+        if (
+            $expr instanceof Node\Expr\Variable
+            && is_string($expr->name)
+            && $call instanceof Node
+            && isset($sanitizedScopes[spl_object_id($call)][$expr->name])
+        ) {
             return false;
         }
 
@@ -312,10 +328,45 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             $expr instanceof Node\Expr\BinaryOp\Concat
             || $expr instanceof Node\Scalar\InterpolatedString
         ) {
+            // Every dynamic leaf provably safe (literals aside) — e.g.
+            // 'themes/' . $entry with $entry from readdir(). Any unknown
+            // leaf keeps the flag.
+            if ($this->allConcatVarsSafe($expr, $origins)) {
+                return false;
+            }
+
             return true;
         }
 
         return $this->isTaintedExpr($expr);
+    }
+
+    /**
+     * Every $variable leaf of a concatenation/interpolation resolves to a
+     * safe origin (deploy-time, local path, directory listing, ...).
+     *
+     * @param array<string, list<Node\Expr>> $origins
+     */
+    private function allConcatVarsSafe(Node\Expr $expr, array $origins): bool
+    {
+        $seen = [];
+        $vars = $this->finder()->find($expr, static function (Node $node): bool {
+            return $node instanceof Node\Expr\Variable;
+        });
+        foreach ($vars as $var) {
+            if (!$var instanceof Node\Expr\Variable || !is_string($var->name)) {
+                return false;
+            }
+            if (isset($seen[$var->name])) {
+                continue;
+            }
+            $seen[$var->name] = true;
+            if (!$this->isSafeVariable($var->name, $origins, [])) {
+                return false;
+            }
+        }
+
+        return $seen !== [];
     }
 
     /**
@@ -359,14 +410,14 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
 
     /**
      * Directory listings return server-side paths, never remote URLs:
-     * glob()/scandir(), Storage::files()/allFiles(), File::files().
+     * glob()/scandir()/readdir(), Storage::files()/allFiles(), File::files().
      */
     private function isDirectoryListing(Node\Expr $expr): bool
     {
         if (
             $expr instanceof Node\Expr\FuncCall
             && $expr->name instanceof Node\Name
-            && in_array(strtolower($expr->name->toString()), ['glob', 'scandir'], true)
+            && in_array(strtolower($expr->name->toString()), ['glob', 'scandir', 'readdir'], true)
         ) {
             return true;
         }
@@ -377,6 +428,130 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             && in_array(strtolower($expr->name->toString()), ['files', 'allfiles', 'listcontents'], true)
         ) {
             return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Variables passed through a *sanitiz*() gate in the same scope
+     * (`if (!sanitizeRemoteUrl($url)) throw ...;`), so a later sink using
+     * them is reviewed-by-construction. Scoped per function (plus top-level)
+     * so a gate in one function never silences another.
+     *
+     * @param list<Node> $nodes
+     * @return array<int, array<string, true>> call id => sanitized var names
+     */
+    private function sanitizedVarScopes(array $nodes): array
+    {
+        $funcs = [];
+        foreach (
+            $this->finder()->find($nodes, static function (Node $node): bool {
+                return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
+            }) as $func
+        ) {
+            if ($func instanceof Node\Stmt\ClassMethod || $func instanceof Node\Stmt\Function_) {
+                $funcs[] = $func;
+            }
+        }
+
+        $byCall = [];
+        $scopes = array_merge($funcs, [null]);
+        foreach ($scopes as $scope) {
+            $haystack = $scope ?? $nodes;
+            $names = [];
+            $gates = $this->finder()->find($haystack, static function (Node $node): bool {
+                if ($node instanceof Node\Expr\FuncCall && $node->name instanceof Node\Name) {
+                    return str_contains(strtolower($node->name->toString()), 'sanitiz');
+                }
+                if (
+                    ($node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall)
+                    && $node->name instanceof Node\Identifier
+                ) {
+                    return str_contains(strtolower($node->name->toString()), 'sanitiz');
+                }
+
+                return false;
+            });
+            foreach ($gates as $gate) {
+                if (
+                    !$gate instanceof Node\Expr\FuncCall
+                    && !$gate instanceof Node\Expr\MethodCall
+                    && !$gate instanceof Node\Expr\StaticCall
+                ) {
+                    continue;
+                }
+                if ($scope === null && $this->isInsideAnyFunction($gate, $funcs)) {
+                    continue;
+                }
+                foreach ($gate->args as $arg) {
+                    if (!$arg instanceof Node\Arg) {
+                        continue;
+                    }
+                    $vars = $this->finder()->find($arg->value, static function (Node $node): bool {
+                        return $node instanceof Node\Expr\Variable;
+                    });
+                    foreach ($vars as $var) {
+                        if ($var instanceof Node\Expr\Variable && is_string($var->name)) {
+                            $names[$var->name] = true;
+                        }
+                    }
+                }
+            }
+            if ($names === []) {
+                continue;
+            }
+            $calls = $this->finder()->find($haystack, static function (Node $node): bool {
+                return $node instanceof Node\Expr\FuncCall
+                    || $node instanceof Node\Expr\MethodCall
+                    || $node instanceof Node\Expr\NullsafeMethodCall
+                    || $node instanceof Node\Expr\StaticCall;
+            });
+            foreach ($calls as $call) {
+                if ($this->isInsideOtherFunction($call, $funcs, $scope)) {
+                    continue;
+                }
+                $byCall[spl_object_id($call)] = $names;
+            }
+        }
+
+        return $byCall;
+    }
+
+    /**
+     * @param list<Node\Stmt\ClassMethod|Node\Stmt\Function_> $funcs
+     */
+    private function isInsideAnyFunction(Node $node, array $funcs): bool
+    {
+        $target = spl_object_id($node);
+        foreach ($funcs as $func) {
+            $found = $this->finder()->find($func, static function (Node $inner) use ($target): bool {
+                return spl_object_id($inner) === $target;
+            });
+            if ($found !== []) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param list<Node\Stmt\ClassMethod|Node\Stmt\Function_> $funcs
+     */
+    private function isInsideOtherFunction(Node $call, array $funcs, Node|null $scope): bool
+    {
+        foreach ($funcs as $func) {
+            if ($scope !== null && $func === $scope) {
+                continue;
+            }
+            $target = spl_object_id($call);
+            $found = $this->finder()->find($func, static function (Node $inner) use ($target): bool {
+                return spl_object_id($inner) === $target;
+            });
+            if ($found !== []) {
+                return true;
+            }
         }
 
         return false;
@@ -470,7 +645,11 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             return true;
         }
 
-        if ($expr instanceof Node\Expr\ConstFetch || $expr instanceof Node\Expr\ClassConstFetch) {
+        if (
+            $expr instanceof Node\Expr\ConstFetch
+            || $expr instanceof Node\Expr\ClassConstFetch
+            || $expr instanceof Node\Scalar\MagicConst
+        ) {
             return true;
         }
 
@@ -497,7 +676,10 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             if (in_array($fn, self::CONFIG_FUNCS, true)) {
                 return true;
             }
-            if (!in_array($fn, ['trim', 'ltrim', 'rtrim', 'sprintf'], true)) {
+            // Pure path/string helpers: the result stays deploy-time when
+            // every argument is (dirname/basename/realpath can never yield
+            // a remote URL — worst case a local filename).
+            if (!in_array($fn, ['trim', 'ltrim', 'rtrim', 'sprintf', 'dirname', 'basename', 'realpath'], true)) {
                 return false;
             }
             foreach ($expr->args as $arg) {
@@ -639,6 +821,14 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
     private function isLiteralString(Node\Expr $expr): bool
     {
         if ($expr instanceof Node\Scalar\String_) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Scalar\LNumber || $expr instanceof Node\Scalar\DNumber) {
+            return true;
+        }
+
+        if ($expr instanceof Node\Scalar\MagicConst) {
             return true;
         }
 

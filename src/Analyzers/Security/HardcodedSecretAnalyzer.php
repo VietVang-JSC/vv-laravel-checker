@@ -38,6 +38,17 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
         '/(?i)password["\']?\s*[:=]\s*["\'][A-Za-z0-9_\-]{8,}["\']/' => 'hardcoded password',
     ];
 
+    /**
+     * Values that are obviously fixtures, not leaks: whsec_test_secret,
+     * AKIA...EXAMPLE (AWS's documented example), dummy/demo/sample data.
+     * Only applied in test paths — production values with these markers
+     * still flag (a staging sk_test_* in .env deserves a look).
+     */
+    private const FAKE_FIXTURE_MARKERS = [
+        'test', 'fake', 'example', 'sample', 'demo', 'mock', 'dummy',
+        'changeme', 'placeholder', 'xxx',
+    ];
+
     public function analyze(array $files): array
     {
         $issues = [];
@@ -65,6 +76,7 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
 
         $issues = [];
         $lines = preg_split('/\r\n|\r|\n/', $code) ?: [];
+        $isTest = $this->isTestPath($file);
 
         foreach ($lines as $index => $line) {
             if ($this->isFieldNameDeclaration($line)) {
@@ -83,6 +95,9 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
             }
             foreach (self::PATTERNS as $pattern => $label) {
                 if (preg_match($pattern, $line, $m) === 1) {
+                    if ($isTest && $this->isFakeFixture($m[0])) {
+                        break;
+                    }
                     $issues[] = $this->makeIssue(
                         self::RULE,
                         sprintf('Possible hardcoded secret detected: %s.', $label),
@@ -98,11 +113,22 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
 
         return $issues;
     }
-
     private function isFieldNameDeclaration(string $line): bool
     {
         foreach (self::FIELD_NAME_MARKERS as $marker) {
             if (preg_match('/\b' . $marker . '(_|$)/i', $line) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isFakeFixture(string $matched): bool
+    {
+        $lower = strtolower($matched);
+        foreach (self::FAKE_FIXTURE_MARKERS as $marker) {
+            if (str_contains($lower, $marker)) {
                 return true;
             }
         }
