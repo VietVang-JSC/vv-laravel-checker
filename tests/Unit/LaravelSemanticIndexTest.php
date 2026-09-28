@@ -306,4 +306,80 @@ final class LaravelSemanticIndexTest extends TestCase
         self::assertSame([], $index->routesForAction('App\\Http\\Controllers\\Nope', 'store'));
         self::assertSame([], $index->middlewareForAction('App\\Http\\Controllers\\BackupController', 'destroy'));
     }
+
+    public function testResolvesVariableConcatAction(): void
+    {
+        // Voyager shape: $namespacePrefix . 'X@login'.
+        $paths = $this->project([
+            'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+                "\$namespacePrefix = 'App\\\\Http\\\\Controllers\\\\';\n" .
+                "Route::middleware(['auth'])->group(function () use (\$namespacePrefix) {\n" .
+                "    Route::get('/user', \$namespacePrefix . 'UserController@show');\n" .
+                "});\n",
+        ]);
+
+        $index = (new LaravelSemanticIndex())->build($paths);
+        $routes = $index->routesForAction('App\\Http\\Controllers\\UserController', 'show');
+
+        self::assertCount(1, $routes);
+        self::assertSame('/user', $routes[0]->uri);
+        self::assertSame(['auth'], $routes[0]->middleware);
+    }
+
+    public function testDynamicActionStaysUnknown(): void
+    {
+        $paths = $this->project([
+            'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+                "\$controller = request('controller');\n" .
+                "Route::get('/', \$controller);\n" .
+                "Route::post('/backup', 'App\\\\Http\\\\Controllers\\\\BackupController@store');\n",
+        ]);
+
+        $index = (new LaravelSemanticIndex())->build($paths);
+
+        self::assertCount(0, $index->routesForAction('App\\Http\\Controllers\\BackupController', 'index'));
+        self::assertCount(1, $index->routesForAction('App\\Http\\Controllers\\BackupController', 'store'));
+        $coverage = $index->coverage();
+        self::assertSame(2, $coverage['total']);
+        self::assertSame(1, $coverage['resolved']);
+        self::assertSame(1, $coverage['unknown']);
+        self::assertSame(1, $coverage['reasons']['function-call'] ?? 0);
+    }
+
+    public function testConditionalVariableStaysUnknown(): void
+    {
+        $paths = $this->project([
+            'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+                "\$x = 'Admin';\n" .
+                "if (\$condition) {\n" .
+                "    \$x = 'User';\n" .
+                "}\n" .
+                "Route::get('/', \$x . 'Controller@index');\n",
+        ]);
+
+        $index = (new LaravelSemanticIndex())->build($paths);
+        $coverage = $index->coverage();
+
+        self::assertSame(1, $coverage['total']);
+        self::assertSame(0, $coverage['resolved']);
+        self::assertSame(1, $coverage['reasons']['conditional-assignment'] ?? 0);
+    }
+
+    public function testCoverageCountsFullAndPartial(): void
+    {
+        $paths = $this->project([
+            'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\n" .
+                "Route::post('/backup', 'App\\\\Http\\\\Controllers\\\\BackupController@store');\n" .
+                "Route::get('/pages/' . strtolower('x'), 'App\\\\Http\\\\Controllers\\\\C@show');\n",
+        ]);
+
+        $index = (new LaravelSemanticIndex())->build($paths);
+        $coverage = $index->coverage();
+
+        self::assertSame(2, $coverage['total']);
+        self::assertSame(2, $coverage['resolved']);
+        self::assertSame(1, $coverage['full']);
+        self::assertSame(1, $coverage['partial']);
+        self::assertSame(0, $coverage['unknown']);
+    }
 }

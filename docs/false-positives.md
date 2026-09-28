@@ -158,6 +158,24 @@ php artisan quality:check --tier=all --fail-on=none
   Linkstack 30 → 19 (11 `admin` proven via role guard; the 3 `link-id` ownership
   routes — including the `UserController@deleteLink` IDOR surface — correctly stay
   `review`; 0 new findings on both pilots).
+- **Bounded constant propagation (v0.3.4)**: route targets, URIs, prefixes and
+  include paths resolve proven-constant expressions — string literals,
+  single-assignment variables (`$a = 'x'`, `$b = $a`, `$c = $a . 'y'`),
+  `__DIR__`/`__FILE__`, `base_path()/app_path()/...` helpers and trivial
+  `Foo::class` — through `ConstantValueResolver`, shared by the whole semantic
+  engine. Conservative rules: one assignment per variable per scope (any
+  conditional, repeated or later assignment → unknown), assignments must precede
+  the use in the same function scope (no backward resolution, no cross-function
+  leakage; enclosing registration-closure bodies contribute visibility), depth cap
+  16 with cycle protection. `config()`, `env()`, `request()`, `sprintf()`, method
+  calls and everything else stay unknown. Every value carries provenance
+  (literal → variable → concat → use-site). The index reports coverage:
+  total/resolved/full/partial/unknown plus unknown reasons (dynamic-variable,
+  function-call, conditional-assignment, unsupported-expression,
+  unresolved-include). Snipe-it/Linkstack BAC results are byte-identical to
+  v0.3.3; Voyager stays 0 resolved with every unknown explained (37
+  config-based, 6 loop-varying BREAD controllers) — `config()` support is
+  deferred, and false resolution is worse than unresolved.
 
 ### `OWASP_SSRF` / `OWASP_COMMAND_INJECTION` / `OWASP_SSTI`
 - The engine only reports when the URL/template/command is **not a literal** and shows

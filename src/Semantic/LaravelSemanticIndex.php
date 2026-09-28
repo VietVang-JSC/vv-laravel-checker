@@ -7,6 +7,9 @@ namespace Rampart\QualityChecker\Semantic;
 use PhpParser\Node;
 use PhpParser\NodeFinder;
 use Rampart\QualityChecker\Analysis\AstPool;
+use Rampart\QualityChecker\Analysis\ConstantScope;
+use Rampart\QualityChecker\Analysis\ConstantValue;
+use Rampart\QualityChecker\Analysis\ConstantValueResolver;
 
 /**
  * Laravel semantic index: Route → Controller resolution.
@@ -54,19 +57,121 @@ final class LaravelSemanticIndex
     /** @var array<string, true> visited realpaths */
     private array $visited = [];
 
+    /** @var array<string, ConstantScope> file => scope */
+    private array $constScopes = [];
+
+    private ConstantValueResolver $constants;
+
     private AstPool $pool;
 
     private NodeFinder $finder;
+
+    private int $declarations = 0;
+
+    private int $resolvedNodes = 0;
+
+    private int $fullNodes = 0;
+
+    private int $unknownNodes = 0;
+
+    /** @var array<string, int> */
+    private array $unknownReasons = [];
+
+    private ?string $lastUnresolvedReason = null;
 
     public function __construct(?AstPool $pool = null)
     {
         $this->pool = $pool ?? new AstPool();
         $this->finder = $this->pool->finder();
+        $this->constants = new ConstantValueResolver();
+    }
+
+    /**
+     * Semantic coverage: how many route declarations resolved fully,
+     * partially (known action, dynamic URI) or not at all — and why.
+     *
+     * @return array{total: int, resolved: int, full: int, partial: int, unknown: int, reasons: array<string, int>}
+     */
+    public function coverage(): array
+    {
+        return [
+            'total' => $this->declarations,
+            'resolved' => $this->resolvedNodes,
+            'full' => $this->fullNodes,
+            'partial' => $this->resolvedNodes - $this->fullNodes,
+            'unknown' => $this->unknownNodes,
+            'reasons' => $this->unknownReasons,
+        ];
     }
 
     private function finder(): NodeFinder
     {
         return $this->finder;
+    }
+
+    private function scopeFor(string $file): ConstantScope
+    {
+        if (!isset($this->constScopes[$file])) {
+            $nodes = $this->pool->ast($file) ?? [];
+            $this->constScopes[$file] = ConstantScope::forFile($nodes, $file);
+        }
+
+        return $this->constScopes[$file];
+    }
+
+    /**
+     * Proven-constant string for an expression, or null when unproven.
+     * Plain literals short-circuit without scope work.
+     */
+    private function resolveConstant(Node\Expr $expr, string $file, int $line): ?ConstantValue
+    {
+        if ($expr instanceof Node\Scalar\String_) {
+            return new ConstantValue($expr->value, 'exact', [[
+                'kind' => 'literal',
+                'detail' => $expr->value,
+                'file' => $file,
+                'line' => $expr->getStartLine(),
+            ]]);
+        }
+        $scope = $this->scopeFor($file)->forNode($expr);
+        $value = $this->constants->resolve($expr, $scope, $line);
+        if ($value === null) {
+            $this->lastUnresolvedReason = $this->reasonBucket($expr);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Map resolver diagnostics to coverage buckets: dynamic-variable,
+     * function-call, conditional-assignment, unsupported-expression,
+     * unresolved-include.
+     */
+    private function reasonBucket(Node\Expr $expr): string
+    {
+        $reason = $this->constants->failureReason();
+        if ($reason === 'conditional-assignment') {
+            return 'conditional-assignment';
+        }
+        if ($reason === 'function-call') {
+            return 'function-call';
+        }
+        if (
+            in_array($reason, [
+            'unassigned-variable', 'ambiguous-assignment', 'use-before-assign',
+            'cyclic-assignment', 'depth-exceeded', 'dynamic-concat', 'dynamic-variable',
+            ], true)
+        ) {
+            return 'dynamic-variable';
+        }
+        if ($expr instanceof Node\Expr\FuncCall) {
+            return 'function-call';
+        }
+        if ($expr instanceof Node\Expr\Variable) {
+            return 'dynamic-variable';
+        }
+
+        return 'unsupported-expression';
     }
 
     /**
@@ -97,7 +202,7 @@ final class LaravelSemanticIndex
             if ($nodes === null) {
                 continue;
             }
-            foreach ($this->collectRequiredFiles($nodes, dirname($file)) as $required) {
+            foreach ($this->collectRequiredFiles($nodes, dirname($file), $file) as $required) {
                 $included[$required] = true;
             }
         }
@@ -355,7 +460,7 @@ final class LaravelSemanticIndex
 
         $prefix = $stack['prefix'];
         if (isset($chain['prefix'])) {
-            $prefix = $this->joinPrefix($prefix, $this->prefixString($chain['prefix']));
+            $prefix = $this->joinPrefix($prefix, $this->prefixString($chain['prefix'], $file, $node->getStartLine()));
         }
 
         $controller = $stack['controller'];
@@ -375,7 +480,8 @@ final class LaravelSemanticIndex
                 ['middleware' => $middlewares, 'prefix' => $prefix, 'controller' => $controller],
                 $file,
                 $uses,
-                $namespace
+                $namespace,
+                $node->getStartLine()
             );
 
             return;
@@ -387,7 +493,8 @@ final class LaravelSemanticIndex
                 ['middleware' => $middlewares, 'prefix' => $prefix, 'controller' => $controller],
                 $file,
                 $uses,
-                $namespace
+                $namespace,
+                $node->getStartLine()
             );
 
             return;
@@ -406,14 +513,15 @@ final class LaravelSemanticIndex
         array $stack,
         string $file,
         array $uses,
-        ?string $namespace
+        ?string $namespace,
+        int $line
     ): void {
         $extended = $stack;
         $first = $args[0] ?? null;
         $second = $args[1] ?? null;
         if ($first instanceof Node\Arg && $first->value instanceof Node\Expr\Array_) {
             $extended['middleware'] = array_merge($extended['middleware'], $this->groupArrayMiddleware($first->value));
-            $extended['prefix'] = $this->joinPrefix($extended['prefix'], $this->groupArrayPrefix($first->value));
+            $extended['prefix'] = $this->joinPrefix($extended['prefix'], $this->groupArrayPrefix($first->value, $file, $line));
             $groupController = $this->groupArrayController($first->value, $uses, $namespace);
             if ($groupController !== null) {
                 $extended['controller'] = $groupController;
@@ -460,7 +568,10 @@ final class LaravelSemanticIndex
         }
 
         if ($verb === 'resource' || $verb === 'apiresource') {
+            $before = count($this->routes);
+            $this->lastUnresolvedReason = null;
             $this->recordResource($verbNode, $chain, $middlewares, $prefix, $verb === 'apiresource', $controller, $file, $uses, $namespace);
+            $this->account($before, 'resource-controller');
 
             return;
         }
@@ -468,6 +579,8 @@ final class LaravelSemanticIndex
         if ($verb === 'match') {
             $methods = $this->matchMethods($verbNode);
             if ($methods === []) {
+                $this->account(count($this->routes), 'unsupported-expression');
+
                 return;
             }
             $uriArg = $verbNode->args[1] ?? null;
@@ -488,8 +601,11 @@ final class LaravelSemanticIndex
         if (!$actionArg instanceof Node\Arg) {
             return;
         }
-        $uri = $uriArg instanceof Node\Arg ? $this->resolveUri($uriArg->value, $prefix) : null;
-        foreach ($this->actionTargets($actionArg->value, $controller, $uses, $namespace) as [$targetClass, $targetMethod]) {
+        $before = count($this->routes);
+        $this->lastUnresolvedReason = null;
+        $uri = $uriArg instanceof Node\Arg ? $this->resolveUri($uriArg->value, $prefix, $file, $line) : null;
+        $targets = $this->actionTargets($actionArg->value, $controller, $uses, $namespace, $file, $line);
+        foreach ($targets as [$targetClass, $targetMethod]) {
             $this->routes[] = new RouteNode(
                 $methods,
                 $uri,
@@ -500,6 +616,47 @@ final class LaravelSemanticIndex
                 $line
             );
         }
+        $this->account($before, $this->actionReason($actionArg->value));
+    }
+
+    /**
+     * Coverage accounting for one route declaration: emitted nodes
+     * count as resolved (full when URI and action are both known),
+     * zero-node declarations count as unknown with a reason.
+     */
+    private function account(int $before, string $fallbackReason): void
+    {
+        ++$this->declarations;
+        $emitted = array_slice($this->routes, $before);
+        if ($emitted === []) {
+            ++$this->unknownNodes;
+            $reason = $this->lastUnresolvedReason ?? $fallbackReason;
+            $this->unknownReasons[$reason] = ($this->unknownReasons[$reason] ?? 0) + 1;
+
+            return;
+        }
+        $this->resolvedNodes += count($emitted);
+        foreach ($emitted as $node) {
+            if ($node->uri !== null && $node->controller !== null && $node->action !== null) {
+                ++$this->fullNodes;
+            }
+        }
+        $this->lastUnresolvedReason = null;
+    }
+
+    private function actionReason(Node\Expr $expr): string
+    {
+        if ($expr instanceof Node\Expr\Variable) {
+            return 'dynamic-variable';
+        }
+        if ($expr instanceof Node\Expr\FuncCall) {
+            return 'function-call';
+        }
+        if ($expr instanceof Node\Expr\Closure) {
+            return 'closure-action';
+        }
+
+        return 'unsupported-expression';
     }
 
     /**
@@ -557,6 +714,8 @@ final class LaravelSemanticIndex
             || !$nameArg->value instanceof Node\Scalar\String_
             || !$controllerArg instanceof Node\Arg
         ) {
+            $this->lastUnresolvedReason = 'dynamic-expression';
+
             return;
         }
         $resolved = $controller;
@@ -564,8 +723,24 @@ final class LaravelSemanticIndex
             $resolved = $this->resolveName($controllerArg->value->class->toString(), $uses, $namespace);
         } elseif ($controllerArg->value instanceof Node\Scalar\String_ && str_contains($controllerArg->value->value, '@')) {
             $resolved = $controller;
+        } elseif (
+            !$controllerArg->value instanceof Node\Expr\ClassConstFetch
+            && !$controllerArg->value instanceof Node\Scalar\String_
+        ) {
+            // Variable / dynamic controller (e.g. BREAD `$breadController`
+            // varying per loop iteration): resolve only when proven.
+            $constant = $this->resolveConstant(
+                $controllerArg->value,
+                $file,
+                $controllerArg->getStartLine()
+            );
+            if ($constant !== null && $constant->value !== '') {
+                $resolved = $this->resolveName($constant->value, $uses, $namespace);
+            }
         }
         if ($resolved === null) {
+            $this->lastUnresolvedReason = $this->actionReason($controllerArg->value);
+
             return;
         }
 
@@ -660,8 +835,14 @@ final class LaravelSemanticIndex
      * @param array<string, string> $uses
      * @return list<array{string|null, string|null}>
      */
-    private function actionTargets(?Node\Expr $expr, ?string $controller, array $uses, ?string $namespace): array
-    {
+    private function actionTargets(
+        ?Node\Expr $expr,
+        ?string $controller,
+        array $uses,
+        ?string $namespace,
+        string $file,
+        int $line
+    ): array {
         if ($expr === null) {
             return [];
         }
@@ -708,7 +889,7 @@ final class LaravelSemanticIndex
                     && $item->key instanceof Node\Scalar\String_
                     && $item->key->value === 'uses'
                 ) {
-                    return $this->actionTargets($item->value, $controller, $uses, $namespace);
+                    return $this->actionTargets($item->value, $controller, $uses, $namespace, $file, $line);
                 }
             }
 
@@ -723,7 +904,15 @@ final class LaravelSemanticIndex
             return [[null, null]];
         }
 
-        return [];
+        // Proven-constant fallback for variables, concatenations and
+        // other scalar shapes (`$namespacePrefix . 'X@login'`): resolve
+        // exactly like a literal, otherwise stay unknown.
+        $constant = $this->resolveConstant($expr, $file, $line);
+        if ($constant === null || $constant->value === '') {
+            return [];
+        }
+
+        return $this->actionTargets(new Node\Scalar\String_($constant->value), $controller, $uses, $namespace, $file, $line);
     }
 
     /**
@@ -744,40 +933,21 @@ final class LaravelSemanticIndex
 
     /**
      * Resolve a URI expression against the accumulated prefix. Plain
-     * strings and string-only concatenations resolve; anything dynamic
-     * resolves to null (unknown, never guessed).
+     * strings resolve directly; proven-constant expressions (variables,
+     * concatenations) resolve via the constant resolver; anything
+     * dynamic resolves to null (unknown, never guessed).
      */
-    private function resolveUri(Node\Expr $expr, string $prefix): ?string
+    private function resolveUri(Node\Expr $expr, string $prefix, string $file, int $line): ?string
     {
         if ($expr instanceof Node\Scalar\String_) {
             return $this->joinPrefix($prefix, $expr->value);
         }
-        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
-            $left = $this->resolveUriPart($expr->left);
-            $right = $this->resolveUriPart($expr->right);
-            if ($left === null || $right === null) {
-                return null;
-            }
-
-            return $this->joinPrefix($prefix, $left . $right);
+        $constant = $this->resolveConstant($expr, $file, $line);
+        if ($constant === null) {
+            return null;
         }
 
-        return null;
-    }
-
-    private function resolveUriPart(Node\Expr $expr): ?string
-    {
-        if ($expr instanceof Node\Scalar\String_) {
-            return $expr->value;
-        }
-        if ($expr instanceof Node\Expr\BinaryOp\Concat) {
-            $left = $this->resolveUriPart($expr->left);
-            $right = $this->resolveUriPart($expr->right);
-
-            return $left === null || $right === null ? null : $left . $right;
-        }
-
-        return null;
+        return $this->joinPrefix($prefix, $constant->value);
     }
 
     private function joinPrefix(string $prefix, ?string $uri): ?string
@@ -804,7 +974,7 @@ final class LaravelSemanticIndex
         array $uses,
         ?string $namespace
     ): void {
-        $path = $this->includePath($include, dirname($file));
+        $path = $this->includePath($include, dirname($file), $file);
         if ($path === null || isset($this->visited[$path])) {
             return;
         }
@@ -821,7 +991,7 @@ final class LaravelSemanticIndex
      * @param list<Node> $ast
      * @return list<string> realpaths of required files
      */
-    private function collectRequiredFiles(array $ast, string $dir): array
+    private function collectRequiredFiles(array $ast, string $dir, string $file): array
     {
         $out = [];
         $includes = $this->finder()->find($ast, static function (Node $node): bool {
@@ -831,7 +1001,7 @@ final class LaravelSemanticIndex
             if (!$include instanceof Node\Expr\Include_) {
                 continue;
             }
-            $path = $this->includePath($include, $dir);
+            $path = $this->includePath($include, $dir, $file);
             if ($path !== null) {
                 $out[] = $path;
             }
@@ -840,11 +1010,17 @@ final class LaravelSemanticIndex
         return $out;
     }
 
-    private function includePath(Node\Expr\Include_ $include, string $dir): ?string
+    private function includePath(Node\Expr\Include_ $include, string $dir, string $file): ?string
     {
-        $target = $this->includeTarget($include);
+        $target = $this->includeTarget($include, $file);
         if ($target === null) {
             return null;
+        }
+        // Proven-constant targets may already be absolute (__DIR__-based).
+        if ($this->isAbsolutePath($target) && is_file($target)) {
+            $real = realpath($target);
+
+            return $real === false ? null : $real;
         }
         $candidate = $dir . DIRECTORY_SEPARATOR . $target;
         if (is_file($candidate)) {
@@ -871,34 +1047,29 @@ final class LaravelSemanticIndex
         return null;
     }
 
-    private function includeTarget(Node\Expr\Include_ $include): ?string
+    private function isAbsolutePath(string $path): bool
+    {
+        return str_starts_with($path, '/')
+            || str_starts_with($path, '\\')
+            || (bool) preg_match('/^[A-Za-z]:[\\\\\\/]/', $path);
+    }
+
+    private function includeTarget(Node\Expr\Include_ $include, string $file): ?string
     {
         if ($include->expr instanceof Node\Scalar\String_) {
             return $include->expr->value === '' ? null : $include->expr->value;
         }
 
-        // require __DIR__ . '/admin.php'.
-        if (
-            $include->expr instanceof Node\Expr\BinaryOp\Concat
-            && $include->expr->left instanceof Node\Scalar\MagicConst
-            && $include->expr->right instanceof Node\Scalar\String_
-            && $include->expr->right->value !== ''
-        ) {
-            return $include->expr->right->value;
+        // require __DIR__ . '/admin.php', base_path('...') and
+        // proven-constant variables — all through one resolver.
+        $constant = $this->resolveConstant($include->expr, $file, $include->getStartLine());
+        if ($constant === null || $constant->value === '') {
+            $this->lastUnresolvedReason = 'unresolved-include';
+
+            return null;
         }
 
-        if (
-            $include->expr instanceof Node\Expr\FuncCall
-            && $include->expr->name instanceof Node\Name
-            && in_array(strtolower($include->expr->name->toString()), ['base_path', 'app_path', 'database_path', 'resource_path', 'config_path', 'lang_path', 'public_path', 'storage_path'], true)
-        ) {
-            $arg = $include->expr->args[0] ?? null;
-            if ($arg instanceof Node\Arg && $arg->value instanceof Node\Scalar\String_ && $arg->value->value !== '') {
-                return $arg->value->value;
-            }
-        }
-
-        return null;
+        return $constant->value;
     }
 
     /**
@@ -943,16 +1114,21 @@ final class LaravelSemanticIndex
         return $out;
     }
 
-    private function groupArrayPrefix(Node\Expr\Array_ $config): string
+    private function groupArrayPrefix(Node\Expr\Array_ $config, string $file, int $line): string
     {
         foreach ($config->items as $item) {
             if (
                 $item instanceof Node\Expr\ArrayItem
                 && $item->key instanceof Node\Scalar\String_
                 && $item->key->value === 'prefix'
-                && $item->value instanceof Node\Scalar\String_
             ) {
-                return $item->value->value;
+                if ($item->value instanceof Node\Scalar\String_) {
+                    return $item->value->value;
+                }
+                $constant = $this->resolveConstant($item->value, $file, $line);
+                if ($constant !== null) {
+                    return $constant->value;
+                }
             }
         }
 
@@ -960,14 +1136,21 @@ final class LaravelSemanticIndex
     }
 
     /**
-     * Prefix from a `->prefix('admin')` chain link. Non-literal prefixes
-     * resolve to '' (unknown segments are dropped, never guessed).
+     * Prefix from a `->prefix('admin')` chain link. Proven-constant
+     * expressions resolve; anything else yields '' (unknown segments
+     * are dropped, never guessed).
      */
-    private function prefixString(Node\Expr\MethodCall $link): string
+    private function prefixString(Node\Expr\MethodCall $link, string $file, int $line): string
     {
         $arg = $link->args[0] ?? null;
         if ($arg instanceof Node\Arg && $arg->value instanceof Node\Scalar\String_) {
             return $arg->value->value;
+        }
+        if ($arg instanceof Node\Arg) {
+            $constant = $this->resolveConstant($arg->value, $file, $line);
+            if ($constant !== null) {
+                return $constant->value;
+            }
         }
 
         return '';
