@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (analysis engine foundation)
+- `src/Analysis/AstPool.php`: parse-once-per-run shared AST pool plus
+  `AstPoolAware` opt-in (wired in `CustomAnalyzerChecker`); legacy analyzers
+  keep parsing on their own.
+- Open redirect migrated to data-flow v0.1: scope- and line-ordered variable
+  maps plus `str_starts_with()` sanitizer-gate recognition (reassign, early
+  enforcement, guarded ternary).
+- Per-rule precision/recall/F1 table in the metrics test output.
+
 ### Added (expert-review wave 2)
 - Delta vs baseline: console line, JSON `delta` block and HTML Delta card
   (New / Fixed / Existing) whenever a `baseline.json` is present.

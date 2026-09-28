@@ -6,6 +6,8 @@ namespace Rampart\QualityChecker\Analyzers\Owasp;
 
 use PhpParser\Node;
 use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
+use Rampart\QualityChecker\Analysis\AstPool;
+use Rampart\QualityChecker\Analysis\AstPoolAware;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
@@ -31,7 +33,7 @@ use Rampart\QualityChecker\Result\Severity;
  * such as redirect($page->getUrl()) is Medium — usually an internal URL
  * builder, but not provably safe without cross-method analysis.
  */
-final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
+final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer implements AstPoolAware
 {
     private const RULE = 'OWASP_OPEN_REDIRECT';
 
@@ -48,6 +50,13 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
      * generic URL builders can return anything.
      */
     private const SIGNED_URL_METHODS = ['temporaryurl', 'presignedurl', 'getpresignedurl', 'temporary_url', 'presigned_url', 'getauthorizationurl'];
+
+    private ?AstPool $pool = null;
+
+    public function setAstPool(AstPool $pool): void
+    {
+        $this->pool = $pool;
+    }
 
     public function analyze(array $files): array
     {
@@ -72,7 +81,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
      */
     private function analyzeFile(string $file): array
     {
-        $ast = $this->parse($this->readFile($file));
+        $ast = $this->pool !== null ? $this->pool->ast($file) : $this->parse($this->readFile($file));
         if ($ast === null) {
             return [];
         }
@@ -83,9 +92,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
                 $nodes[] = $node;
             }
         }
-        $known = $this->safeTargetVars($nodes);
-        $pinned = $this->pinnedHostVars($nodes, $known);
-        $literals = $this->literalStringVars($nodes);
+        $guarded = $this->guardSanitizedVars($nodes, []);
 
         $issues = [];
         $calls = $this->finder()->find($nodes, function (Node $node): bool {
@@ -104,12 +111,24 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
             if ($target === null) {
                 continue;
             }
+            // Data-flow v0.1: only assignments in the same scope, above the
+            // sink line, are visible — a literal assigned later, or in
+            // another function, never silences this sink.
+            $maps = $this->visibleVarMaps($nodes, $call);
+            $known = $maps['safe'];
+            $pinned = $maps['pinned'];
+            $literals = $maps['literals'];
             if ($this->isSafeTarget($target, $known)) {
                 continue;
             }
             // Host-pinned lead: route('home').$path or signed storage URLs
             // keep the host even when the tail is dynamic.
             if ($this->hasPinnedHostLead($target, $known, $pinned, $literals)) {
+                continue;
+            }
+            // Sanitizer-guarded: str_starts_with() gate with reassignment
+            // or early enforcement in the same function, above the sink.
+            if ($this->isGuardSanitized($target, $call, $nodes, $guarded)) {
                 continue;
             }
             if (!$this->isFlaggableTarget($target)) {
@@ -332,59 +351,91 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
     }
 
     /**
-     * Variables assigned deploy-time-safe redirect targets in source order
-     * (`$login = config('app.url') . '/login'`), so sinks using the variable
-     * are recognized as safe.
+     * Data-flow v0.1 variable maps for one sink: only STRAIGHT-LINE
+     * assignments (never inside if/try/loops/closures) in the same scope,
+     * above the sink line, are visible, accumulated in source order. A
+     * conditional reassignment (`if (...) { $v = '/'; }`) never silences —
+     * one path may keep the tainted value; use a guard gate for those.
      *
      * @param list<Node> $nodes
-     * @return array<string, true>
+     * @return array{safe: array<string, true>, pinned: array<string, true>, literals: array<string, string>}
      */
-    private function safeTargetVars(array $nodes): array
+    private function visibleVarMaps(array $nodes, Node $call): array
     {
-        $known = [];
-        $assigns = $this->finder()->find($nodes, static function (Node $node): bool {
-            return $node instanceof Node\Expr\Assign;
-        });
-        foreach ($assigns as $assign) {
-            if (
-                $assign instanceof Node\Expr\Assign
-                && $assign->var instanceof Node\Expr\Variable
-                && is_string($assign->var->name)
-                && $this->isSafeTarget($assign->expr, $known)
-            ) {
-                $known[$assign->var->name] = true;
+        $sinkLine = $call->getStartLine();
+        $funcId = $this->enclosingFunctionId($call, $nodes);
+
+        $safe = [];
+        $pinned = [];
+        $literals = [];
+        foreach ($this->visibleAssigns($nodes, $funcId, $sinkLine) as $assign) {
+            if (!$assign->var instanceof Node\Expr\Variable) {
+                continue;
+            }
+            $name = $assign->var->name;
+            if (!is_string($name)) {
+                continue;
+            }
+            if ($assign->expr instanceof Node\Scalar\String_) {
+                $literals[$name] = $assign->expr->value;
+            }
+            if ($this->isSafeTarget($assign->expr, $safe)) {
+                $safe[$name] = true;
+            }
+            if ($this->isHostPinned($assign->expr, $safe, $pinned)) {
+                $pinned[$name] = true;
             }
         }
 
-        return $known;
+        return ['safe' => $safe, 'pinned' => $pinned, 'literals' => $literals];
     }
 
     /**
-     * Variables whose value starts with a host-pinning expression
-     * (`$base = route('index')`), so `$base . $userPath` keeps the host.
+     * Straight-line `$var = ...` assignments visible at a sink: same
+     * function scope (top-level assigns are visible everywhere), above the
+     * sink line, in source order.
      *
      * @param list<Node> $nodes
-     * @param array<string, true> $known
-     * @return array<string, true>
+     * @return list<Node\Expr\Assign>
      */
-    private function pinnedHostVars(array $nodes, array $known): array
+    private function visibleAssigns(array $nodes, int $funcId, int $sinkLine): array
     {
-        $pinned = [];
-        $assigns = $this->finder()->find($nodes, static function (Node $node): bool {
-            return $node instanceof Node\Expr\Assign;
-        });
-        foreach ($assigns as $assign) {
-            if (
-                $assign instanceof Node\Expr\Assign
-                && $assign->var instanceof Node\Expr\Variable
-                && is_string($assign->var->name)
-                && $this->isHostPinned($assign->expr, $known, $pinned)
-            ) {
-                $pinned[$assign->var->name] = true;
+        $funcs = [];
+        foreach (
+            $this->finder()->find($nodes, static function (Node $node): bool {
+                return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
+            }) as $func
+        ) {
+            if ($func instanceof Node\Stmt\ClassMethod || $func instanceof Node\Stmt\Function_) {
+                $funcs[spl_object_id($func)] = $func;
             }
         }
 
-        return $pinned;
+        $out = [];
+        $collect = static function (array $stmts) use (&$out, $sinkLine): void {
+            foreach ($stmts as $stmt) {
+                if (
+                    $stmt instanceof Node\Stmt\Expression
+                    && $stmt->expr instanceof Node\Expr\Assign
+                    && $stmt->expr->var instanceof Node\Expr\Variable
+                    && is_string($stmt->expr->var->name)
+                    && $stmt->getStartLine() < $sinkLine
+                ) {
+                    $out[] = $stmt->expr;
+                }
+            }
+        };
+
+        // Top-level straight-line code always runs first.
+        $collect($nodes);
+        if ($funcId !== 0 && isset($funcs[$funcId])) {
+            $func = $funcs[$funcId];
+            if (is_array($func->stmts)) {
+                $collect($func->stmts);
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -490,30 +541,272 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
     }
 
     /**
-     * Variables assigned a plain string literal (`$url =
-     * 'https://oauth.host/authorize?%s'`), for format-string resolution.
+     * Variables sanitized by a str_starts_with() prefix gate in the same
+     * function, effective for sinks below the gate:
+     *   if (!str_starts_with($v, $safe)) { $v = '/'; }
+     *   if (!str_starts_with($v, $safe)) { throw/abort/return ...; }
+     * Either way every path past the gate leaves $v on-host. Only the
+     * prefix form counts — suffix/contains checks cannot pin a host.
+     * Ternary reassignment (`$v = str_starts_with($v, $s) ? $v : '/';`)
+     * counts as well.
      *
      * @param list<Node> $nodes
-     * @return array<string, string>
+     * @param array<string, true> $known
+     * @return array<int, array<string, int>> func id => var name => guard line
      */
-    private function literalStringVars(array $nodes): array
+    private function guardSanitizedVars(array $nodes, array $known): array
     {
-        $literals = [];
-        $assigns = $this->finder()->find($nodes, static function (Node $node): bool {
-            return $node instanceof Node\Expr\Assign;
-        });
-        foreach ($assigns as $assign) {
-            if (
-                $assign instanceof Node\Expr\Assign
-                && $assign->var instanceof Node\Expr\Variable
-                && is_string($assign->var->name)
-                && $assign->expr instanceof Node\Scalar\String_
+        $guarded = [];
+
+        $scopes = [];
+        foreach (
+            $this->finder()->find($nodes, static function (Node $node): bool {
+                return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
+            }) as $func
+        ) {
+            if ($func instanceof Node\Stmt\ClassMethod || $func instanceof Node\Stmt\Function_) {
+                $scopes[spl_object_id($func)] = $func;
+            }
+        }
+        $scopes[0] = $nodes;
+
+        foreach ($scopes as $funcId => $scope) {
+            $haystack = $scope === $nodes ? $nodes : [$scope];
+            foreach (
+                $this->finder()->find($haystack, static function (Node $node): bool {
+                    return $node instanceof Node\Expr\Assign || $node instanceof Node\Stmt\If_;
+                }) as $node
             ) {
-                $literals[$assign->var->name] = $assign->expr->value;
+                // Guards only apply inside their own scope: a gate in one
+                // function must never silence a sink in another (or top-level).
+                if ($this->enclosingFunctionId($node, $nodes) !== $funcId) {
+                    continue;
+                }
+                if ($node instanceof Node\Expr\Assign) {
+                    $this->collectTernaryGuard($node, $funcId, $known, $guarded);
+                    continue;
+                }
+                if ($node instanceof Node\Stmt\If_) {
+                    $this->collectIfGuard($node, $funcId, $known, $guarded);
+                }
             }
         }
 
-        return $literals;
+        return $guarded;
+    }
+
+    /**
+     * @param array<string, true> $known
+     * @param array<int, array<string, int>> $guarded
+     */
+    private function collectTernaryGuard(Node\Expr\Assign $assign, int $funcId, array $known, array &$guarded): void
+    {
+        if (
+            !$assign->var instanceof Node\Expr\Variable
+            || !is_string($assign->var->name)
+            || !$assign->expr instanceof Node\Expr\Ternary
+            || $assign->expr->if === null
+        ) {
+            return;
+        }
+        $guardedVar = $this->prefixGuardedVar($assign->expr->cond, $known);
+        if ($guardedVar === null || $guardedVar !== $assign->var->name) {
+            return;
+        }
+        if (!$this->isSafeTarget($assign->expr->else, $known)) {
+            return;
+        }
+        $line = $assign->getStartLine();
+        $this->rememberGuard($guarded, $funcId, $guardedVar, $line);
+    }
+
+    /**
+     * @param array<string, true> $known
+     * @param array<int, array<string, int>> $guarded
+     */
+    private function collectIfGuard(Node\Stmt\If_ $if, int $funcId, array $known, array &$guarded): void
+    {
+        $guardedVar = $this->negatedPrefixGuardedVar($if->cond, $known);
+        if ($guardedVar === null) {
+            return;
+        }
+        $line = $if->getStartLine();
+        foreach ($if->stmts as $stmt) {
+            if ($this->stmtReassignsSafe($stmt, $guardedVar, $known) || $this->isEnforcingExit($stmt)) {
+                $this->rememberGuard($guarded, $funcId, $guardedVar, $line);
+
+                return;
+            }
+        }
+        if ($if->else instanceof Node\Stmt\Else_ && $this->branchReassignsSafe($if->else->stmts, $guardedVar, $known)) {
+            $this->rememberGuard($guarded, $funcId, $guardedVar, $line);
+        }
+    }
+
+    /**
+     * @param array<int, array<string, int>> $guarded
+     */
+    private function rememberGuard(array &$guarded, int $funcId, string $var, int $line): void
+    {
+        if (!isset($guarded[$funcId][$var]) || $line < $guarded[$funcId][$var]) {
+            $guarded[$funcId][$var] = $line;
+        }
+    }
+
+    /**
+     * str_starts_with($var, $safe-prefix) with a safe prefix expression in
+     * ternary position. Returns the guarded variable name or null.
+     *
+     * @param array<string, true> $known
+     */
+    private function prefixGuardedVar(Node\Expr $cond, array $known): ?string
+    {
+        if (
+            !$cond instanceof Node\Expr\FuncCall
+            || !$cond->name instanceof Node\Name
+            || strtolower($cond->name->toString()) !== 'str_starts_with'
+        ) {
+            return null;
+        }
+        $varArg = $cond->args[0] ?? null;
+        $prefixArg = $cond->args[1] ?? null;
+        if (
+            !$varArg instanceof Node\Arg
+            || !$varArg->value instanceof Node\Expr\Variable
+            || !is_string($varArg->value->name)
+            || !$prefixArg instanceof Node\Arg
+            || !$this->isSafeTarget($prefixArg->value, $known)
+        ) {
+            return null;
+        }
+
+        return $varArg->value->name;
+    }
+
+    /**
+     * !str_starts_with($var, $safe-prefix): the negated gate whose branch
+     * reassigns or exits.
+     *
+     * @param array<string, true> $known
+     */
+    private function negatedPrefixGuardedVar(Node\Expr $cond, array $known): ?string
+    {
+        if (
+            !$cond instanceof Node\Expr\BooleanNot
+            || !$cond->expr instanceof Node\Expr\FuncCall
+        ) {
+            return null;
+        }
+
+        return $this->prefixGuardedVar($cond->expr, $known);
+    }
+
+    /**
+     * @param array<string, true> $known
+     */
+    private function stmtReassignsSafe(Node\Stmt $stmt, string $var, array $known): bool
+    {
+        if (!$stmt instanceof Node\Stmt\Expression || !$stmt->expr instanceof Node\Expr\Assign) {
+            return false;
+        }
+        $assign = $stmt->expr;
+
+        return $assign->var instanceof Node\Expr\Variable
+            && $assign->var->name === $var
+            && $this->isSafeTarget($assign->expr, $known);
+    }
+
+    /**
+     * @param list<Node\Stmt> $stmts
+     * @param array<string, true> $known
+     */
+    private function branchReassignsSafe(array $stmts, string $var, array $known): bool
+    {
+        foreach ($stmts as $stmt) {
+            if ($this->stmtReassignsSafe($stmt, $var, $known)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isEnforcingExit(Node\Stmt $stmt): bool
+    {
+        // Throw_ lives under Expr in php-parser 5; Return_ ends the flow.
+        // break/continue are deliberately excluded: breaking out of a loop
+        // still reaches later sinks with the tainted value.
+        if (!$stmt instanceof Node\Stmt\Expression) {
+            return $stmt instanceof Node\Stmt\Return_;
+        }
+        $expr = $stmt->expr;
+        if ($expr instanceof Node\Expr\Throw_) {
+            return true;
+        }
+
+        return $expr instanceof Node\Expr\FuncCall
+            && $expr->name instanceof Node\Name
+            && in_array(strtolower($expr->name->toString()), ['abort', 'abort_if', 'abort_unless', 'exit', 'die'], true);
+    }
+
+    /**
+     * Every dynamic leaf of the target is a guarded variable visible at the
+     * sink (guard above the sink line, same function scope).
+     *
+     * @param list<Node> $nodes
+     * @param array<int, array<string, int>> $guarded
+     */
+    private function isGuardSanitized(Node\Expr $target, Node $call, array $nodes, array $guarded): bool
+    {
+        $funcId = $this->enclosingFunctionId($call, $nodes);
+        $vars = [];
+        foreach (
+            $this->finder()->find($target, static function (Node $node): bool {
+                return $node instanceof Node\Expr\Variable;
+            }) as $var
+        ) {
+            if ($var instanceof Node\Expr\Variable && is_string($var->name)) {
+                $vars[$var->name] = true;
+            }
+        }
+        if ($vars === []) {
+            return false;
+        }
+        $sinkLine = $call->getStartLine();
+        foreach ($vars as $name => $_) {
+            $guardLine = $guarded[$funcId][$name] ?? $guarded[0][$name] ?? null;
+            if ($guardLine === null || $sinkLine <= $guardLine) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * spl_object_id of the enclosing function, 0 for top-level code.
+     *
+     * @param list<Node> $nodes
+     */
+    private function enclosingFunctionId(Node $call, array $nodes): int
+    {
+        $target = spl_object_id($call);
+        $funcs = $this->finder()->find(
+            $nodes,
+            static function (Node $node): bool {
+                return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
+            }
+        );
+        foreach ($funcs as $func) {
+            $found = $this->finder()->find($func, static function (Node $node) use ($target): bool {
+                return spl_object_id($node) === $target;
+            });
+            if ($found !== []) {
+                return spl_object_id($func);
+            }
+        }
+
+        return 0;
     }
 
     /**

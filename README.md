@@ -335,7 +335,7 @@ The **tier** controls what the gate fails on:
 Custom analyzers only (phpcs/phpstan/phpunit excluded), `tier=security`,
 `fail-on=none`, cold runs without cache. Quality is pinned by a labeled
 corpus (`tests/Unit/AnalyzerMetricsTest.php`): **precision 1.000 / recall 1.000**
-across 188 true/false-positive cases (70 TP + 118 TN), so the reductions below
+across 192 true/false-positive cases (70 TP + 122 TN), so the reductions below
 cannot regress silently.
 | Pilot | Stack | Files | Before | After | Signal left |
 |---|---|---|---|---|---|

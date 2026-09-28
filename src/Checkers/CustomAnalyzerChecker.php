@@ -36,6 +36,8 @@ use Rampart\QualityChecker\Analyzers\TestCoverage\FeatureTestAnalyzer;
 use Rampart\QualityChecker\Analyzers\TestCoverage\MissingTestAnalyzer;
 use Rampart\QualityChecker\Analyzers\TestCoverage\TestCoverageAnalyzer;
 use Rampart\QualityChecker\Analyzers\TestCoverage\TestWithoutAssertAnalyzer;
+use Rampart\QualityChecker\Analysis\AstPool;
+use Rampart\QualityChecker\Analysis\AstPoolAware;
 use Rampart\QualityChecker\Result\CheckResult;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
@@ -80,12 +82,19 @@ final class CustomAnalyzerChecker implements CheckerInterface
         )));
         $issues = [];
 
+        // One shared AST pool per run; analyzers implementing AstPoolAware
+        // parse once and share, the rest parse on their own as before.
+        $pool = new AstPool();
         foreach ($this->buildAnalyzers($ctx) as $entry) {
             if (!$entry['enabled']) {
                 continue;
             }
 
-            $issues = array_merge($issues, $this->runAnalyzer($entry['analyzer'], $files));
+            $analyzer = $entry['analyzer'];
+            if ($analyzer instanceof AstPoolAware) {
+                $analyzer->setAstPool($pool);
+            }
+            $issues = array_merge($issues, $this->runAnalyzer($analyzer, $files));
         }
 
         if ($this->taintEnabled($ctx)) {

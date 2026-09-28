@@ -783,6 +783,16 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/AuthController.php' => "<?php\nreturn redirect(\$this->getSafePreviousUrl());\n"],
             null,
         ];
+        yield 'openredirect_fp_prefix_guard_reassign' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nclass AuthController extends Controller {\n    public function go(string \$redirect) {\n        if (!str_starts_with(\$redirect, config('app.url'))) {\n            \$redirect = '/';\n        }\n        return redirect()->to(\$redirect);\n    }\n}\n"],
+            null,
+        ];
+        yield 'openredirect_fp_prefix_guard_throw' => [
+            static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
+            ['app/Http/Controllers/AuthController.php' => "<?php\nclass AuthController extends Controller {\n    public function go(string \$redirect) {\n        if (!str_starts_with(\$redirect, '/')) {\n            throw new \\InvalidArgumentException('bad redirect');\n        }\n        return redirect()->to(\$redirect);\n    }\n}\n"],
+            null,
+        ];
         yield 'openredirect_fp_sprintf_fixed_host' => [
             static fn (): AbstractAnalyzer => new OwaspOpenRedirectAnalyzer(),
             ['app/Http/Controllers/OAuthController.php' => "<?php\nreturn redirect()->to(sprintf('https://connect.example.com/oauth/authorize?%s', http_build_query(\$params)));\n"],
@@ -1123,6 +1133,8 @@ final class AnalyzerMetricsTest extends TestCase
         $falseNegatives = 0;
         /** @var list<string> $failures */
         $failures = [];
+        /** @var array<string, array{tp: int, fp: int, fn: int}> $perRule */
+        $perRule = [];
 
         foreach (self::corpus() as $id => [$factory, $files, $expectedRule]) {
             $paths = $this->materialize($files);
@@ -1140,14 +1152,22 @@ final class AnalyzerMetricsTest extends TestCase
                 if ($issues !== []) {
                     $falsePositives++;
                     $failures[] = $id . ' (FP: ' . implode(',', $rules) . ')';
+                    foreach (array_unique($rules) as $rule) {
+                        $perRule[$rule] = $perRule[$rule] ?? ['tp' => 0, 'fp' => 0, 'fn' => 0];
+                        $perRule[$rule]['fp']++;
+                    }
                 } else {
                     $trueNegatives++;
                 }
             } elseif (in_array($expectedRule, $rules, true)) {
                 $truePositives++;
+                $perRule[$expectedRule] = $perRule[$expectedRule] ?? ['tp' => 0, 'fp' => 0, 'fn' => 0];
+                $perRule[$expectedRule]['tp']++;
             } else {
                 $falseNegatives++;
                 $failures[] = $id . ' (FN: missing ' . $expectedRule . ')';
+                $perRule[$expectedRule] = $perRule[$expectedRule] ?? ['tp' => 0, 'fp' => 0, 'fn' => 0];
+                $perRule[$expectedRule]['fn']++;
             }
         }
 
@@ -1171,10 +1191,52 @@ final class AnalyzerMetricsTest extends TestCase
                 $recall
             )
         );
+        fwrite(STDERR, $this->perRuleTable($perRule));
 
         self::assertSame([], $failures, 'Corpus failures: ' . implode('; ', $failures));
         self::assertSame(1.0, $precision);
         self::assertSame(1.0, $recall);
+    }
+
+    /**
+     * Per-rule precision/recall/F1 table: the benchmark behind the headline
+     * numbers. Rules are grouped by expected (TP/FN) and actual (FP) hits.
+     *
+     * @param array<string, array{tp: int, fp: int, fn: int}> $perRule
+     */
+    private function perRuleTable(array $perRule): string
+    {
+        ksort($perRule);
+        $lines = [sprintf(
+            "%-28s %4s %4s %4s %9s %7s %7s\n",
+            'rule',
+            'TP',
+            'FP',
+            'FN',
+            'precision',
+            'recall',
+            'F1'
+        )];
+        foreach ($perRule as $rule => $stats) {
+            $tp = $stats['tp'];
+            $fp = $stats['fp'];
+            $fn = $stats['fn'];
+            $precision = $tp + $fp > 0 ? $tp / ($tp + $fp) : 1.0;
+            $recall = $tp + $fn > 0 ? $tp / ($tp + $fn) : 1.0;
+            $f1 = $precision + $recall > 0 ? 2 * $precision * $recall / ($precision + $recall) : 1.0;
+            $lines[] = sprintf(
+                "%-28s %4d %4d %4d %8.1f%% %6.1f%% %6.1f%%\n",
+                $rule,
+                $tp,
+                $fp,
+                $fn,
+                $precision * 100,
+                $recall * 100,
+                $f1 * 100
+            );
+        }
+
+        return '[per-rule]' . "\n" . implode('', $lines);
     }
 
     /**

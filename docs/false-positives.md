@@ -266,6 +266,12 @@ php artisan quality:check --tier=all --fail-on=none
   `->intended()` / `Redirect::away()` / `Redirect::intended()` /
   `response(...)->header('Location', ...)` is a variable, call, or concatenation
   containing a dynamic part.
+- **Data-flow v0.1**: only straight-line assignments in the same function,
+  above the sink, count — a literal assigned later or in another function
+  never silences. `str_starts_with()` prefix gates with reassignment
+  (`if (!str_starts_with($v, $safe)) { $v = '/'; }`), early enforcement
+  (`throw`/`abort`/`return`), and guarded ternaries count; suffix/contains
+  checks do not.
 - **Automatically skipped**: `redirect()->route()` / `Redirect::route()`, `back()`,
   string literals, `url()->previous()`, `config()`/`env()` (including concatenation where
   every leaf is safe, e.g. `redirect(config('app.url') . '/done')` — including via

@@ -453,4 +453,64 @@ final class OwaspOpenRedirectAnalyzerTest extends TestCase
 
         self::assertCount(0, $issues);
     }
+
+    public function testSkipsPrefixGuardedReassign(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass AuthController extends Controller {\n    public function go(string \$redirect) {\n        if (!str_starts_with(\$redirect, config('app.url'))) {\n            \$redirect = '/';\n        }\n        return redirect()->to(\$redirect);\n    }\n}\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testSkipsPrefixGuardedThrow(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass AuthController extends Controller {\n    public function go(string \$redirect) {\n        if (!str_starts_with(\$redirect, '/')) {\n            throw new \\InvalidArgumentException('bad redirect');\n        }\n        return redirect()->to(\$redirect);\n    }\n}\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testStillFlagsSuffixGuard(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass AuthController extends Controller {\n    public function go(string \$redirect) {\n        if (!str_ends_with(\$redirect, '/home')) {\n            \$redirect = '/';\n        }\n        return redirect()->to(\$redirect);\n    }\n}\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_OPEN_REDIRECT', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testStillFlagsSinkBeforeAssign(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass AuthController extends Controller {\n    public function go(string \$next) {\n        \$r = redirect()->to(\$next);\n        \$next = '/home';\n        return \$r;\n    }\n}\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_OPEN_REDIRECT', $this->rules($issues)[0] ?? null);
+    }
+
+    public function testStillFlagsAssignInOtherFunction(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass AuthController extends Controller {\n    public function clean(string \$next): void {\n        \$next = '/home';\n    }\n    public function go(string \$next) {\n        return redirect()->to(\$next);\n    }\n}\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertSame('OWASP_OPEN_REDIRECT', $this->rules($issues)[0] ?? null);
+    }
 }
