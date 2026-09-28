@@ -176,6 +176,20 @@ php artisan quality:check --tier=all --fail-on=none
   v0.3.3; Voyager stays 0 resolved with every unknown explained (37
   config-based, 6 loop-varying BREAD controllers) — `config()` support is
   deferred, and false resolution is worse than unresolved.
+- **FormRequest + validation semantics (v0.3.5)**: controller parameters resolve
+  to request classes through `FormRequestIndex`, exposing composable
+  `ValidationEvidence` (source/fields/confidence) and `AuthorizationEvidence`
+  (mechanism/ability/confidence). `rules()` presence counts even when dynamic —
+  but then fields are unknown (medium confidence, never false-safe); a resolved
+  FormRequest *without* `rules()` is no validation evidence. `authorize()`
+  returning literal `true` (or absent) is explicitly not authorization;
+  `can`/`Gate`/deny/403 patterns are strong evidence, other non-trivial bodies
+  stay protective (medium). Inline `$request->validate([...])`,
+  `Validator::make(...)` and `validated()`/`safe()` are recognized separately
+  (validated-*use* is the bridge later mass-assignment work needs). Unresolvable
+  `*Request` hints keep the legacy name-heuristic suppression (low confidence).
+  BAC consumes the same evidence with unchanged outcomes; Voyager config()
+  unknowns are kept as the future config-semantics benchmark.
 
 ### `OWASP_SSRF` / `OWASP_COMMAND_INJECTION` / `OWASP_SSTI`
 - The engine only reports when the URL/template/command is **not a literal** and shows

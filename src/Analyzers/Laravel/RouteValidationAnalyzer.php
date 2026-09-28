@@ -9,20 +9,25 @@ use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Semantic\FormRequestIndex;
+use Rampart\QualityChecker\Semantic\InlineValidation;
+use Rampart\QualityChecker\Semantic\ValidationEvidence;
 
 /**
  * Request validation on mutating controller actions.
  *
  * Flags controller methods that mutate state (store/update/delete/destroy and
- * the like) yet perform no validation:
- *  - no `$request->validate(...)` / `Validator::make(...)` / `->validate()`
- *    call in the body
- *  - no FormRequest (a class ending in `Request`) injected as a parameter
- *  - no `->validate()` on a model / validated() usage
+ * the like) yet carry no validation evidence:
+ *  - a FormRequest parameter whose class resolves to `rules()` (fields may
+ *    be known or unknown — presence of the layer counts; a resolved
+ *    FormRequest *without* `rules()` is not evidence)
+ *  - `$request->validate(...)` / `Validator::make(...)` in the body
+ *  - `validated()` / `safe()` use (validated-data source)
  *
- * Assumes: only concrete controller classes (name ends in "Controller", not
- * abstract) are inspected. Confidence is medium because validation may be
- * delegated to a service or route middleware.
+ * An unresolvable `*Request` type-hint keeps the legacy name-heuristic
+ * suppression (low confidence). Assumes: only concrete controller classes
+ * (name ends in "Controller", not abstract) are inspected. Confidence is
+ * medium because validation may be delegated to a service or middleware.
  */
 final class RouteValidationAnalyzer extends AbstractAnalyzer
 {
@@ -32,18 +37,16 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
         'store', 'update', 'delete', 'destroy', 'restore', 'forceDelete',
     ];
 
-    private const VALIDATION_CALLS = [
-        'validate', 'validated', 'make', 'validateWithBag',
-    ];
-
     public function analyze(array $files): array
     {
+        $index = (new FormRequestIndex())->build($files);
+
         $issues = [];
         foreach ($files as $file) {
             if (!$this->supports($file)) {
                 continue;
             }
-            foreach ($this->analyzeFile($file) as $issue) {
+            foreach ($this->analyzeFile($file, $index) as $issue) {
                 $issues[] = $issue;
             }
         }
@@ -51,7 +54,7 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
         return $issues;
     }
 
-    private function analyzeFile(string $file): array
+    private function analyzeFile(string $file, FormRequestIndex $index): array
     {
         $ast = $this->parse($this->readFile($file));
         if ($ast === null) {
@@ -61,12 +64,13 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
         $issues = [];
         $classes = $this->finder()->findInstanceOf($ast, Node\Stmt\Class_::class);
         $useMap = $this->useMap($ast);
+        $namespace = $this->namespaceOf($ast);
 
         foreach ($classes as $class) {
             if (!$class instanceof Node\Stmt\Class_ || !$this->isControllerClass($class)) {
                 continue;
             }
-            foreach ($this->analyzeController($class, $file, $useMap) as $issue) {
+            foreach ($this->analyzeController($class, $file, $useMap, $namespace, $index) as $issue) {
                 $issues[] = $issue;
             }
         }
@@ -87,8 +91,13 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
      * @param array<string, string> $useMap
      * @return Issue[]
      */
-    private function analyzeController(Node\Stmt\Class_ $class, string $file, array $useMap): array
-    {
+    private function analyzeController(
+        Node\Stmt\Class_ $class,
+        string $file,
+        array $useMap,
+        ?string $namespace,
+        FormRequestIndex $index
+    ): array {
         $issues = [];
 
         foreach ($class->stmts as $stmt) {
@@ -101,7 +110,7 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
                 continue;
             }
 
-            if ($this->hasFormRequest($stmt, $useMap) || $this->bodyHasValidation($stmt)) {
+            if ($this->validationEvidence($stmt, $useMap, $namespace, $index) !== null) {
                 continue;
             }
 
@@ -111,7 +120,7 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
                 $file,
                 $stmt->getStartLine(),
                 Severity::Warning,
-                ['method' => $name],
+                ['method' => $name, 'validation_evidence' => null],
                 Confidence::Medium
             );
         }
@@ -122,38 +131,84 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
     /**
      * @param array<string, string> $useMap alias => FQCN
      */
-    private function hasFormRequest(Node\Stmt\ClassMethod $method, array $useMap): bool
-    {
+    private function validationEvidence(
+        Node\Stmt\ClassMethod $method,
+        array $useMap,
+        ?string $namespace,
+        FormRequestIndex $index
+    ): ?ValidationEvidence {
         foreach ($method->params as $param) {
             if (!$param->type instanceof Node\Name) {
                 continue;
             }
-
-            $type = $param->type->toString();
-            // Resolve short names through use-imports: `store(StoreRequest
-            // $request)` with `use App\Http\Requests\StoreRequest;` is a
-            // FormRequest even though the hint has no backslash.
-            if (!str_contains($type, '\\') && isset($useMap[$type])) {
-                $type = $useMap[$type];
+            $fqn = $this->resolveParam($param->type->toString(), $useMap, $namespace);
+            $evidence = $index->validationEvidence($fqn);
+            if ($evidence instanceof ValidationEvidence) {
+                return $evidence;
             }
-
-            // Real FormRequest: either the Laravel base class or a custom
-            // *Request inside a `Requests\` namespace. Plain `Illuminate\Http\Request`
-            // is NOT a FormRequest.
-            if (str_ends_with($type, 'FormRequest')) {
-                return true;
-            }
-
-            if (
-                str_contains($type, '\\')
-                && str_ends_with($type, 'Request')
-                && stripos($type, 'Requests\\') !== false
-            ) {
-                return true;
+            // Legacy name-heuristic fallback for request classes absent
+            // from the scan (low confidence, preserves behavior).
+            if ($index->find($fqn) === null && $this->looksLikeFormRequest($param->type->toString(), $useMap)) {
+                return new ValidationEvidence(
+                    ValidationEvidence::SOURCE_FORM_REQUEST,
+                    $fqn,
+                    true,
+                    null,
+                    'low'
+                );
             }
         }
 
-        return false;
+        $inline = InlineValidation::recognize($method);
+
+        return $inline[0] ?? null;
+    }
+
+    /**
+     * @param array<string, string> $useMap alias => FQCN
+     */
+    private function resolveParam(string $type, array $useMap, ?string $namespace): string
+    {
+        if (str_starts_with($type, '\\')) {
+            return ltrim($type, '\\');
+        }
+        if (!str_contains($type, '\\') && isset($useMap[$type])) {
+            return $useMap[$type];
+        }
+        $pos = strpos($type, '\\');
+        if ($pos !== false) {
+            $first = substr($type, 0, $pos);
+            if (isset($useMap[$first])) {
+                return $useMap[$first] . substr($type, $pos);
+            }
+        }
+
+        return $namespace !== null ? $namespace . '\\' . $type : $type;
+    }
+
+    /**
+     * Legacy name heuristic for request classes absent from the scan:
+     * the Laravel base class or a custom *Request inside a `Requests\`
+     * namespace. Plain `Illuminate\Http\Request` is NOT a FormRequest.
+     *
+     * @param array<string, string> $useMap alias => FQCN
+     */
+    private function looksLikeFormRequest(string $type, array $useMap): bool
+    {
+        // Resolve short names through use-imports: `store(StoreRequest
+        // $request)` with `use App\Http\Requests\StoreRequest;` is a
+        // FormRequest even though the hint has no backslash.
+        if (!str_contains($type, '\\') && isset($useMap[$type])) {
+            $type = $useMap[$type];
+        }
+
+        if (str_ends_with($type, 'FormRequest')) {
+            return true;
+        }
+
+        return str_contains($type, '\\')
+            && str_ends_with($type, 'Request')
+            && stripos($type, 'Requests\\') !== false;
     }
 
     /**
@@ -177,28 +232,20 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
         return $map;
     }
 
-    private function bodyHasValidation(Node\Stmt\ClassMethod $method): bool
+    /**
+     * @param list<Node> $ast
+     */
+    private function namespaceOf(array $ast): ?string
     {
-        if ($method->stmts === null) {
-            return false;
+        $found = $this->finder()->find($ast, static function (Node $node): bool {
+            return $node instanceof Node\Stmt\Namespace_;
+        });
+        foreach ($found as $node) {
+            if ($node instanceof Node\Stmt\Namespace_ && $node->name instanceof Node\Name) {
+                return $node->name->toString();
+            }
         }
 
-        $found = $this->finder()->find($method->stmts, function (Node $node): bool {
-            if ($node instanceof Node\Expr\MethodCall && $node->name instanceof Node\Identifier) {
-                return in_array($node->name->toString(), self::VALIDATION_CALLS, true);
-            }
-
-            if (
-                $node instanceof Node\Expr\StaticCall
-                && $node->class instanceof Node\Name
-                && str_ends_with($node->class->toString(), 'Validator')
-            ) {
-                return true;
-            }
-
-            return false;
-        });
-
-        return $found !== [];
+        return null;
     }
 }

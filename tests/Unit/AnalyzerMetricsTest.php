@@ -167,6 +167,22 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Api/V1/Controllers/AccountController.php' => "<?php\nnamespace App\\Api\\V1\\Controllers;\nuse App\\Api\\V1\\Requests\\StoreRequest;\nclass AccountController extends Controller {\n    public function store(StoreRequest \$request) {\n        return \$this->repository->store(\$request->getAllAccountData());\n    }\n}\n"],
             null,
         ];
+        yield 'validation_fp_resolved_formrequest_rules' => [
+            static fn (): AbstractAnalyzer => new RouteValidationAnalyzer(),
+            [
+                'app/Http/Controllers/UserController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Http\\Requests\\StoreUserRequest;\nclass UserController extends Controller {\n    public function store(StoreUserRequest \$request) {\n        return User::create(\$request->validated());\n    }\n}\n",
+                'app/Http/Requests/StoreUserRequest.php' => "<?php\nnamespace App\\Http\\Requests;\nuse Illuminate\\Foundation\\Http\\FormRequest;\nclass StoreUserRequest extends FormRequest {\n    public function authorize() {\n        return true;\n    }\n    public function rules() {\n        return ['name' => 'required'];\n    }\n}\n",
+            ],
+            null,
+        ];
+        yield 'validation_tp_resolved_formrequest_no_rules' => [
+            static fn (): AbstractAnalyzer => new RouteValidationAnalyzer(),
+            [
+                'app/Http/Controllers/AccountController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Http\\Requests\\OpenRequest;\nclass AccountController extends Controller {\n    public function store(OpenRequest \$request) {\n        return Account::create(\$request->all());\n    }\n}\n",
+                'app/Http/Requests/OpenRequest.php' => "<?php\nnamespace App\\Http\\Requests;\nuse Illuminate\\Foundation\\Http\\FormRequest;\nclass OpenRequest extends FormRequest {\n    public function authorize() {\n        return true;\n    }\n}\n",
+            ],
+            'ROUTE_MISSING_VALIDATION',
+        ];
 
         // --- Command injection ---
         yield 'cmd_tp_system_request' => [

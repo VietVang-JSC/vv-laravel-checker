@@ -251,4 +251,117 @@ final class LaravelAnalyzerTest extends TestCase
         self::assertNotEmpty($issues);
         self::assertSame('ROUTE_MISSING_VALIDATION', $issues[0]->rule);
     }
+
+    public function testRouteValidationSkipsResolvedFormRequestWithRules(): void
+    {
+        // C: StoreUserRequest + rules() → validation evidence.
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Http\\Requests\\StoreUserRequest;\n" .
+            "class UserController extends Controller {\n    public function store(StoreUserRequest \$request) {\n        return User::create(\$request->validated());\n    }\n}\n",
+            'app/Http/Controllers/UserController.php'
+        );
+        $request = $this->temp(
+            "<?php\nnamespace App\\Http\\Requests;\nuse Illuminate\\Foundation\\Http\\FormRequest;\n" .
+            "class StoreUserRequest extends FormRequest {\n" .
+            "    public function authorize() {\n        return true;\n    }\n" .
+            "    public function rules() {\n        return ['name' => 'required'];\n    }\n" .
+            "}\n",
+            'app/Http/Requests/StoreUserRequest.php'
+        );
+
+        $issues = (new RouteValidationAnalyzer())->analyze([$controller, $request]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testRouteValidationFlagsResolvedFormRequestWithoutRules(): void
+    {
+        // A resolved FormRequest with no rules() method validates nothing.
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Http\\Requests\\OpenRequest;\n" .
+            "class AccountController extends Controller {\n    public function store(OpenRequest \$request) {\n        return Account::create(\$request->all());\n    }\n}\n",
+            'app/Http/Controllers/AccountController.php'
+        );
+        $request = $this->temp(
+            "<?php\nnamespace App\\Http\\Requests;\nuse Illuminate\\Foundation\\Http\\FormRequest;\n" .
+            "class OpenRequest extends FormRequest {\n" .
+            "    public function authorize() {\n        return true;\n    }\n" .
+            "}\n",
+            'app/Http/Requests/OpenRequest.php'
+        );
+
+        $issues = (new RouteValidationAnalyzer())->analyze([$controller, $request]);
+
+        self::assertNotEmpty($issues);
+        self::assertSame('ROUTE_MISSING_VALIDATION', $issues[0]->rule);
+    }
+
+    public function testRouteValidationSkipsDynamicRulesWithoutFields(): void
+    {
+        // F: dynamic rules() → layer present (no flag), fields unknown.
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Http\\Requests\\DynamicRequest;\n" .
+            "class AccountController extends Controller {\n    public function store(DynamicRequest \$request) {\n        return Account::create(\$request->validated());\n    }\n}\n",
+            'app/Http/Controllers/AccountController.php'
+        );
+        $request = $this->temp(
+            "<?php\nnamespace App\\Http\\Requests;\nuse Illuminate\\Foundation\\Http\\FormRequest;\n" .
+            "class DynamicRequest extends FormRequest {\n" .
+            "    public function authorize() {\n        return true;\n    }\n" .
+            "    public function rules() {\n        return config('app.rules');\n" .
+            "    }\n" .
+            "}\n",
+            'app/Http/Requests/DynamicRequest.php'
+        );
+
+        $issues = (new RouteValidationAnalyzer())->analyze([$controller, $request]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testRouteValidationSkipsValidatorMake(): void
+    {
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Http\\Request;\n" .
+            "class OrderController extends Controller {\n    public function store(Request \$request) {\n" .
+            "        \$v = \\Illuminate\\Support\\Facades\\Validator::make(\$request->all(), ['x' => 'required']);\n" .
+            "        return Order::create(\$v->validated());\n" .
+            "    }\n}\n",
+            'app/Http/Controllers/OrderController.php'
+        );
+
+        $issues = (new RouteValidationAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testRouteValidationSkipsValidatedUse(): void
+    {
+        // validated() alone marks validated-data use.
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Http\\Request;\n" .
+            "class OrderController extends Controller {\n    public function store(Request \$request) {\n        return Order::create(\$request->validated());\n    }\n}\n",
+            'app/Http/Controllers/OrderController.php'
+        );
+
+        $issues = (new RouteValidationAnalyzer())->analyze([$file]);
+
+        self::assertCount(0, $issues);
+    }
+
+    public function testRouteValidationStillFlagsAllWithoutValidate(): void
+    {
+        // $request->validate() proves the layer; $request->all() alone
+        // with no validate/validated/FormRequest still flags.
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Http\\Request;\n" .
+            "class OrderController extends Controller {\n    public function store(Request \$request) {\n        \$data = \$request->all();\n        return Order::create(\$data);\n    }\n}\n",
+            'app/Http/Controllers/OrderController.php'
+        );
+
+        $issues = (new RouteValidationAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        self::assertSame('ROUTE_MISSING_VALIDATION', $issues[0]->rule);
+    }
 }

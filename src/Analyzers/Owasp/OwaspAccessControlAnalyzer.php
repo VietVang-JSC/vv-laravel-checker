@@ -10,6 +10,7 @@ use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Semantic\AccessDecision;
+use Rampart\QualityChecker\Semantic\FormRequestIndex;
 use Rampart\QualityChecker\Semantic\LaravelSemanticIndex;
 use Rampart\QualityChecker\Semantic\MiddlewareEvidence;
 use Rampart\QualityChecker\Semantic\MiddlewareInspector;
@@ -84,14 +85,14 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
     {
         $index = $this->routeMiddleware ? (new LaravelSemanticIndex())->build($files) : null;
         $registry = $this->routeMiddleware ? (new MiddlewareRegistry())->build($files) : null;
-        $formRequestAuth = $this->buildFormRequestAuthMap($files);
+        $formRequests = (new FormRequestIndex())->build($files);
 
         $issues = [];
         foreach ($files as $file) {
             if (!$this->supports($file)) {
                 continue;
             }
-            foreach ($this->analyzeFile($file, $index, $registry, $formRequestAuth) as $issue) {
+            foreach ($this->analyzeFile($file, $index, $registry, $formRequests) as $issue) {
                 $issues[] = $issue;
             }
         }
@@ -105,78 +106,24 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
      * protected when CustomRequest::authorize() does real checks. A lone
      * `return true;` (or no authorize() at all) means no protection.
      *
-     * @param list<string> $files
-     * @return array<string, true> lowercased FQCN => authorized
-     */
-    private function buildFormRequestAuthMap(array $files): array
-    {
-        $map = [];
-        foreach ($files as $file) {
-            if (!$this->supports($file)) {
-                continue;
-            }
-            $base = strtolower((string) pathinfo($file, PATHINFO_BASENAME));
-            if (!str_ends_with($base, 'request.php')) {
-                continue;
-            }
-            $ast = $this->parse($this->readFile($file));
-            if ($ast === null) {
-                continue;
-            }
-            $nodes = $this->nodeList($ast);
-            $namespace = $this->namespaceOf($nodes);
-            $classes = $this->finder()->findInstanceOf($nodes, Node\Stmt\Class_::class);
-            foreach ($classes as $class) {
-                if (!$class instanceof Node\Stmt\Class_ || $class->name === null) {
-                    continue;
-                }
-                $fqn = strtolower($namespace !== null ? $namespace . '\\' . $class->name->toString() : $class->name->toString());
-                foreach ($class->stmts as $stmt) {
-                    if (
-                        $stmt instanceof Node\Stmt\ClassMethod
-                        && strtolower($stmt->name->toString()) === 'authorize'
-                        && !$this->isTrivialTrueReturn($stmt)
-                    ) {
-                        $map[$fqn] = true;
-                    }
-                }
-            }
-        }
-
-        return $map;
-    }
-
-    private function isTrivialTrueReturn(Node\Stmt\ClassMethod $method): bool
-    {
-        if ($method->stmts === null || count($method->stmts) !== 1) {
-            return false;
-        }
-        $only = $method->stmts[0];
-
-        return $only instanceof Node\Stmt\Return_
-            && $only->expr instanceof Node\Expr\ConstFetch
-            && strtolower($only->expr->name->toString()) === 'true';
-    }
-
-    /**
+     * Evidence comes from FormRequestIndex: ability checks (can/Gate)
+     * are strong, other non-trivial bodies stay protective for backward
+     * compatibility, literal `true` never is.
+     *
      * @param array<string, string> $uses
-     * @param array<string, true> $formRequestAuth
      */
     private function hasAuthorizingFormRequest(
         Node\Stmt\ClassMethod $method,
         array $uses,
         ?string $namespace,
-        array $formRequestAuth
+        FormRequestIndex $formRequests
     ): bool {
-        if ($formRequestAuth === []) {
-            return false;
-        }
         foreach ($method->params as $param) {
             if (!$param->type instanceof Node\Name) {
                 continue;
             }
-            $resolved = strtolower($this->resolveName($param->type->toString(), $uses, $namespace));
-            if (isset($formRequestAuth[$resolved])) {
+            $resolved = strtolower($this->resolveParam($param->type->toString(), $uses, $namespace));
+            if ($formRequests->authorizationEvidence($resolved) !== null) {
                 return true;
             }
         }
@@ -185,13 +132,32 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
     }
 
     /**
-     * @param array<string, true> $formRequestAuth
+     * @param array<string, string> $uses
      */
+    private function resolveParam(string $type, array $uses, ?string $namespace): string
+    {
+        if (str_starts_with($type, '\\')) {
+            return ltrim($type, '\\');
+        }
+        if (!str_contains($type, '\\') && isset($uses[strtolower($type)])) {
+            return $uses[strtolower($type)];
+        }
+        $pos = strpos($type, '\\');
+        if ($pos !== false) {
+            $first = strtolower(substr($type, 0, $pos));
+            if (isset($uses[$first])) {
+                return $uses[$first] . substr($type, $pos);
+            }
+        }
+
+        return $namespace !== null ? $namespace . '\\' . $type : $type;
+    }
+
     private function analyzeFile(
         string $file,
         ?LaravelSemanticIndex $index,
         ?MiddlewareRegistry $registry,
-        array $formRequestAuth = []
+        FormRequestIndex $formRequests
     ): array {
         $ast = $this->parse($this->readFile($file));
         if ($ast === null) {
@@ -207,7 +173,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
             if (!$class instanceof Node\Stmt\Class_ || !$this->isControllerClass($class)) {
                 continue;
             }
-            foreach ($this->analyzeController($class, $file, $index, $registry, $namespace, $uses, $formRequestAuth) as $issue) {
+            foreach ($this->analyzeController($class, $file, $index, $registry, $namespace, $uses, $formRequests) as $issue) {
                 $issues[] = $issue;
             }
         }
@@ -231,7 +197,6 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
 
     /**
      * @param array<string, string> $uses
-     * @param array<string, true> $formRequestAuth
      * @return Issue[]
      */
     private function analyzeController(
@@ -241,7 +206,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
         ?MiddlewareRegistry $registry,
         ?string $namespace,
         array $uses = [],
-        array $formRequestAuth = []
+        ?FormRequestIndex $formRequests = null
     ): array {
         $issues = [];
         $hasAuthContext = $this->classHasAuthContext($class);
@@ -262,10 +227,12 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
                 continue;
             }
             // Strong local evidence suppresses regardless of routes.
+            $requestAuth = $formRequests !== null
+                && $this->hasAuthorizingFormRequest($stmt, $uses, $namespace, $formRequests);
             if (
                 $hasAuthContext
                 || $this->methodHasAuth($stmt)
-                || $this->hasAuthorizingFormRequest($stmt, $uses, $namespace, $formRequestAuth)
+                || $requestAuth
             ) {
                 continue;
             }
@@ -688,35 +655,6 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
     }
 
     /**
-     * Resolve a class reference against the file's imports (alias => FQCN).
-     *
-     * @param array<string, string> $uses
-     */
-    private function resolveName(string $name, array $uses, ?string $namespace): string
-    {
-        if (str_starts_with($name, '\\')) {
-            return ltrim($name, '\\');
-        }
-
-        $pos = strpos($name, '\\');
-        if ($pos !== false) {
-            $first = strtolower(substr($name, 0, $pos));
-            $rest = substr($name, $pos);
-            if (isset($uses[$first])) {
-                return $uses[$first] . $rest;
-            }
-
-            return $namespace !== null ? $namespace . '\\' . $name : $name;
-        }
-
-        $lower = strtolower($name);
-        if (isset($uses[$lower])) {
-            return $uses[$lower];
-        }
-
-        return $namespace !== null ? $namespace . '\\' . $name : $name;
-    }
-
     /**
      * @param list<Node> $nodes
      * @return array<string, string> lowercase alias => FQCN
