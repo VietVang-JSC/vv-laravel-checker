@@ -217,4 +217,18 @@ final class AuthHardeningTest extends TestCase
         self::assertNotEmpty($issues);
         self::assertTrue($this->ruleMatches($issues[0], 'WEAK_PASSWORD_POLICY', Severity::Warning));
     }
+
+    public function testWeakPasswordPolicySkipsCustomMessageKeys(): void
+    {
+        $file = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Http\\Request;\n" .
+            "class RegisterController {\n    public function store(Request \$request): void {\n" .
+            "        \$request->validate(['password' => 'required|min:8'], ['password.min' => 'Too short']);\n    }\n}\n",
+            'app/Http/Controllers/RegisterController.php'
+        );
+
+        $issues = $this->onlyRule((new AuthHardeningAnalyzer())->analyze([$file]), 'WEAK_PASSWORD_POLICY');
+
+        self::assertCount(0, $issues);
+    }
 }

@@ -236,8 +236,11 @@ php artisan quality:check --tier=all --fail-on=none
 
 ### `WEAK_PASSWORD_POLICY`
 - **Reported when**: `Password::min(N)` with N < 8, a `password` validation rule
-  with `min:N` below 8, or a `password` rule with no length floor at all.
-  Non-password fields and `min:8+` stay silent.
+  with `min:N` below 8, or a `password` rule with no length floor at all
+  (including `$rules` variables returned from `rules()`).
+- **Not inspected**: the custom-messages argument (`'password.min' => '...'`
+  names a message, not a field), non-password fields, `min:8+`, and rule
+  objects such as `Password::min(8)`.
 
 ### `ROUTE_MISSING_VALIDATION`
 - **Reported when**: a mutating controller action (`store`/`update`/`delete`/...)

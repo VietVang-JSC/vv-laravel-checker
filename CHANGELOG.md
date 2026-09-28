@@ -129,6 +129,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New rules `SESSION_FIXATION` (login without session rotation in the same
   function) and `WEAK_PASSWORD_POLICY` (`Password::min(N<8)`, short or missing
   `min:` on password fields).
+- Password policy: custom-message keys (`'password.min' => '...'`) and
+  non-`rules()` positions are not fields; `$rules`-variable indirection is
+  followed.
 - Configurable heuristics (previously hardcoded): `cache.enabled`/`cache.ttl`
   for the result cache; `analyzers.models_dirs` for Eloquent model lookup
   (DDD layouts); `analyzers.extra_middleware` for custom protective middleware;

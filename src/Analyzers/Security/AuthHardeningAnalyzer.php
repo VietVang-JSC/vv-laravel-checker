@@ -285,8 +285,9 @@ final class AuthHardeningAnalyzer
 
     /**
      * Only arrays that look like validation rules count: arrays returned
-     * from a rules() method, or arrays passed to validate() /
-     * Validator::make() / validateWithBag().
+     * from a rules() method, or the RULES argument of validate() /
+     * Validator::make() / validateWithBag() — not the custom-messages
+     * argument (whose 'password.min' keys name messages, not fields).
      */
     private function isValidationRulesArray(Node\Expr\Array_ $array): bool
     {
@@ -303,16 +304,7 @@ final class AuthHardeningAnalyzer
                 return strtolower($parent->name->toString()) === 'rules';
             }
             if ($parent instanceof Node\Arg) {
-                $call = $parent->getAttribute('parent');
-                if (
-                    $call instanceof Node\Expr\FuncCall
-                    || $call instanceof Node\Expr\MethodCall
-                    || $call instanceof Node\Expr\StaticCall
-                ) {
-                    return $this->isValidationCall($call);
-                }
-
-                return false;
+                return $this->isRulesArgument($parent);
             }
             if (
                 $parent instanceof Node\Expr\Array_
@@ -329,37 +321,50 @@ final class AuthHardeningAnalyzer
         }
     }
 
-    private function isValidationCall(Node\Expr $call): bool
+    /**
+     * The argument holding validation RULES (not custom messages):
+     * validate($rules, ...), validateWithBag($bag, $rules, ...),
+     * Validator::make($data, $rules, ...), or a named rules: argument.
+     */
+    private function isRulesArgument(Node\Arg $arg): bool
     {
-        if ($call instanceof Node\Expr\FuncCall) {
-            if (!$call->name instanceof Node\Name) {
-                return false;
-            }
-            $name = strtolower($call->name->toString());
-            $parts = explode('\\', $name);
-
-            return in_array(end($parts), ['validate', 'validatewithbag'], true);
-        }
-        if ($call instanceof Node\Expr\MethodCall) {
-            if (!$call->name instanceof Node\Identifier) {
-                return false;
-            }
-
-            return in_array(strtolower($call->name->toString()), ['validate', 'validatewithbag'], true);
-        }
-        if ($call instanceof Node\Expr\StaticCall) {
-            if (!$call->name instanceof Node\Identifier) {
-                return false;
-            }
-            $name = strtolower($call->name->toString());
-            if (in_array($name, ['validate', 'validatewithbag'], true)) {
-                return true;
-            }
-            if ($name === 'make' && $call->class instanceof Node\Name) {
-                return str_contains(strtolower($call->class->toString()), 'validator');
-            }
-
+        $call = $arg->getAttribute('parent');
+        if (
+            !$call instanceof Node\Expr\FuncCall
+            && !$call instanceof Node\Expr\MethodCall
+            && !$call instanceof Node\Expr\StaticCall
+        ) {
             return false;
+        }
+        if ($arg->name instanceof Node\Identifier) {
+            return strtolower($arg->name->toString()) === 'rules';
+        }
+        $index = null;
+        foreach ($call->args as $i => $candidate) {
+            if ($candidate === $arg) {
+                $index = $i;
+                break;
+            }
+        }
+        if ($index === null) {
+            return false;
+        }
+        $name = $this->callName($call);
+        if ($name === null) {
+            return false;
+        }
+        $lower = strtolower($name);
+        if ($lower === 'validate') {
+            return $index === 0;
+        }
+        if ($lower === 'validatewithbag') {
+            return $index === 1;
+        }
+        if ($lower === 'make') {
+            return $index === 1
+                && $call instanceof Node\Expr\StaticCall
+                && $call->class instanceof Node\Name
+                && str_contains(strtolower($call->class->toString()), 'validator');
         }
 
         return false;
