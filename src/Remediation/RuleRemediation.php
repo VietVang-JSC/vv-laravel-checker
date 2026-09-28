@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Remediation;
+namespace Rampart\QualityChecker\Remediation;
 
 /**
  * Per-rule remediation catalog: what the finding means and how to fix it.

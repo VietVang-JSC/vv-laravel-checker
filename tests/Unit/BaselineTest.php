@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Unit;
+namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use VietVang\QualityChecker\Baseline\BaselineFilter;
-use VietVang\QualityChecker\Baseline\BaselineManager;
-use VietVang\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Baseline\BaselineFilter;
+use Rampart\QualityChecker\Baseline\BaselineManager;
+use Rampart\QualityChecker\Result\CheckResult;
 
 final class BaselineTest extends TestCase
 {

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Analyzers;
+namespace Rampart\QualityChecker\Analyzers;
 
-use VietVang\QualityChecker\Result\CheckResult;
-use VietVang\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\Issue;
 
 final class Deduplicator
 {

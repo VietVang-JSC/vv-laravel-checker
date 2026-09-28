@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Commands;
+namespace Rampart\QualityChecker\Commands;
 
 use Illuminate\Console\Command;
-use VietVang\QualityChecker\Baseline\BaselineFilter;
-use VietVang\QualityChecker\Baseline\BaselineManager;
-use VietVang\QualityChecker\Fixer\PhpcsFixer;
-use VietVang\QualityChecker\Reporters\ConsoleReporter;
-use VietVang\QualityChecker\Reporters\HtmlReporter;
-use VietVang\QualityChecker\Reporters\JsonReporter;
-use VietVang\QualityChecker\Reporters\MarkdownReporter;
-use VietVang\QualityChecker\Reporters\ReporterInterface;
-use VietVang\QualityChecker\Reporters\SarifReporter;
-use VietVang\QualityChecker\Result\CheckResult;
-use VietVang\QualityChecker\Runner\CheckContext;
-use VietVang\QualityChecker\Runner\CheckRunner;
+use Rampart\QualityChecker\Baseline\BaselineFilter;
+use Rampart\QualityChecker\Baseline\BaselineManager;
+use Rampart\QualityChecker\Fixer\PhpcsFixer;
+use Rampart\QualityChecker\Reporters\ConsoleReporter;
+use Rampart\QualityChecker\Reporters\HtmlReporter;
+use Rampart\QualityChecker\Reporters\JsonReporter;
+use Rampart\QualityChecker\Reporters\MarkdownReporter;
+use Rampart\QualityChecker\Reporters\ReporterInterface;
+use Rampart\QualityChecker\Reporters\SarifReporter;
+use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Runner\CheckRunner;
 
 final class QualityCheckCommand extends Command
 {

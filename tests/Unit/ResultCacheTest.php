@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Unit;
+namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use VietVang\QualityChecker\Runner\CheckContext;
-use VietVang\QualityChecker\Runner\ResultCache;
+use Rampart\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Runner\ResultCache;
 
 final class ResultCacheTest extends TestCase
 {

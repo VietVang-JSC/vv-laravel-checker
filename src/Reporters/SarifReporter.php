@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Reporters;
+namespace Rampart\QualityChecker\Reporters;
 
-use VietVang\QualityChecker\Result\CheckResult;
-use VietVang\QualityChecker\Result\Issue;
-use VietVang\QualityChecker\Result\Severity;
-use VietVang\QualityChecker\Remediation\RuleRemediation;
-use VietVang\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Remediation\RuleRemediation;
+use Rampart\QualityChecker\Runner\CheckContext;
 
 /**
  * SARIF 2.1.0 reporter for GitHub Advanced Security / code scanning upload.
@@ -57,7 +57,7 @@ final class SarifReporter implements ReporterInterface
                 [
                     'tool' => [
                         'driver' => [
-                            'name' => 'vietvang/quality-checker',
+                            'name' => 'rampart/quality-checker',
                             'informationUri' => $this->repoUri($ctx),
                             'version' => $ctx->packageVersion,
                             'rules' => array_values($rules),
@@ -155,7 +155,7 @@ final class SarifReporter implements ReporterInterface
         $cfg = $ctx->configFor('html');
         $repo = rtrim(trim((string) ($cfg['repo_url'] ?? '')), '/');
         if ($repo === '') {
-            $repo = 'https://github.com/VietVang-JSC/vv-laravel-checker';
+            $repo = 'https://github.com/rampart/laravel-checker';
         }
 
         return $repo;

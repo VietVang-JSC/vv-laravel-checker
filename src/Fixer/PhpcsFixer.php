@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Fixer;
+namespace Rampart\QualityChecker\Fixer;
 
 /**
  * Auto-fix wrapper around `vendor/bin/phpcbf` (PHP_CodeSniffer fixer).

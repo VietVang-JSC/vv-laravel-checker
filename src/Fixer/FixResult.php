@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Fixer;
+namespace Rampart\QualityChecker\Fixer;
 
 /**
  * Value object describing the outcome of an auto-fix run.

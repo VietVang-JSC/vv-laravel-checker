@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Checkers;
+namespace Rampart\QualityChecker\Checkers;
 
 use Symfony\Component\Process\Process;
-use VietVang\QualityChecker\Result\CheckResult;
-use VietVang\QualityChecker\Result\Issue;
-use VietVang\QualityChecker\Result\Severity;
-use VietVang\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Runner\CheckContext;
 
 final class ComposerAuditChecker extends AbstractProcessChecker
 {

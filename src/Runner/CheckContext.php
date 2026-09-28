@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Runner;
+namespace Rampart\QualityChecker\Runner;
 
 final class CheckContext
 {

@@ -1,6 +1,6 @@
 <div align="center">
 
-# VietVang Quality Checker
+# Rampart Quality Checker
 
 **A comprehensive quality gate for Laravel** —
 _A comprehensive Laravel quality gate._
@@ -68,7 +68,7 @@ Optional tools (skipped with a hint if missing): `squizlabs/php_codesniffer`,
 Requirements: PHP `^8.1`, Laravel `10|11|12`, and Composer `2.4+`.
 
 ```bash
-composer require vietvang/quality-checker
+composer require rampart/quality-checker
 ```
 
 The service provider is auto-discovered. Publishing the config is optional, but
@@ -85,8 +85,8 @@ This creates `config/quality-checker.php`.
 When developing the checker itself, clone it next to the Laravel application:
 
 ```bash
-git clone https://github.com/VietVang-JSC/vv-laravel-checker.git
-cd vv-laravel-checker
+git clone https://github.com/rampart/laravel-checker.git
+cd laravel-checker
 composer install
 ```
 
@@ -94,8 +94,8 @@ From the Laravel application's directory, register the local checkout and
 install the package from that path:
 
 ```bash
-composer config repositories.quality-checker path ../vv-laravel-checker
-composer require vietvang/quality-checker:@dev
+composer config repositories.quality-checker path ../laravel-checker
+composer require rampart/quality-checker:@dev
 php artisan vendor:publish --tag=quality-checker-config
 php artisan quality:check --tier=security --only=custom,composer_audit
 ```
@@ -106,14 +106,14 @@ so source changes in the clone are immediately used by the application. After
 pulling package changes, run:
 
 ```bash
-composer update vietvang/quality-checker --with-dependencies
+composer update rampart/quality-checker --with-dependencies
 ```
 
 For a normal application installation, omit the path repository and use the
 stable package version instead:
 
 ```bash
-composer require vietvang/quality-checker
+composer require rampart/quality-checker
 ```
 
 ---
@@ -558,7 +558,7 @@ ingest, so security findings surface directly on the PR as code-scanning alerts:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: reports/quality-checker/quality-report.sarif
-          category: vietvang-quality-checker
+          category: rampart-quality-checker
 ```
 
 Severity mapping: `critical`/`error` → `error`, `warning` → `warning`,
@@ -607,4 +607,4 @@ composer validate --no-check-publish
 
 ## License
 
-[MIT](LICENSE) © 2026 VietVang
+[MIT](LICENSE) © 2026 Rampart

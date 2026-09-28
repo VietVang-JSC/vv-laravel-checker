@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Reporters;
+namespace Rampart\QualityChecker\Reporters;
 
-use VietVang\QualityChecker\Result\CheckResult;
-use VietVang\QualityChecker\Result\Severity;
-use VietVang\QualityChecker\Remediation\RuleRemediation;
-use VietVang\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Remediation\RuleRemediation;
+use Rampart\QualityChecker\Runner\CheckContext;
 
 final class HtmlReporter implements ReporterInterface
 {

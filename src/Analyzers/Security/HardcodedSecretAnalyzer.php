@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Analyzers\Security;
+namespace Rampart\QualityChecker\Analyzers\Security;
 
 use PhpParser\Node;
-use VietVang\QualityChecker\Analyzers\AbstractAnalyzer;
-use VietVang\QualityChecker\Result\Issue;
-use VietVang\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
 
 final class HardcodedSecretAnalyzer extends AbstractAnalyzer
 {

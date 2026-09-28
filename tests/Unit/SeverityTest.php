@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Unit;
+namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use VietVang\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Result\Severity;
 
 final class SeverityTest extends TestCase
 {

@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Unit;
+namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use VietVang\QualityChecker\Analyzers\Laravel\MigrationAnalyzer;
-use VietVang\QualityChecker\Analyzers\Laravel\RouteValidationAnalyzer;
-use VietVang\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Analyzers\Laravel\MigrationAnalyzer;
+use Rampart\QualityChecker\Analyzers\Laravel\RouteValidationAnalyzer;
+use Rampart\QualityChecker\Result\Severity;
 
 final class LaravelAnalyzerTest extends TestCase
 {

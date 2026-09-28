@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve `vietvang/quality-checker`! This guide covers local
+Thanks for helping improve `rampart/quality-checker`! This guide covers local
 setup, running the checks, and how to add a new analyzer.
 
 ## Requirements
@@ -40,19 +40,19 @@ the usual flags, e.g. `composer test -- --filter=SomeTest`.
 Analyzers inspect PHP source with `nikic/php-parser` and emit `Issue` objects.
 
 1. **Create the analyzer class** under `src/Analyzers/` (e.g. `src/Analyzers/Security/`),
-   extending `VietVang\QualityChecker\Analyzers\AbstractAnalyzer`:
+   extending `Rampart\QualityChecker\Analyzers\AbstractAnalyzer`:
 
    ```php
    <?php
 
    declare(strict_types=1);
 
-   namespace VietVang\QualityChecker\Analyzers\Security;
+   namespace Rampart\QualityChecker\Analyzers\Security;
 
-   use VietVang\QualityChecker\Analyzers\AbstractAnalyzer;
-   use VietVang\QualityChecker\Result\Confidence;
-   use VietVang\QualityChecker\Result\Issue;
-   use VietVang\QualityChecker\Result\Severity;
+   use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
+   use Rampart\QualityChecker\Result\Confidence;
+   use Rampart\QualityChecker\Result\Issue;
+   use Rampart\QualityChecker\Result\Severity;
 
    final class ExampleAnalyzer extends AbstractAnalyzer
    {

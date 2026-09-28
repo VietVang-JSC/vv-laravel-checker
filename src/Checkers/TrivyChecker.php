@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Checkers;
+namespace Rampart\QualityChecker\Checkers;
 
 use Symfony\Component\Process\Process;
-use VietVang\QualityChecker\Result\CheckResult;
-use VietVang\QualityChecker\Result\Issue;
-use VietVang\QualityChecker\Result\Severity;
-use VietVang\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Runner\CheckContext;
 
 final class TrivyChecker implements CheckerInterface
 {
@@ -197,8 +197,8 @@ final class TrivyChecker implements CheckerInterface
 
     private function cachedBinary(CheckContext $ctx): ?string
     {
-        if (class_exists(\VietVang\QualityChecker\Tools\TrivyDownloader::class)) {
-            $downloader = new \VietVang\QualityChecker\Tools\TrivyDownloader($ctx);
+        if (class_exists(\Rampart\QualityChecker\Tools\TrivyDownloader::class)) {
+            $downloader = new \Rampart\QualityChecker\Tools\TrivyDownloader($ctx);
 
             return $downloader->binaryPath();
         }

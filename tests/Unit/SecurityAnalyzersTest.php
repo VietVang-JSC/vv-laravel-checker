@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Unit;
+namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use VietVang\QualityChecker\Analyzers\Security\DisabledCsrfAnalyzer;
-use VietVang\QualityChecker\Analyzers\Security\HardcodedSecretAnalyzer;
-use VietVang\QualityChecker\Analyzers\Security\InsecureCookieAnalyzer;
-use VietVang\QualityChecker\Analyzers\Security\InsecureHashAnalyzer;
-use VietVang\QualityChecker\Analyzers\Security\LaravelTaintAnalyzer;
-use VietVang\QualityChecker\Analyzers\Security\MassAssignmentAnalyzer;
-use VietVang\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer;
-use VietVang\QualityChecker\Analyzers\Security\UnsafeDeserializationAnalyzer;
-use VietVang\QualityChecker\Analyzers\Security\UnsafeEvalAnalyzer;
-use VietVang\QualityChecker\Result\Issue;
-use VietVang\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Analyzers\Security\DisabledCsrfAnalyzer;
+use Rampart\QualityChecker\Analyzers\Security\HardcodedSecretAnalyzer;
+use Rampart\QualityChecker\Analyzers\Security\InsecureCookieAnalyzer;
+use Rampart\QualityChecker\Analyzers\Security\InsecureHashAnalyzer;
+use Rampart\QualityChecker\Analyzers\Security\LaravelTaintAnalyzer;
+use Rampart\QualityChecker\Analyzers\Security\MassAssignmentAnalyzer;
+use Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer;
+use Rampart\QualityChecker\Analyzers\Security\UnsafeDeserializationAnalyzer;
+use Rampart\QualityChecker\Analyzers\Security\UnsafeEvalAnalyzer;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
 
 final class SecurityAnalyzersTest extends TestCase
 {

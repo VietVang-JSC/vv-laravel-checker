@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Analyzers\Security;
+namespace Rampart\QualityChecker\Analyzers\Security;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
-use VietVang\QualityChecker\Result\Issue;
-use VietVang\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
 
 final class UnsafeDeserializationAnalyzer
 {

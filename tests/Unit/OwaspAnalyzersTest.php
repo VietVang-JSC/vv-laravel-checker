@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Unit;
+namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use VietVang\QualityChecker\Analyzers\Owasp\OwaspAccessControlAnalyzer;
-use VietVang\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer;
-use VietVang\QualityChecker\Analyzers\Owasp\OwaspMisconfigurationAnalyzer;
-use VietVang\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer;
-use VietVang\QualityChecker\Analyzers\Owasp\OwaspSstiAnalyzer;
-use VietVang\QualityChecker\Analyzers\Owasp\OwaspXxeAnalyzer;
-use VietVang\QualityChecker\Result\Issue;
-use VietVang\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Analyzers\Owasp\OwaspAccessControlAnalyzer;
+use Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer;
+use Rampart\QualityChecker\Analyzers\Owasp\OwaspMisconfigurationAnalyzer;
+use Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer;
+use Rampart\QualityChecker\Analyzers\Owasp\OwaspSstiAnalyzer;
+use Rampart\QualityChecker\Analyzers\Owasp\OwaspXxeAnalyzer;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
 
 final class OwaspAnalyzersTest extends TestCase
 {

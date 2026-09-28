@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Feature;
+namespace Rampart\QualityChecker\Tests\Feature;
 
 use Orchestra\Testbench\TestCase;
-use VietVang\QualityChecker\QualityCheckerServiceProvider;
+use Rampart\QualityChecker\QualityCheckerServiceProvider;
 
 final class QualityCheckCommandTest extends TestCase
 {

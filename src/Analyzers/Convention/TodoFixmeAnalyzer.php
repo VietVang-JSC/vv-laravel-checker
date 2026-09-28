@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Analyzers\Convention;
+namespace Rampart\QualityChecker\Analyzers\Convention;
 
-use VietVang\QualityChecker\Result\Confidence;
-use VietVang\QualityChecker\Result\Issue;
-use VietVang\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Result\Confidence;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
 
 final class TodoFixmeAnalyzer
 {

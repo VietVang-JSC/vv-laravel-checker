@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Unit;
+namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use VietVang\QualityChecker\Checkers\CustomAnalyzerChecker;
-use VietVang\QualityChecker\Result\Issue;
-use VietVang\QualityChecker\Result\Severity;
-use VietVang\QualityChecker\Runner\CheckContext;
-use VietVang\QualityChecker\Suppression\InlineSuppressor;
+use Rampart\QualityChecker\Checkers\CustomAnalyzerChecker;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Suppression\InlineSuppressor;
 
 final class InlineSuppressorTest extends TestCase
 {

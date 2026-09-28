@@ -1,6 +1,3 @@
-* text=auto
-/.gitattributes export-ignore
-/tests export-ignore
-/docs export-ignore
-/SPEC.md export-ignore
-/.gitignore export-ignore
+# Normalize line endings to LF on checkin; check out as-is.
+# The package's own phpcs standard (PSR-12) requires LF.
+* text=auto eol=lf

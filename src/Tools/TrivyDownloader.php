@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tools;
+namespace Rampart\QualityChecker\Tools;
 
 use Symfony\Component\Process\Process;
-use VietVang\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Runner\CheckContext;
 
 /**
  * Downloads and caches the Trivy security scanner binary.

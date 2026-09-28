@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Suppression;
+namespace Rampart\QualityChecker\Suppression;
 
-use VietVang\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Issue;
 
 /**
  * Inline per-finding suppression via source comments.

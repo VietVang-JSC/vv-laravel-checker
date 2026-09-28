@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Unit;
+namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use VietVang\QualityChecker\Reporters\SarifReporter;
-use VietVang\QualityChecker\Result\CheckResult;
-use VietVang\QualityChecker\Result\Confidence;
-use VietVang\QualityChecker\Result\Issue;
-use VietVang\QualityChecker\Result\Severity;
-use VietVang\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Reporters\SarifReporter;
+use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\Confidence;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Runner\CheckContext;
 
 final class SarifReporterTest extends TestCase
 {
@@ -63,7 +63,7 @@ final class SarifReporterTest extends TestCase
         self::assertCount(1, $payload['runs']);
 
         $driver = $payload['runs'][0]['tool']['driver'];
-        self::assertSame('vietvang/quality-checker', $driver['name']);
+        self::assertSame('rampart/quality-checker', $driver['name']);
         self::assertSame('1.0.0', $driver['version']);
         self::assertArrayHasKey('rules', $driver);
     }
@@ -204,7 +204,7 @@ final class SarifReporterTest extends TestCase
                 true
             );
             self::assertSame(
-                'https://github.com/VietVang-JSC/vv-laravel-checker',
+                'https://github.com/rampart/laravel-checker',
                 $fallbackPayload['runs'][0]['tool']['driver']['informationUri']
             );
         } finally {

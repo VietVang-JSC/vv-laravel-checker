@@ -2,7 +2,7 @@
 #
 # INSTALLATION:
 #   Copy this file to your project's Git hooks directory as pre-commit:
-#     Copy-Item vendor/vietvang/quality-checker/resources/stubs/pre-commit.ps1 .git/hooks/pre-commit
+#     Copy-Item vendor/rampart/quality-checker/resources/stubs/pre-commit.ps1 .git/hooks/pre-commit
 #   Then configure Git to use this PowerShell hook:
 #     git config core.hooksPath .git/hooks
 #   (or place a small pre-commit wrapper that calls this script).

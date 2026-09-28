@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Unit;
+namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use VietVang\QualityChecker\Analyzers\Owasp\OwaspOpenRedirectAnalyzer;
-use VietVang\QualityChecker\Result\Confidence;
-use VietVang\QualityChecker\Result\Issue;
-use VietVang\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Analyzers\Owasp\OwaspOpenRedirectAnalyzer;
+use Rampart\QualityChecker\Result\Confidence;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
 
 final class OwaspOpenRedirectAnalyzerTest extends TestCase
 {

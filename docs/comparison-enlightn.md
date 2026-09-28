@@ -1,12 +1,12 @@
 # Comparison with Enlightn
 
-This note compares `vietvang/quality-checker` against
+This note compares `rampart/quality-checker` against
 [enlightn/enlightn](https://github.com/enlightn/enlightn) (982 stars, 106 forks)
 — the best-known Laravel audit tool for performance + security. Enlightn
 figures come from the upstream README at the time of writing (the repo has been **archived,
 read-only since 01/2026**).
 
-_This note compares `vietvang/quality-checker` against Enlightn. Enlightn
+_This note compares `rampart/quality-checker` against Enlightn. Enlightn
 figures come from its upstream README; that repo is archived since Jan 2026._
 
 ## 1. Overview

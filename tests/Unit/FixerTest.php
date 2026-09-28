@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Unit;
+namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use VietVang\QualityChecker\Fixer\PhpcsFixer;
-use VietVang\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Fixer\PhpcsFixer;
+use Rampart\QualityChecker\Runner\CheckContext;
 
 final class FixerTest extends TestCase
 {

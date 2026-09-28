@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Analyzers\Security\Taint;
+namespace Rampart\QualityChecker\Analyzers\Security\Taint;
 
 use PhpParser\Node;
 use PhpParser\Node\Expr;

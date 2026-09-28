@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Unit;
+namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use VietVang\QualityChecker\Checkers\PhpunitChecker;
+use Rampart\QualityChecker\Checkers\PhpunitChecker;
 
 final class CoverageParseTest extends TestCase
 {

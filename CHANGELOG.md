@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (rebrand)
+- Renamed package `vietvang/quality-checker` → `rampart/laravel-checker` and
+  namespace `VietVang\QualityChecker` → `Rampart\QualityChecker` (all sources,
+  tests, docs, SARIF links). Locked LF line endings via `.gitattributes`.
+
 ### Changed (source hygiene)
 - PHPStan 1.12 (EOL) → 2.0; `treatPhpDocTypesAsCertain: false` (finder
   generics already narrow node types — defensive `instanceof` stays).

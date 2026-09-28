@@ -16,7 +16,7 @@
 - There is no unified report for CI integration.
 
 ### 1.2 Solution
-A Laravel package (`vietvang/quality-checker`) providing an Artisan command:
+A Laravel package (`rampart/quality-checker`) providing an Artisan command:
 
 ```
 php artisan quality:check
@@ -509,7 +509,7 @@ return [
 
 ## 13. To confirm before coding
 
-1. **Package name / vendor namespace** — e.g. `vietvang/quality-checker`?
+1. **Package name / vendor namespace** — e.g. `rampart/quality-checker`?
 2. **Minimum supported PHP version** (8.1 / 8.2 / 8.3)?
 3. **Supported Laravel version range** (10 / 11 / 12)?
 4. **Default threshold** for `fail_on` (error or warning)?

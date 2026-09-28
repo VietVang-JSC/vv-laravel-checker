@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Result;
+namespace Rampart\QualityChecker\Result;
 
 final class Issue
 {

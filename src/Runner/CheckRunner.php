@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Runner;
+namespace Rampart\QualityChecker\Runner;
 
-use VietVang\QualityChecker\Checkers\CheckerInterface;
-use VietVang\QualityChecker\Checkers\ComposerAuditChecker;
-use VietVang\QualityChecker\Checkers\CustomAnalyzerChecker;
-use VietVang\QualityChecker\Checkers\PhpcsChecker;
-use VietVang\QualityChecker\Checkers\PhpstanChecker;
-use VietVang\QualityChecker\Checkers\PhpunitChecker;
-use VietVang\QualityChecker\Checkers\TrivyChecker;
-use VietVang\QualityChecker\Result\CheckResult;
-use VietVang\QualityChecker\Result\Confidence;
-use VietVang\QualityChecker\Result\Issue;
-use VietVang\QualityChecker\Result\Severity;
-use VietVang\QualityChecker\Tools\ToolInstaller;
+use Rampart\QualityChecker\Checkers\CheckerInterface;
+use Rampart\QualityChecker\Checkers\ComposerAuditChecker;
+use Rampart\QualityChecker\Checkers\CustomAnalyzerChecker;
+use Rampart\QualityChecker\Checkers\PhpcsChecker;
+use Rampart\QualityChecker\Checkers\PhpstanChecker;
+use Rampart\QualityChecker\Checkers\PhpunitChecker;
+use Rampart\QualityChecker\Checkers\TrivyChecker;
+use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\Confidence;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Tools\ToolInstaller;
 
 final class CheckRunner
 {

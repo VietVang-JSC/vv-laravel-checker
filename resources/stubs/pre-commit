@@ -4,7 +4,7 @@
 #
 # INSTALLATION:
 #   Copy this file into your project's Git hooks directory and make it executable:
-#     cp vendor/vietvang/quality-checker/resources/stubs/pre-commit .git/hooks/pre-commit
+#     cp vendor/rampart/quality-checker/resources/stubs/pre-commit .git/hooks/pre-commit
 #     chmod +x .git/hooks/pre-commit
 #
 # What it does:

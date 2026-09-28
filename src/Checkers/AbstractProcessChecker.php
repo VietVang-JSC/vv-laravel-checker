@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Checkers;
+namespace Rampart\QualityChecker\Checkers;
 
 use Symfony\Component\Process\Process;
-use VietVang\QualityChecker\Result\CheckResult;
-use VietVang\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Runner\CheckContext;
 
 abstract class AbstractProcessChecker implements CheckerInterface
 {

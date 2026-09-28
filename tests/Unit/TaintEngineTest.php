@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Unit;
+namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use VietVang\QualityChecker\Analyzers\Security\Taint\TaintEngine;
+use Rampart\QualityChecker\Analyzers\Security\Taint\TaintEngine;
 
 final class TaintEngineTest extends TestCase
 {

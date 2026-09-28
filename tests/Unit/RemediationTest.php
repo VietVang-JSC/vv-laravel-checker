@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Tests\Unit;
+namespace Rampart\QualityChecker\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Output\BufferedOutput;
-use VietVang\QualityChecker\Remediation\RuleRemediation;
-use VietVang\QualityChecker\Reporters\ConsoleReporter;
-use VietVang\QualityChecker\Reporters\HtmlReporter;
-use VietVang\QualityChecker\Reporters\JsonReporter;
-use VietVang\QualityChecker\Reporters\MarkdownReporter;
-use VietVang\QualityChecker\Reporters\SarifReporter;
-use VietVang\QualityChecker\Result\CheckResult;
-use VietVang\QualityChecker\Result\Confidence;
-use VietVang\QualityChecker\Result\Issue;
-use VietVang\QualityChecker\Result\Severity;
-use VietVang\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Remediation\RuleRemediation;
+use Rampart\QualityChecker\Reporters\ConsoleReporter;
+use Rampart\QualityChecker\Reporters\HtmlReporter;
+use Rampart\QualityChecker\Reporters\JsonReporter;
+use Rampart\QualityChecker\Reporters\MarkdownReporter;
+use Rampart\QualityChecker\Reporters\SarifReporter;
+use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\Confidence;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Runner\CheckContext;
 
 /**
  * Remediation catalog: every rule teaches the fix, not just the symptom.

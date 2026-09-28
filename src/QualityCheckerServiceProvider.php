@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker;
+namespace Rampart\QualityChecker;
 
 use Illuminate\Support\ServiceProvider;
-use VietVang\QualityChecker\Commands\QualityCheckCommand;
+use Rampart\QualityChecker\Commands\QualityCheckCommand;
 
 final class QualityCheckerServiceProvider extends ServiceProvider
 {

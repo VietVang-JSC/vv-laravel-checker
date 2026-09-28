@@ -1,5 +1,5 @@
 {
-    "name": "vietvang/quality-checker",
+    "name": "rampart/quality-checker",
     "description": "Laravel CLI quality gate: wraps phpcs, phpstan, phpunit, composer audit, trivy and adds custom PHP-Parser analyzers for security, missing tests and conventions.",
     "keywords": ["laravel", "quality", "phpcs", "phpstan", "phpunit", "security", "static-analysis", "ci"],
     "license": "MIT",
@@ -30,18 +30,18 @@
     },
     "autoload": {
         "psr-4": {
-            "VietVang\\QualityChecker\\": "src/"
+            "Rampart\\QualityChecker\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "VietVang\\QualityChecker\\Tests\\": "tests/"
+            "Rampart\\QualityChecker\\Tests\\": "tests/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "VietVang\\QualityChecker\\QualityCheckerServiceProvider"
+                "Rampart\\QualityChecker\\QualityCheckerServiceProvider"
             ]
         }
     },

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Baseline;
+namespace Rampart\QualityChecker\Baseline;
 
 /**
  * Filters baselined issues out of checker results.

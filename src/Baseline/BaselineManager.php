@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace VietVang\QualityChecker\Baseline;
+namespace Rampart\QualityChecker\Baseline;
 
 /**
  * Baseline support for known/accepted issues.
