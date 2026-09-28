@@ -6,8 +6,11 @@ namespace Rampart\QualityChecker\Analyzers\Owasp;
 
 use PhpParser\Node;
 use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
+use Rampart\QualityChecker\Analysis\AssignmentMap;
 use Rampart\QualityChecker\Analysis\AstPool;
 use Rampart\QualityChecker\Analysis\AstPoolAware;
+use Rampart\QualityChecker\Analysis\FlowTrace;
+use Rampart\QualityChecker\Analysis\ScopeResolver;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
@@ -53,9 +56,31 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer implements AstPoo
 
     private ?AstPool $pool = null;
 
+    private ?ScopeResolver $scopes = null;
+
+    private ?AssignmentMap $assignments = null;
+
     public function setAstPool(AstPool $pool): void
     {
         $this->pool = $pool;
+    }
+
+    private function scopes(): ScopeResolver
+    {
+        if ($this->scopes === null) {
+            $this->scopes = new ScopeResolver($this->finder());
+        }
+
+        return $this->scopes;
+    }
+
+    private function assignments(): AssignmentMap
+    {
+        if ($this->assignments === null) {
+            $this->assignments = new AssignmentMap($this->finder(), $this->scopes());
+        }
+
+        return $this->assignments;
     }
 
     public function analyze(array $files): array
@@ -141,12 +166,51 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer implements AstPoo
                 $file,
                 $call->getStartLine(),
                 Severity::Error,
-                ['sink' => $label],
+                ['sink' => $label, 'flow' => $this->traceFor($target, $call, $nodes, $label)->toMetadata()],
                 $this->isDirectTarget($target) ? Confidence::High : Confidence::Medium
             );
         }
 
         return $issues;
+    }
+
+    /**
+     * Minimal explainability trace for a flagged finding: source →
+     * propagation → sink. Only straight-line assignments visible at the
+     * sink are listed as propagation steps.
+     *
+     * @param list<Node> $nodes
+     */
+    private function traceFor(Node\Expr $target, Node $call, array $nodes, string $label): FlowTrace
+    {
+        $trace = new FlowTrace();
+        $trace->source(
+            $this->readsRequest($target) ? 'request input' : 'dynamic value',
+            $target->getStartLine()
+        );
+
+        $sinkLine = $call->getStartLine();
+        $funcId = $this->scopes()->funcId($call, $nodes);
+        foreach ($this->assignments()->visible($nodes, $funcId, $sinkLine) as $assign) {
+            if (!$assign->var instanceof Node\Expr\Variable || !is_string($assign->var->name)) {
+                continue;
+            }
+            if (!$this->targetUsesVar($target, $assign->var->name)) {
+                continue;
+            }
+            $trace->propagate('$' . $assign->var->name . ' assigned', $assign->getStartLine());
+        }
+
+        return $trace->sink($label, $sinkLine);
+    }
+
+    private function targetUsesVar(Node\Expr $target, string $name): bool
+    {
+        $found = $this->finder()->find($target, static function (Node $node) use ($name): bool {
+            return $node instanceof Node\Expr\Variable && $node->name === $name;
+        });
+
+        return $found !== [];
     }
 
     /**
@@ -363,12 +427,12 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer implements AstPoo
     private function visibleVarMaps(array $nodes, Node $call): array
     {
         $sinkLine = $call->getStartLine();
-        $funcId = $this->enclosingFunctionId($call, $nodes);
+        $funcId = $this->scopes()->funcId($call, $nodes);
 
         $safe = [];
         $pinned = [];
         $literals = [];
-        foreach ($this->visibleAssigns($nodes, $funcId, $sinkLine) as $assign) {
+        foreach ($this->assignments()->visible($nodes, $funcId, $sinkLine) as $assign) {
             if (!$assign->var instanceof Node\Expr\Variable) {
                 continue;
             }
@@ -388,54 +452,6 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer implements AstPoo
         }
 
         return ['safe' => $safe, 'pinned' => $pinned, 'literals' => $literals];
-    }
-
-    /**
-     * Straight-line `$var = ...` assignments visible at a sink: same
-     * function scope (top-level assigns are visible everywhere), above the
-     * sink line, in source order.
-     *
-     * @param list<Node> $nodes
-     * @return list<Node\Expr\Assign>
-     */
-    private function visibleAssigns(array $nodes, int $funcId, int $sinkLine): array
-    {
-        $funcs = [];
-        foreach (
-            $this->finder()->find($nodes, static function (Node $node): bool {
-                return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
-            }) as $func
-        ) {
-            if ($func instanceof Node\Stmt\ClassMethod || $func instanceof Node\Stmt\Function_) {
-                $funcs[spl_object_id($func)] = $func;
-            }
-        }
-
-        $out = [];
-        $collect = static function (array $stmts) use (&$out, $sinkLine): void {
-            foreach ($stmts as $stmt) {
-                if (
-                    $stmt instanceof Node\Stmt\Expression
-                    && $stmt->expr instanceof Node\Expr\Assign
-                    && $stmt->expr->var instanceof Node\Expr\Variable
-                    && is_string($stmt->expr->var->name)
-                    && $stmt->getStartLine() < $sinkLine
-                ) {
-                    $out[] = $stmt->expr;
-                }
-            }
-        };
-
-        // Top-level straight-line code always runs first.
-        $collect($nodes);
-        if ($funcId !== 0 && isset($funcs[$funcId])) {
-            $func = $funcs[$funcId];
-            if (is_array($func->stmts)) {
-                $collect($func->stmts);
-            }
-        }
-
-        return $out;
     }
 
     /**
@@ -558,16 +574,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer implements AstPoo
     {
         $guarded = [];
 
-        $scopes = [];
-        foreach (
-            $this->finder()->find($nodes, static function (Node $node): bool {
-                return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
-            }) as $func
-        ) {
-            if ($func instanceof Node\Stmt\ClassMethod || $func instanceof Node\Stmt\Function_) {
-                $scopes[spl_object_id($func)] = $func;
-            }
-        }
+        $scopes = $this->scopes()->functions($nodes);
         $scopes[0] = $nodes;
 
         foreach ($scopes as $funcId => $scope) {
@@ -579,7 +586,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer implements AstPoo
             ) {
                 // Guards only apply inside their own scope: a gate in one
                 // function must never silence a sink in another (or top-level).
-                if ($this->enclosingFunctionId($node, $nodes) !== $funcId) {
+                if ($this->scopes()->funcId($node, $nodes) !== $funcId) {
                     continue;
                 }
                 if ($node instanceof Node\Expr\Assign) {
@@ -758,7 +765,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer implements AstPoo
      */
     private function isGuardSanitized(Node\Expr $target, Node $call, array $nodes, array $guarded): bool
     {
-        $funcId = $this->enclosingFunctionId($call, $nodes);
+        $funcId = $this->scopes()->funcId($call, $nodes);
         $vars = [];
         foreach (
             $this->finder()->find($target, static function (Node $node): bool {
@@ -781,32 +788,6 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer implements AstPoo
         }
 
         return true;
-    }
-
-    /**
-     * spl_object_id of the enclosing function, 0 for top-level code.
-     *
-     * @param list<Node> $nodes
-     */
-    private function enclosingFunctionId(Node $call, array $nodes): int
-    {
-        $target = spl_object_id($call);
-        $funcs = $this->finder()->find(
-            $nodes,
-            static function (Node $node): bool {
-                return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
-            }
-        );
-        foreach ($funcs as $func) {
-            $found = $this->finder()->find($func, static function (Node $node) use ($target): bool {
-                return spl_object_id($node) === $target;
-            });
-            if ($found !== []) {
-                return spl_object_id($func);
-            }
-        }
-
-        return 0;
     }
 
     /**

@@ -6,6 +6,9 @@ namespace Rampart\QualityChecker\Analyzers\Owasp;
 
 use PhpParser\Node;
 use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
+use Rampart\QualityChecker\Analysis\AssignmentMap;
+use Rampart\QualityChecker\Analysis\GuardMap;
+use Rampart\QualityChecker\Analysis\ScopeResolver;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 
@@ -81,16 +84,9 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
                 $nodes[] = $node;
             }
         }
-        $origins = $this->variableOrigins($nodes);
-        // Loop-carried origins are invisible to the shared assignment scan:
-        // foreach ($files as $file) and $uploads['k'] = glob(...) must map
-        // the loop variable / array to its source expression, otherwise
-        // directory listings look like unknown (flaggable) input.
-        foreach ($this->loopOrigins($nodes) as $name => $rhsList) {
-            foreach ($rhsList as $rhs) {
-                $origins[$name][] = $rhs;
-            }
-        }
+        // Shared origin map: plain, foreach, array-element, $this->property
+        // and default origins.
+        $origins = (new AssignmentMap($this->finder()))->origins($nodes);
         $sanitizedScopes = $this->sanitizedVarScopes($nodes);
 
         $issues = [];
@@ -383,73 +379,6 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
     }
 
     /**
-     * Extra origins the assignment scan misses: foreach value/key variables
-     * (`foreach ($files as $file)` maps $file to $files), array-element
-     * assignments (`$uploads['k'] = glob(...)`), and `$this->prop = ...`
-     * property assignments (deploy-time config typically lands in
-     * properties: `$this->apiUrl = env('EMS_URL')`). Only adds origins
-     * (silencing direction) — never removes any.
-     *
-     * @param list<Node> $nodes
-     * @return array<string, list<Node\Expr>>
-     */
-    private function loopOrigins(array $nodes): array
-    {
-        $origins = [];
-        $loops = $this->finder()->find($nodes, static function (Node $node): bool {
-            return $node instanceof Node\Stmt\Foreach_
-                || $node instanceof Node\Expr\Assign
-                || $node instanceof Node\Stmt\Property;
-        });
-        foreach ($loops as $node) {
-            if ($node instanceof Node\Stmt\Property) {
-                foreach ($node->props as $prop) {
-                    if (
-                        $prop instanceof Node\Stmt\PropertyProperty
-                        && $prop->default instanceof Node\Expr
-                    ) {
-                        $origins['this->' . $prop->name->toString()][] = $prop->default;
-                    }
-                }
-                continue;
-            }
-            if ($node instanceof Node\Stmt\Foreach_) {
-                if ($node->valueVar instanceof Node\Expr\Variable && is_string($node->valueVar->name)) {
-                    $origins[$node->valueVar->name][] = $node->expr;
-                }
-                if ($node->keyVar instanceof Node\Expr\Variable && is_string($node->keyVar->name)) {
-                    $origins[$node->keyVar->name][] = $node->expr;
-                }
-                continue;
-            }
-            if (
-                $node instanceof Node\Expr\Assign
-                && $node->var instanceof Node\Expr\ArrayDimFetch
-                && $node->var->var instanceof Node\Expr\Variable
-                && is_string($node->var->var->name)
-            ) {
-                $origins[$node->var->var->name][] = $node->expr;
-            }
-            if (
-                $node instanceof Node\Expr\Assign
-                && $node->var instanceof Node\Expr\PropertyFetch
-                && $node->var->var instanceof Node\Expr\Variable
-                && $node->var->var->name === 'this'
-            ) {
-                // PropertyFetch->name is natively Node; dynamic property
-                // names ($this->$var) are not tracked as origins.
-                /** @var Node\Identifier|Node\Expr $propName */
-                $propName = $node->var->name;
-                if ($propName instanceof Node\Identifier) {
-                    $origins['this->' . $propName->toString()][] = $node->expr;
-                }
-            }
-        }
-
-        return $origins;
-    }
-
-    /**
      * Directory listings return server-side paths, never remote URLs:
      * glob()/scandir()/readdir(), Storage::files()/allFiles(), File::files().
      */
@@ -477,52 +406,38 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
     /**
      * Variables passed through a *sanitiz*() gate in the same scope
      * (`if (!sanitizeRemoteUrl($url)) throw ...;`), so a later sink using
-     * them is reviewed-by-construction. Scoped per function (plus top-level)
-     * so a gate in one function never silences another.
+     * them is reviewed-by-construction. Scope partitioning comes from the
+     * shared GuardMap so a gate in one function never silences another.
      *
      * @param list<Node> $nodes
      * @return array<int, array<string, true>> call id => sanitized var names
      */
     private function sanitizedVarScopes(array $nodes): array
     {
-        $funcs = [];
-        foreach (
-            $this->finder()->find($nodes, static function (Node $node): bool {
-                return $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_;
-            }) as $func
-        ) {
-            if ($func instanceof Node\Stmt\ClassMethod || $func instanceof Node\Stmt\Function_) {
-                $funcs[] = $func;
+        $guardMap = new GuardMap($this->finder());
+        $byScope = $guardMap->find($nodes, static function (Node $node): bool {
+            if ($node instanceof Node\Expr\FuncCall && $node->name instanceof Node\Name) {
+                return str_contains(strtolower($node->name->toString()), 'sanitiz');
             }
-        }
+            if (
+                ($node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall)
+                && $node->name instanceof Node\Identifier
+            ) {
+                return str_contains(strtolower($node->name->toString()), 'sanitiz');
+            }
 
-        $byCall = [];
-        $scopes = array_merge($funcs, [null]);
-        foreach ($scopes as $scope) {
-            $haystack = $scope ?? $nodes;
+            return false;
+        });
+
+        $namesByScope = [];
+        foreach ($byScope as $funcId => $gates) {
             $names = [];
-            $gates = $this->finder()->find($haystack, static function (Node $node): bool {
-                if ($node instanceof Node\Expr\FuncCall && $node->name instanceof Node\Name) {
-                    return str_contains(strtolower($node->name->toString()), 'sanitiz');
-                }
-                if (
-                    ($node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall)
-                    && $node->name instanceof Node\Identifier
-                ) {
-                    return str_contains(strtolower($node->name->toString()), 'sanitiz');
-                }
-
-                return false;
-            });
             foreach ($gates as $gate) {
                 if (
                     !$gate instanceof Node\Expr\FuncCall
                     && !$gate instanceof Node\Expr\MethodCall
                     && !$gate instanceof Node\Expr\StaticCall
                 ) {
-                    continue;
-                }
-                if ($scope === null && $this->isInsideAnyFunction($gate, $funcs)) {
                     continue;
                 }
                 foreach ($gate->args as $arg) {
@@ -539,63 +454,30 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
                     }
                 }
             }
-            if ($names === []) {
-                continue;
+            if ($names !== []) {
+                $namesByScope[$funcId] = $names;
             }
-            $calls = $this->finder()->find($haystack, static function (Node $node): bool {
-                return $node instanceof Node\Expr\FuncCall
-                    || $node instanceof Node\Expr\MethodCall
-                    || $node instanceof Node\Expr\NullsafeMethodCall
-                    || $node instanceof Node\Expr\StaticCall;
-            });
-            foreach ($calls as $call) {
-                if ($this->isInsideOtherFunction($call, $funcs, $scope)) {
-                    continue;
-                }
-                $byCall[spl_object_id($call)] = $names;
+        }
+        if ($namesByScope === []) {
+            return [];
+        }
+
+        $scopeResolver = new ScopeResolver($this->finder());
+        $byCall = [];
+        $calls = $this->finder()->find($nodes, static function (Node $node): bool {
+            return $node instanceof Node\Expr\FuncCall
+                || $node instanceof Node\Expr\MethodCall
+                || $node instanceof Node\Expr\NullsafeMethodCall
+                || $node instanceof Node\Expr\StaticCall;
+        });
+        foreach ($calls as $call) {
+            $funcId = $scopeResolver->funcId($call, $nodes);
+            if (isset($namesByScope[$funcId])) {
+                $byCall[spl_object_id($call)] = $namesByScope[$funcId];
             }
         }
 
         return $byCall;
-    }
-
-    /**
-     * @param list<Node\Stmt\ClassMethod|Node\Stmt\Function_> $funcs
-     */
-    private function isInsideAnyFunction(Node $node, array $funcs): bool
-    {
-        $target = spl_object_id($node);
-        foreach ($funcs as $func) {
-            $found = $this->finder()->find($func, static function (Node $inner) use ($target): bool {
-                return spl_object_id($inner) === $target;
-            });
-            if ($found !== []) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param list<Node\Stmt\ClassMethod|Node\Stmt\Function_> $funcs
-     */
-    private function isInsideOtherFunction(Node $call, array $funcs, Node|null $scope): bool
-    {
-        foreach ($funcs as $func) {
-            if ($scope !== null && $func === $scope) {
-                continue;
-            }
-            $target = spl_object_id($call);
-            $found = $this->finder()->find($func, static function (Node $inner) use ($target): bool {
-                return spl_object_id($inner) === $target;
-            });
-            if ($found !== []) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

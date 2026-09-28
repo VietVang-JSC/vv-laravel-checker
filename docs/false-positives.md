@@ -271,7 +271,9 @@ php artisan quality:check --tier=all --fail-on=none
   never silences. `str_starts_with()` prefix gates with reassignment
   (`if (!str_starts_with($v, $safe)) { $v = '/'; }`), early enforcement
   (`throw`/`abort`/`return`), and guarded ternaries count; suffix/contains
-  checks do not.
+  checks do not. Shared primitives (`ScopeResolver`, `AssignmentMap`,
+  `GuardMap`) back SSRF and traversal too, and findings carry a `flow`
+  trace (source → propagation → sink) in metadata.
 - **Automatically skipped**: `redirect()->route()` / `Redirect::route()`, `back()`,
   string literals, `url()->previous()`, `config()`/`env()` (including concatenation where
   every leaf is safe, e.g. `redirect(config('app.url') . '/done')` — including via

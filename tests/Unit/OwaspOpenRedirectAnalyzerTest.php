@@ -513,4 +513,20 @@ final class OwaspOpenRedirectAnalyzerTest extends TestCase
 
         self::assertSame('OWASP_OPEN_REDIRECT', $this->rules($issues)[0] ?? null);
     }
+
+    public function testFindingCarriesFlowTrace(): void
+    {
+        $file = $this->temp(
+            "<?php\nclass AuthController extends Controller {\n    public function go(\\Illuminate\\Http\\Request \$request) {\n        \$target = \$request->query('next');\n        return redirect()->to(\$target);\n    }\n}\n",
+            'app/Http/Controllers/AuthController.php'
+        );
+
+        $issues = (new OwaspOpenRedirectAnalyzer())->analyze([$file]);
+
+        self::assertNotEmpty($issues);
+        $flow = $issues[0]->metadata['flow'] ?? null;
+        self::assertIsArray($flow);
+        self::assertSame('source', $flow[0]['kind'] ?? null);
+        self::assertSame('sink', $flow[count($flow) - 1]['kind'] ?? null);
+    }
 }

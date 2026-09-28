@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   maps plus `str_starts_with()` sanitizer-gate recognition (reassign, early
   enforcement, guarded ternary).
 - Per-rule precision/recall/F1 table in the metrics test output.
+- Shared flow primitives (`ScopeResolver`, `AssignmentMap`, `GuardMap`,
+  `FlowTrace`): SSRF, traversal and redirect now propagate through one
+  engine; redirect findings carry a `flow` trace in metadata.
 
 ### Added (expert-review wave 2)
 - Delta vs baseline: console line, JSON `delta` block and HTML Delta card

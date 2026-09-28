@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Analyzers\Owasp;
 
 use PhpParser\Node;
 use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
+use Rampart\QualityChecker\Analysis\AssignmentMap;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 
@@ -83,7 +84,10 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
                 $roots[] = $node;
             }
         }
-        $origins = $this->variableOrigins($roots);
+        // Shared origin map (plain, foreach, array-element, $this->property
+        // and default origins). A superset of the old plain-assign scan —
+        // only ever silences provably-derived paths.
+        $origins = (new AssignmentMap($this->finder()))->origins($roots);
 
         $issues = [];
         $nodes = $this->finder()->find($roots, function (Node $node): bool {
