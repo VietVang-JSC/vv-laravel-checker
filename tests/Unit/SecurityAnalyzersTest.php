@@ -400,7 +400,7 @@ final class SecurityAnalyzersTest extends TestCase
             'app/Http/Controllers/OrderController.php'
         );
         $model = $this->tempPhp(
-            "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {\n    protected \$guarded = [];\n}\n",
             'app/Models/Order.php'
         );
 
@@ -410,10 +410,10 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertTrue($this->ruleMatches($issues[0], 'MASS_ASSIGNMENT', Severity::Error));
     }
 
-    public function testMassAssignmentFindingCarriesFlowProvenance(): void
+    public function testMassAssignmentSkipsDefaultGuardedModel(): void
     {
-        // Shadow mode: the decision is unchanged, but the finding carries
-        // the classified input-to-sink flow for later comparison.
+        // Framework default $guarded = ['*'] when neither property is
+        // declared: nothing is assignable, so no finding (with evidence).
         $controller = $this->tempPhp(
             "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\n" .
             "class OrderController {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
@@ -426,12 +426,36 @@ final class SecurityAnalyzersTest extends TestCase
 
         $issues = (new MassAssignmentAnalyzer())->analyze([$controller, $model]);
 
+        self::assertCount(0, $issues);
+    }
+
+    public function testMassAssignmentFindingCarriesFlowProvenance(): void
+    {
+        // Production decision: the finding carries the full chain payload
+        // (input → sink → model protection → flow trace).
+        $controller = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\n" .
+            "class OrderController {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
+            'app/Http/Controllers/OrderController.php'
+        );
+        $model = $this->tempPhp(
+            "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {\n    protected \$guarded = [];\n}\n",
+            'app/Models/Order.php'
+        );
+
+        $issues = (new MassAssignmentAnalyzer())->analyze([$controller, $model]);
+
         self::assertNotEmpty($issues);
-        $flow = $issues[0]->metadata['flow_provenance'] ?? null;
-        self::assertIsArray($flow);
-        self::assertSame('tainted-raw', $flow['status'] ?? null);
-        self::assertSame('create()', $flow['sink'] ?? null);
-        self::assertFalse($flow['force_bypass'] ?? true);
+        $payload = $issues[0]->metadata['mass_assignment'] ?? null;
+        self::assertIsArray($payload);
+        self::assertSame('exposed', $payload['verdict'] ?? null);
+        self::assertSame('tainted-raw', $payload['input_kind'] ?? null);
+        self::assertSame('create', $payload['sink']['type'] ?? null);
+        self::assertSame('App\\Models\\Order', $payload['sink']['model'] ?? null);
+        self::assertSame('unguarded', $payload['model_protection']['type'] ?? null);
+        self::assertFalse($payload['bypass'] ?? true);
+        self::assertSame('high', $payload['confidence'] ?? null);
+        self::assertNotEmpty($payload['flow'] ?? []);
     }
 
     public function testMassAssignmentForceFillCarriesBypassProvenance(): void
@@ -445,10 +469,11 @@ final class SecurityAnalyzersTest extends TestCase
         $issues = (new MassAssignmentAnalyzer())->analyze([$controller]);
 
         self::assertNotEmpty($issues);
-        $flow = $issues[0]->metadata['flow_provenance'] ?? null;
-        self::assertIsArray($flow);
-        self::assertSame('tainted-raw', $flow['status'] ?? null);
-        self::assertTrue($flow['force_bypass'] ?? false);
+        $payload = $issues[0]->metadata['mass_assignment'] ?? null;
+        self::assertIsArray($payload);
+        self::assertSame('exposed', $payload['verdict'] ?? null);
+        self::assertSame('tainted-raw', $payload['input_kind'] ?? null);
+        self::assertTrue($payload['bypass'] ?? false);
     }
 
     public function testMassAssignmentSkipsModelWithFillable(): void
@@ -468,8 +493,10 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
-    public function testMassAssignmentSkipsGuardedModel(): void
+    public function testMassAssignmentReviewsPartiallyGuardedModel(): void
     {
+        // $guarded = ['id'] is not total protection: raw input still
+        // reaches every other field → REVIEW (Warning/Medium), not silent.
         $controller = $this->tempPhp(
             "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\n" .
             "class OrderController {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
@@ -482,7 +509,13 @@ final class SecurityAnalyzersTest extends TestCase
 
         $issues = (new MassAssignmentAnalyzer())->analyze([$controller, $model]);
 
-        self::assertCount(0, $issues);
+        self::assertCount(1, $issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'MASS_ASSIGNMENT', Severity::Warning));
+        $payload = $issues[0]->metadata['mass_assignment'] ?? null;
+        self::assertIsArray($payload);
+        self::assertSame('review', $payload['verdict'] ?? null);
+        self::assertSame('guarded', $payload['model_protection']['type'] ?? null);
+        self::assertSame(['id'], $payload['model_protection']['fields'] ?? null);
     }
 
     public function testMassAssignmentFlagsEmptyGuardedModel(): void
@@ -511,7 +544,7 @@ final class SecurityAnalyzersTest extends TestCase
             'app/Http/Controllers/OrderController.php'
         );
         $model = $this->tempPhp(
-            "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {\n    protected \$guarded = [];\n}\n",
             'app/Models/Order.php'
         );
 
@@ -864,7 +897,7 @@ final class SecurityAnalyzersTest extends TestCase
             'app/Http/Controllers/ShopController.php'
         );
         $model = $this->tempPhp(
-            "<?php\nnamespace App\\Domain\\Shop\\Models;\nclass Product extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            "<?php\nnamespace App\\Domain\\Shop\\Models;\nclass Product extends \\Illuminate\\Database\\Eloquent\\Model {\n    protected \$guarded = [];\n}\n",
             'app/Domain/Shop/Models/Product.php'
         );
 

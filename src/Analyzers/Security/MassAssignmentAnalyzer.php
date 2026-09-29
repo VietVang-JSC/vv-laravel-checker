@@ -9,9 +9,15 @@ use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
 use PhpParser\PrettyPrinter\Standard;
 use Rampart\QualityChecker\Analysis\ScopeResolver;
+use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Semantic\MassAssignmentDecision;
 use Rampart\QualityChecker\Semantic\MassAssignmentFlow;
+use Rampart\QualityChecker\Semantic\MassFlow;
+use Rampart\QualityChecker\Semantic\ModelMetadata;
+use Rampart\QualityChecker\Semantic\ModelMetadataIndex;
+use Rampart\QualityChecker\Semantic\ModelTypeResolver;
 
 final class MassAssignmentAnalyzer
 {
@@ -59,11 +65,12 @@ final class MassAssignmentAnalyzer
     {
         $issues = [];
         $modelClassFiles = $this->findModelClassFiles($files);
+        $metaIndex = new ModelMetadataIndex($files, $this->modelDirSegments);
         foreach ($files as $file) {
             if (!$this->supports($file)) {
                 continue;
             }
-            foreach ($this->analyzeFile($file, $modelClassFiles) as $issue) {
+            foreach ($this->analyzeFile($file, $modelClassFiles, $metaIndex) as $issue) {
                 $issues[] = $issue;
             }
         }
@@ -76,7 +83,7 @@ final class MassAssignmentAnalyzer
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
-    public function analyzeFile(string $file, array $modelClassFiles = []): array
+    public function analyzeFile(string $file, array $modelClassFiles = [], ?ModelMetadataIndex $metaIndex = null): array
     {
         $code = $this->readFile($file);
         if ($code === '') {
@@ -91,17 +98,24 @@ final class MassAssignmentAnalyzer
         if ($modelClassFiles === []) {
             $modelClassFiles = $this->findModelClassFiles([$file]);
         }
+        $metaIndex ??= new ModelMetadataIndex([$file], $this->modelDirSegments);
 
-        return $this->findIssues($file, $ast, $modelClassFiles);
+        return $this->findIssues($file, $ast, $modelClassFiles, $metaIndex);
     }
 
-    private function findIssues(string $file, array $ast, array $modelClassFiles): array
-    {
+    private function findIssues(
+        string $file,
+        array $ast,
+        array $modelClassFiles,
+        ModelMetadataIndex $metaIndex
+    ): array {
         $issues = [];
         $finder = new NodeFinder();
         $printer = new Standard();
         $scopes = new ScopeResolver($finder);
         $funcs = $scopes->functions($ast);
+        $uses = $this->useMap($ast);
+        $namespace = $this->namespaceOf($ast);
 
         $calls = $finder->find($ast, function (Node $node): bool {
             if (!$node instanceof Node\Expr\StaticCall && !$node instanceof Node\Expr\MethodCall) {
@@ -110,7 +124,7 @@ final class MassAssignmentAnalyzer
 
             $method = $node->name instanceof Node\Identifier ? $node->name->toString() : null;
 
-            return $method !== null && ($method === 'unguard' || $method === 'forceFill' || in_array($method, self::SOURCE_METHODS, true));
+            return $method !== null && ($method === 'unguard' || $method === 'forceFill' || $method === 'forceCreate' || in_array($method, self::SOURCE_METHODS, true));
         });
 
         foreach ($calls as $call) {
@@ -146,107 +160,478 @@ final class MassAssignmentAnalyzer
                 continue;
             }
 
-            // forceFill() bypasses $fillable/$guarded by design — with request
-            // input it is unguarded mass assignment no matter what the model
-            // declares, so no model resolution is needed. Seeder-style
-            // forceFill([...literals...]) stays silent.
-            if ($method === 'forceFill') {
-                $firstArg = $args[0] ?? null;
-                if (
-                    ($call instanceof Node\Expr\StaticCall || $call instanceof Node\Expr\MethodCall)
-                    && $firstArg instanceof Node\Arg
-                    && $this->isRequestInput($firstArg->value)
-                ) {
-                    $issues[] = new Issue(
-                        self::RULE,
-                        'forceFill() with untrusted request input bypasses mass assignment protection ($fillable/$guarded are ignored) — use fill() with $fillable or validated().',
-                        $file,
-                        $call->getStartLine(),
-                        Severity::Error,
-                        'custom',
-                        [
-                            'method' => $method,
-                            'flow_provenance' => $this->flowProvenance(
-                                $call,
-                                $firstArg->value,
-                                $method,
-                                $ast,
-                                $funcs,
-                                $scopes,
-                                $file
-                            ),
-                        ]
-                    );
-                }
+            // forceFill()/forceCreate() bypass $fillable/$guarded by design.
+            // Decision-first; the legacy fallback below preserves the exact
+            // old behavior (direct request input only; literals silent).
+            if (!($call instanceof Node\Expr\StaticCall || $call instanceof Node\Expr\MethodCall)) {
                 continue;
             }
-
-            if (count($args) === 0) {
+            if ($method === 'forceFill' || $method === 'forceCreate') {
+                $this->checkForceCall($call, $args, $method, $ast, $funcs, $scopes, $uses, $namespace, $file, $metaIndex, $issues);
                 continue;
             }
-
-            $firstArg = $args[0]->value;
-            if (!$this->isRequestInput($firstArg)) {
-                // updateOr*/firstOr* take lookup attributes first and fill values
-                // second — taint in either argument is mass assignment.
-                if (!in_array($method, ['updateOrCreate', 'firstOrCreate', 'updateOrInsert', 'firstOrNew'], true)) {
-                    continue;
-                }
-                $tainted = false;
-                foreach (array_slice($args, 1) as $extra) {
-                    if ($this->isRequestInput($extra->value)) {
-                        $tainted = true;
-                        break;
-                    }
-                }
-                if (!$tainted) {
-                    continue;
-                }
-            }
-
-            $target = $this->resolveModelTarget($call);
-            if ($target === null) {
-                continue;
-            }
-
-            if (!$this->modelExists($target, $modelClassFiles)) {
-                continue;
-            }
-
-            if ($this->modelDefinesMassAssignmentGuard($target, $modelClassFiles)) {
-                continue;
-            }
-
-            if ($call instanceof Node\Expr\StaticCall || $call instanceof Node\Expr\MethodCall) {
-                $issues[] = new Issue(
-                    self::RULE,
-                    sprintf(
-                        'Model::%s() called with untrusted request input (%s) but no $fillable/$guarded is defined.',
-                        $method,
-                        $printer->prettyPrintExpr($firstArg)
-                    ),
-                    $file,
-                    $call->getStartLine(),
-                    Severity::Error,
-                    'custom',
-                    [
-                        'method' => $method,
-                        'model' => $target,
-                        'flow_provenance' => $this->flowProvenance(
-                            $call,
-                            $this->taintingArg($call, $args, $method),
-                            $method,
-                            $ast,
-                            $funcs,
-                            $scopes,
-                            $file
-                        ),
-                    ]
-                );
-            }
+            $this->checkMassCall(
+                $call,
+                $args,
+                $method,
+                $ast,
+                $funcs,
+                $scopes,
+                $uses,
+                $namespace,
+                $file,
+                $metaIndex,
+                $modelClassFiles,
+                $printer,
+                $issues
+            );
         }
 
         return $issues;
+    }
+
+    /**
+     * @param list<Node\Arg|Node\VariadicPlaceholder> $args
+     * @param list<Node> $ast
+     * @param array<int, Node\Stmt\ClassMethod|Node\Stmt\Function_> $funcs
+     * @param array<string, string> $uses
+     * @param Issue[] $issues
+     */
+    private function checkForceCall(
+        Node\Expr $call,
+        array $args,
+        string $method,
+        array $ast,
+        array $funcs,
+        ScopeResolver $scopes,
+        array $uses,
+        ?string $namespace,
+        string $file,
+        ModelMetadataIndex $metaIndex,
+        array &$issues
+    ): void {
+        if (!($call instanceof Node\Expr\StaticCall || $call instanceof Node\Expr\MethodCall)) {
+            return;
+        }
+        $firstArg = $args[0] ?? null;
+        if ($firstArg instanceof Node\Arg) {
+            $decision = $this->decideSink($call, $firstArg->value, $method, $ast, $funcs, $scopes, $uses, $namespace, $file, $metaIndex);
+            if ($decision instanceof MassAssignmentDecision) {
+                if ($decision->verdict === MassAssignmentDecision::SAFE) {
+                    return;
+                }
+                if (
+                    $decision->verdict === MassAssignmentDecision::EXPOSED
+                    || $decision->verdict === MassAssignmentDecision::REVIEW
+                ) {
+                    $issues[] = $this->decisionIssue($decision, $method, $file, $call->getStartLine());
+
+                    return;
+                }
+            }
+        }
+        // Legacy fallback (byte-identical): direct request input only.
+        if ($method !== 'forceFill') {
+            return;
+        }
+        if ($firstArg instanceof Node\Arg && $this->isRequestInput($firstArg->value)) {
+            $issues[] = new Issue(
+                self::RULE,
+                'forceFill() with untrusted request input bypasses mass assignment protection ($fillable/$guarded are ignored) — use fill() with $fillable or validated().',
+                $file,
+                $call->getStartLine(),
+                Severity::Error,
+                'custom',
+                [
+                    'method' => $method,
+                    'flow_provenance' => $this->flowProvenance(
+                        $call,
+                        $firstArg->value,
+                        $method,
+                        $ast,
+                        $funcs,
+                        $scopes,
+                        $file
+                    ),
+                ]
+            );
+        }
+    }
+
+    /**
+     * Decision-first for create/fill/update/... sinks. SAFE suppresses
+     * (with evidence); EXPOSED/REVIEW emit production findings with the
+     * full chain payload; UNKNOWN/INTERNAL fall back to the byte-identical
+     * legacy heuristic below.
+     *
+     * @param list<Node\Arg|Node\VariadicPlaceholder> $args
+     * @param list<Node> $ast
+     * @param array<int, Node\Stmt\ClassMethod|Node\Stmt\Function_> $funcs
+     * @param array<string, string> $uses
+     * @param array<string, string> $modelClassFiles
+     * @param Issue[] $issues
+     */
+    private function checkMassCall(
+        Node\Expr $call,
+        array $args,
+        string $method,
+        array $ast,
+        array $funcs,
+        ScopeResolver $scopes,
+        array $uses,
+        ?string $namespace,
+        string $file,
+        ModelMetadataIndex $metaIndex,
+        array $modelClassFiles,
+        Standard $printer,
+        array &$issues
+    ): void {
+        if (!($call instanceof Node\Expr\StaticCall || $call instanceof Node\Expr\MethodCall)) {
+            return;
+        }
+        $decision = $this->decideCall($call, $args, $method, $ast, $funcs, $scopes, $uses, $namespace, $file, $metaIndex);
+        if ($decision instanceof MassAssignmentDecision) {
+            if ($decision->verdict === MassAssignmentDecision::SAFE) {
+                return;
+            }
+            if (
+                $decision->verdict === MassAssignmentDecision::EXPOSED
+                || $decision->verdict === MassAssignmentDecision::REVIEW
+            ) {
+                $issues[] = $this->decisionIssue($decision, $method, $file, $call->getStartLine());
+
+                return;
+            }
+        }
+
+        // Legacy fallback (byte-identical findings).
+        if (count($args) === 0) {
+            return;
+        }
+
+        $first = $args[0] ?? null;
+        if (!$first instanceof Node\Arg) {
+            return;
+        }
+        $firstArg = $first->value;
+        if (!$this->isRequestInput($firstArg)) {
+            // updateOr*/firstOr* take lookup attributes first and fill values
+            // second — taint in either argument is mass assignment.
+            if (!in_array($method, ['updateOrCreate', 'firstOrCreate', 'updateOrInsert', 'firstOrNew'], true)) {
+                return;
+            }
+            $tainted = false;
+            foreach (array_slice($args, 1) as $extra) {
+                if ($extra instanceof Node\Arg && $this->isRequestInput($extra->value)) {
+                    $tainted = true;
+                    break;
+                }
+            }
+            if (!$tainted) {
+                return;
+            }
+        }
+
+        $target = $this->resolveModelTarget($call);
+        if ($target === null) {
+            return;
+        }
+
+        if (!$this->modelExists($target, $modelClassFiles)) {
+            return;
+        }
+
+        if ($this->modelDefinesMassAssignmentGuard($target, $modelClassFiles)) {
+            return;
+        }
+
+        $issues[] = new Issue(
+            self::RULE,
+            sprintf(
+                'Model::%s() called with untrusted request input (%s) but no $fillable/$guarded is defined.',
+                $method,
+                $printer->prettyPrintExpr($firstArg)
+            ),
+            $file,
+            $call->getStartLine(),
+            Severity::Error,
+            'custom',
+            [
+                'method' => $method,
+                'model' => $target,
+                'flow_provenance' => $this->flowProvenance(
+                    $call,
+                    $this->taintingArg($call, $args, $method),
+                    $method,
+                    $ast,
+                    $funcs,
+                    $scopes,
+                    $file
+                ),
+            ]
+        );
+    }
+
+    /**
+     * Decision-first classification for one sink call. Returns null when
+     * no method context exists (legacy path decides).
+     *
+     * @param list<Node\Arg|Node\VariadicPlaceholder> $args
+     * @param list<Node> $ast
+     * @param array<int, Node\Stmt\ClassMethod|Node\Stmt\Function_> $funcs
+     * @param array<string, string> $uses
+     */
+    private function decideCall(
+        Node\Expr\StaticCall|Node\Expr\MethodCall $call,
+        array $args,
+        string $method,
+        array $ast,
+        array $funcs,
+        ScopeResolver $scopes,
+        array $uses,
+        ?string $namespace,
+        string $file,
+        ModelMetadataIndex $metaIndex
+    ): ?MassAssignmentDecision {
+        $funcId = $scopes->funcId($call, $ast);
+        $func = $funcs[$funcId] ?? null;
+        if (!$func instanceof Node\Stmt\ClassMethod) {
+            return null;
+        }
+        $candidates = [];
+        $first = $args[0] ?? null;
+        if ($first instanceof Node\Arg) {
+            $candidates[] = $first->value;
+        }
+        if (in_array($method, ['updateOrCreate', 'firstOrCreate', 'updateOrInsert', 'firstOrNew'], true)) {
+            foreach (array_slice($args, 1) as $extra) {
+                if ($extra instanceof Node\Arg) {
+                    $candidates[] = $extra->value;
+                }
+            }
+        }
+        $picked = null;
+        foreach ($candidates as $candidate) {
+            $flow = MassAssignmentFlow::classify(
+                $candidate,
+                $method,
+                $func,
+                $ast,
+                $funcId,
+                $file,
+                $call->getStartLine()
+            );
+            if ($flow->status !== MassFlow::INTERNAL) {
+                $picked = $flow;
+                break;
+            }
+        }
+        if ($picked === null) {
+            return null;
+        }
+        $model = $this->resolveSinkModel($call, $func, $uses, $namespace);
+        $meta = $model !== null ? $metaIndex->metadataFor($model) : null;
+
+        return MassAssignmentDecision::decide($picked, $meta, $metaIndex->globallyUnguarded());
+    }
+
+    /**
+     * Decision-first for forceFill()/forceCreate() (single argument).
+     *
+     * @param list<Node> $ast
+     * @param array<int, Node\Stmt\ClassMethod|Node\Stmt\Function_> $funcs
+     * @param array<string, string> $uses
+     */
+    private function decideSink(
+        Node\Expr\StaticCall|Node\Expr\MethodCall $call,
+        Node\Expr $arg,
+        string $method,
+        array $ast,
+        array $funcs,
+        ScopeResolver $scopes,
+        array $uses,
+        ?string $namespace,
+        string $file,
+        ModelMetadataIndex $metaIndex
+    ): ?MassAssignmentDecision {
+        $funcId = $scopes->funcId($call, $ast);
+        $func = $funcs[$funcId] ?? null;
+        if (!$func instanceof Node\Stmt\ClassMethod) {
+            return null;
+        }
+        $flow = MassAssignmentFlow::classify($arg, $method, $func, $ast, $funcId, $file, $call->getStartLine());
+        $model = $this->resolveSinkModel($call, $func, $uses, $namespace);
+        $meta = $model !== null ? $metaIndex->metadataFor($model) : null;
+
+        return MassAssignmentDecision::decide($flow, $meta, $metaIndex->globallyUnguarded());
+    }
+
+    /**
+     * @param array<string, string> $uses
+     */
+    private function resolveSinkModel(
+        Node\Expr\StaticCall|Node\Expr\MethodCall $call,
+        Node\Stmt\ClassMethod $func,
+        array $uses,
+        ?string $namespace
+    ): ?string {
+        if ($call instanceof Node\Expr\StaticCall && $call->class instanceof Node\Name) {
+            return $this->resolveName($call->class->toString(), $uses, $namespace);
+        }
+        if (
+            $call instanceof Node\Expr\MethodCall
+            && $call->var instanceof Node\Expr\Variable
+            && is_string($call->var->name)
+        ) {
+            return ModelTypeResolver::resolve($call->var, $func, $uses, $namespace, $call->getStartLine());
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, string> $uses
+     */
+    private function resolveName(string $name, array $uses, ?string $namespace): string
+    {
+        if (str_starts_with($name, '\\')) {
+            return ltrim($name, '\\');
+        }
+        $pos = strpos($name, '\\');
+        if ($pos !== false) {
+            $first = strtolower(substr($name, 0, $pos));
+            if (isset($uses[$first])) {
+                return $uses[$first] . substr($name, $pos);
+            }
+
+            return $namespace !== null ? $namespace . '\\' . $name : $name;
+        }
+        $lower = strtolower($name);
+        if (isset($uses[$lower])) {
+            return $uses[$lower];
+        }
+
+        return $namespace !== null ? $namespace . '\\' . $name : $name;
+    }
+
+    private function decisionIssue(
+        MassAssignmentDecision $decision,
+        string $method,
+        string $file,
+        int $line
+    ): Issue {
+        $model = $decision->model ?? 'unknown model';
+        $protection = $this->protectionPhrase($decision);
+        $metadata = [
+            'method' => $method,
+            'model' => $decision->model,
+            'mass_assignment' => $this->payload($decision, $method),
+        ];
+        if ($decision->verdict === MassAssignmentDecision::EXPOSED) {
+            return new Issue(
+                self::RULE,
+                sprintf(
+                    'Mass assignment exposure: %s reaches %s::%s() with %s.',
+                    $this->shortSource($decision),
+                    $model,
+                    strtolower($method),
+                    $protection
+                ),
+                $file,
+                $line,
+                Severity::Error,
+                'custom',
+                $metadata,
+                Confidence::High
+            );
+        }
+
+        return new Issue(
+            self::RULE,
+            sprintf(
+                'Possible mass assignment: %s reaches %s::%s() with %s.',
+                $this->shortSource($decision),
+                $model,
+                strtolower($method),
+                $protection
+            ),
+            $file,
+            $line,
+            Severity::Warning,
+            'custom',
+            $metadata,
+            Confidence::Medium
+        );
+    }
+
+    private function shortSource(MassAssignmentDecision $decision): string
+    {
+        foreach ($decision->trace as $step) {
+            if ($step['kind'] === 'source') {
+                return $step['detail'];
+            }
+        }
+
+        return $decision->input;
+    }
+
+    private function protectionPhrase(MassAssignmentDecision $decision): string
+    {
+        foreach ($decision->evidence as $step) {
+            if (str_contains($step, 'force-bypass')) {
+                return 'a guard-bypassing sink ($fillable/$guarded are ignored)';
+            }
+            if (str_contains($step, 'globally unguarded')) {
+                return 'globally disabled mass assignment protection';
+            }
+        }
+        if ($decision->assignability === ModelMetadata::UNGUARDED) {
+            return 'an unguarded model ($guarded = [])';
+        }
+        if ($decision->assignability === ModelMetadata::GUARDED_LIST) {
+            return 'a partially guarded model';
+        }
+
+        return 'unresolved model protection';
+    }
+
+    /**
+     * @return array{verdict: string, input_kind: string, source: string, sink: array{type: string, model: string|null}, model_protection: array{type: string, fields: list<string>|null}, bypass: bool, confidence: string, flow: list<array{kind: string, detail: string, line: int|null}>}
+     */
+    private function payload(MassAssignmentDecision $decision, string $method): array
+    {
+        $bypass = false;
+        foreach ($decision->evidence as $step) {
+            if (str_contains($step, 'force-bypass')) {
+                $bypass = true;
+                break;
+            }
+        }
+
+        return [
+            'verdict' => $decision->verdict,
+            'input_kind' => $decision->input,
+            'source' => $this->shortSource($decision),
+            'sink' => ['type' => strtolower($method), 'model' => $decision->model],
+            'model_protection' => [
+                'type' => $this->protectionType($decision->assignability),
+                'fields' => $decision->protectionFields,
+            ],
+            'bypass' => $bypass,
+            'confidence' => $decision->verdict === MassAssignmentDecision::EXPOSED ? 'high' : 'medium',
+            'flow' => $decision->trace,
+        ];
+    }
+
+    private function protectionType(string $assignability): string
+    {
+        return match ($assignability) {
+            ModelMetadata::FILLABLE => 'fillable',
+            ModelMetadata::GUARDED_ALL => 'guarded',
+            ModelMetadata::GUARDED_LIST => 'guarded',
+            ModelMetadata::UNGUARDED => 'unguarded',
+            default => 'unknown',
+        };
     }
 
     /**
@@ -299,6 +684,46 @@ final class MassAssignmentAnalyzer
         }
 
         return $firstExpr;
+    }
+
+    /**
+     * @param list<Node> $ast
+     * @return array<string, string> alias => FQCN
+     */
+    private function useMap(array $ast): array
+    {
+        $map = [];
+        $finder = new NodeFinder();
+        /** @var list<Node\Stmt\Use_> $uses */
+        $uses = $finder->findInstanceOf($ast, Node\Stmt\Use_::class);
+        foreach ($uses as $use) {
+            foreach ($use->uses as $useUse) {
+                $alias = $useUse->alias !== null
+                    ? $useUse->alias->toString()
+                    : $useUse->name->getLast();
+                $map[strtolower($alias)] = $useUse->name->toString();
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param list<Node> $ast
+     */
+    private function namespaceOf(array $ast): ?string
+    {
+        $finder = new NodeFinder();
+        $found = $finder->find($ast, static function (Node $node): bool {
+            return $node instanceof Node\Stmt\Namespace_;
+        });
+        foreach ($found as $node) {
+            if ($node instanceof Node\Stmt\Namespace_ && $node->name instanceof Node\Name) {
+                return $node->name->toString();
+            }
+        }
+
+        return null;
     }
 
     private function resolveModelTarget(Node $call): ?string

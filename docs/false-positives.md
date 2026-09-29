@@ -225,6 +225,23 @@ php artisan quality:check --tier=all --fail-on=none
   no data flow by design); linkstack 28 sinks, all internal. The 38 raw
   instance-`fill()` flows the legacy analyzer cannot see are the v0.4.2
   escalation pool, once `$fillable`/`$guarded` field-set reasoning lands.
+- **Production decision integration (v0.4.3)**: the analyzer runs
+  decision-first with deliberate fallback — SAFE suppresses (only when
+  provenance, target, assignability are all known, no bypass, no global
+  unguard), EXPOSED emits Error/High, REVIEW emits Warning/Medium with the
+  full chain payload (`verdict`/`input_kind`/`source`/`sink`/
+  `model_protection`/`bypass`/`confidence`/`flow`), UNKNOWN and
+  no-context sinks keep the byte-identical legacy heuristic. Framework
+  default-guarded models (neither property declared) suppress with
+  evidence; partially-guarded models with raw input become REVIEW instead
+  of silent. Findings answer the whole chain
+  (`$request->all()` → `$data` → `$user->fill($data)` → model → guarded
+  → decision). Snipe-it 1 → 3 (gone 0; 2 new REVIEW both human-verified:
+  `CustomFieldsetsController@store/update` fill raw input into a
+  `guarded = ['id']`-only model — authorized but all-but-`id` assignable);
+  linkstack 0 → 0. Protocol from here on: every new EXPOSED/REVIEW and
+  every gone finding gets 100% human review before the semantic engine
+  earns production-outcome power.
 - **Model metadata + assignability decisions, shadow mode (v0.4.2)**:
   `ModelMetadata` returns state, never bare arrays — `fillable` non-empty
   wins (FILLABLE), `$guarded = []` guards nothing (UNGUARDED), `['*']` or

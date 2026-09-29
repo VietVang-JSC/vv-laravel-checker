@@ -26,6 +26,8 @@ final class MassAssignmentDecision
      * @param list<string>|null $inputFields known input fields (only())
      * @param list<string>|null $assignableFields model-allowed fields
      *   (null = open or unknown set)
+     * @param list<string>|null $protectionFields protection-defining
+     *   fields (fillable list, guarded list, [] for guarded-all)
      * @param list<string> $sensitiveFields reserved slot (v0.4.2: always
      *   empty — risk ranking, not detection foundation)
      * @param list<string> $evidence
@@ -38,6 +40,7 @@ final class MassAssignmentDecision
         public readonly string $assignability,
         public readonly ?array $inputFields,
         public readonly ?array $assignableFields,
+        public readonly ?array $protectionFields,
         public readonly array $sensitiveFields,
         public readonly array $evidence,
         public readonly array $trace,
@@ -45,7 +48,7 @@ final class MassAssignmentDecision
     }
 
     /**
-     * @return array{verdict: string, input: string, model: string|null, assignability: string, input_fields: list<string>|null, assignable_fields: list<string>|null, sensitive_fields: list<string>, evidence: list<string>, trace: list<array{kind: string, detail: string, line: int|null}>}
+     * @return array{verdict: string, input: string, model: string|null, assignability: string, input_fields: list<string>|null, assignable_fields: list<string>|null, protection_fields: list<string>|null, sensitive_fields: list<string>, evidence: list<string>, trace: list<array{kind: string, detail: string, line: int|null}>}
      */
     public function toArray(): array
     {
@@ -56,6 +59,7 @@ final class MassAssignmentDecision
             'assignability' => $this->assignability,
             'input_fields' => $this->inputFields,
             'assignable_fields' => $this->assignableFields,
+            'protection_fields' => $this->protectionFields,
             'sensitive_fields' => $this->sensitiveFields,
             'evidence' => $this->evidence,
             'trace' => $this->trace,
@@ -77,6 +81,7 @@ final class MassAssignmentDecision
             string $assignability,
             ?array $inputFields,
             ?array $assignableFields,
+            ?array $protectionFields,
             array $extra
         ): self => new self(
             $verdict,
@@ -85,6 +90,7 @@ final class MassAssignmentDecision
             $assignability,
             $inputFields,
             $assignableFields,
+            $protectionFields,
             [],
             [...$evidence, ...$extra],
             $flow->trace
@@ -94,7 +100,7 @@ final class MassAssignmentDecision
         if ($flow->status === MassFlow::INTERNAL) {
             return $mk(self::SAFE, $metadata?->model, $metadata === null
                 ? ModelMetadata::ASSIGN_UNKNOWN
-                : $metadata->assignability()[0], null, null, ['internal data: not request mass assignment']);
+                : $metadata->assignability()[0], null, null, null, ['internal data: not request mass assignment']);
         }
 
         // force* bypasses model protection by definition: the model
@@ -106,6 +112,7 @@ final class MassAssignmentDecision
                 $metadata === null ? ModelMetadata::ASSIGN_UNKNOWN : $metadata->assignability()[0],
                 $flow->fields,
                 null,
+                null,
                 ['force-bypass: model protection ignored']
             );
         }
@@ -114,25 +121,33 @@ final class MassAssignmentDecision
         // unless a global unguard is proven, which bypasses every model
         // including unscanned ones.
         if ($metadata === null && !$globallyUnguarded) {
-            return $mk(self::UNKNOWN, null, ModelMetadata::ASSIGN_UNKNOWN, null, null, ['model: unresolved']);
+            return $mk(self::UNKNOWN, null, ModelMetadata::ASSIGN_UNKNOWN, null, null, null, ['model: unresolved']);
         }
         [$assignability, $assignable] = $metadata === null
             ? [ModelMetadata::UNGUARDED, null]
             : $metadata->assignability();
         $modelName = $metadata?->model;
+        $protectionFields = $metadata?->guardedFields;
+        if ($assignability === ModelMetadata::FILLABLE) {
+            $protectionFields = $assignable;
+        }
+        if ($assignability === ModelMetadata::GUARDED_ALL) {
+            $protectionFields = [];
+        }
         if ($globallyUnguarded && $assignability !== ModelMetadata::ASSIGN_UNKNOWN) {
             $assignability = ModelMetadata::UNGUARDED;
             $assignable = null;
+            $protectionFields = null;
         }
         $modelLabel = ($modelName ?? 'unknown model') . ' (' . $assignability . ')';
         if ($assignability === ModelMetadata::ASSIGN_UNKNOWN) {
-            return $mk(self::UNKNOWN, $modelName, $assignability, null, null, ['model: ' . $modelLabel]);
+            return $mk(self::UNKNOWN, $modelName, $assignability, null, null, null, ['model: ' . $modelLabel]);
         }
 
         // Framework-protected models: nothing assignable, or the
         // framework drops non-fillable input.
         if ($assignability === ModelMetadata::GUARDED_ALL) {
-            return $mk(self::SAFE, $modelName, $assignability, null, [], ['model: ' . $modelLabel]);
+            return $mk(self::SAFE, $modelName, $assignability, null, [], [], ['model: ' . $modelLabel]);
         }
         if ($assignability === ModelMetadata::FILLABLE) {
             return $mk(
@@ -141,6 +156,7 @@ final class MassAssignmentDecision
                 $assignability,
                 $flow->fields,
                 $assignable,
+                $protectionFields,
                 ['model: ' . $modelLabel]
             );
         }
@@ -161,6 +177,7 @@ final class MassAssignmentDecision
                     $assignability,
                     $flow->fields,
                     null,
+                    $protectionFields,
                     ['model: ' . $modelLabel, 'all input fields guarded']
                 );
             }
@@ -171,6 +188,7 @@ final class MassAssignmentDecision
                 $assignability,
                 $flow->fields,
                 null,
+                $protectionFields,
                 ['model: ' . $modelLabel, 'guarded list is not total protection']
             );
         }
@@ -180,9 +198,9 @@ final class MassAssignmentDecision
         // input needs human review — validated is never auto-safe.
         $extra = ['model: ' . $modelLabel . ($globallyUnguarded ? ' [globally unguarded]' : '')];
         if ($flow->status === MassFlow::RAW) {
-            return $mk(self::EXPOSED, $modelName, $assignability, null, null, $extra);
+            return $mk(self::EXPOSED, $modelName, $assignability, null, null, null, $extra);
         }
 
-        return $mk(self::REVIEW, $modelName, $assignability, $flow->fields, null, $extra);
+        return $mk(self::REVIEW, $modelName, $assignability, $flow->fields, null, null, $extra);
     }
 }

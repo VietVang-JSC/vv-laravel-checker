@@ -610,8 +610,8 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'mass_tp_update_or_create' => [
             static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(),
             [
-                'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController {\n    public function store(Request \$request) {\n        return Order::updateOrCreate(['code' => 'x'], \$request->all());\n    }\n}\n",
-                'app/Models/Order.php' => "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+                'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController extends Controller {\n    public function store(Request \$request) {\n        return Order::updateOrCreate(['code' => 'x'], \$request->all());\n    }\n}\n",
+                'app/Models/Order.php' => "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {\n    protected \$guarded = [];\n}\n",
             ],
             'MASS_ASSIGNMENT',
         ];
@@ -623,11 +623,19 @@ final class AnalyzerMetricsTest extends TestCase
             ],
             'MASS_ASSIGNMENT',
         ];
-        yield 'mass_fp_guarded' => [
+        yield 'mass_tp_guarded_list_review' => [
             static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(),
             [
                 'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController extends Controller {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
                 'app/Models/Order.php' => "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {\n    protected \$guarded = ['id'];\n}\n",
+            ],
+            'MASS_ASSIGNMENT',
+        ];
+        yield 'mass_fp_default_guarded' => [
+            static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(),
+            [
+                'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController extends Controller {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
+                'app/Models/Order.php' => "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
             ],
             null,
         ];
@@ -666,8 +674,8 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'mass_tp_custom_model_dir' => [
             static fn (): MassAssignmentAnalyzer => new MassAssignmentAnalyzer(['models_dirs' => ['app/Domain/Shop/Models']]),
             [
-                'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Domain\\Shop\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
-                'app/Domain/Shop/Models/Order.php' => "<?php\nnamespace App\\Domain\\Shop\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+                'app/Http/Controllers/OrderController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Domain\\Shop\\Models\\Order;\nuse Illuminate\\Http\\Request;\nclass OrderController extends Controller {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
+                'app/Domain/Shop/Models/Order.php' => "<?php\nnamespace App\\Domain\\Shop\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {\n    protected \$guarded = [];\n}\n",
             ],
             'MASS_ASSIGNMENT',
         ];
