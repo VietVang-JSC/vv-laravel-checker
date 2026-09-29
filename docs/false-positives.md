@@ -225,6 +225,26 @@ php artisan quality:check --tier=all --fail-on=none
   no data flow by design); linkstack 28 sinks, all internal. The 38 raw
   instance-`fill()` flows the legacy analyzer cannot see are the v0.4.2
   escalation pool, once `$fillable`/`$guarded` field-set reasoning lands.
+- **Model metadata + assignability decisions, shadow mode (v0.4.2)**:
+  `ModelMetadata` returns state, never bare arrays — `fillable` non-empty
+  wins (FILLABLE), `$guarded = []` guards nothing (UNGUARDED), `['*']` or
+  neither property declared (framework default) guards everything
+  (GUARDED), explicit lists stay lists, dynamic values are UNKNOWN (never
+  empty). A non-seed `Model::unguard()` without `reguard()` marks every
+  model unguarded; scoped `unguarded()` does not. `MassAssignmentDecision`
+  reasons Source × Model: raw into unguarded → EXPOSED; validated/bounded
+  into unguarded → REVIEW (validated is never auto-safe); `force*`
+  bypasses model protection (raw → EXPOSED, else REVIEW); fillable and
+  guarded-all models → SAFE; guarded-list → REVIEW unless bounded input is
+  fully guarded; internal data → SAFE; unknown model/input → UNKNOWN.
+  Instance targets resolve via params, single straight-line
+  `Model::...`/`new Model` assigns (later reassignments do not poison
+  earlier uses) and one variable hop. The analyzer is untouched — shadow
+  only. Snipe-it 38 raw flows: 34 SAFE via `$fillable` (sampled),
+  2 REVIEW via `$guarded = ['id']` (CustomFieldset), 2 UNKNOWN via
+  loop-nested assigns; 0 EXPOSED, and no `$guarded = []` exists in its
+  models, so zero is correct rather than a miss. Full-pilot verdicts:
+  snipe-it 138 safe / 2 review / 53 unknown, linkstack 28 safe.
 
 ### `OWASP_SSRF` / `OWASP_COMMAND_INJECTION` / `OWASP_SSTI`
 - The engine only reports when the URL/template/command is **not a literal** and shows

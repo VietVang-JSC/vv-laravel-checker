@@ -298,6 +298,7 @@ final class PolicyMappingTest extends TestCase
             "    public function update(\$id) {\n" .
             "        \$post = Post::find(\$id);\n" .
             "        \$post = Other::find(\$id);\n" .
+            "        \$x = \$post->id;\n" .
             "    }\n" .
             "}\n"
         );
@@ -309,6 +310,33 @@ final class PolicyMappingTest extends TestCase
             null,
             10
         ));
+    }
+
+    public function testModelTypeLaterReassignDoesNotPoison(): void
+    {
+        // Flow-sensitive: only assignments preceding the use count; a
+        // later reassignment cannot affect it.
+        $methods = $this->methodsOf(
+            "use App\\Models\\Post;\n" .
+            "class C {\n" .
+            "    public function update(\$id) {\n" .
+            "        \$post = new Post;\n" .
+            "        \$x = \$post->id;\n" .
+            "        \$post = Other::find(\$id);\n" .
+            "    }\n" .
+            "}\n"
+        );
+
+        self::assertSame(
+            'App\\Models\\Post',
+            ModelTypeResolver::resolve(
+                new Node\Expr\Variable('post'),
+                $methods[0],
+                ['post' => 'App\\Models\\Post'],
+                null,
+                6
+            )
+        );
     }
 
     public function testModelTypePropertyIsNull(): void

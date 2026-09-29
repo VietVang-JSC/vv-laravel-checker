@@ -66,18 +66,28 @@ final class ModelTypeResolver
         if ($method->stmts === null) {
             return null;
         }
-        // Exactly one straight-line assignment above the use.
+        // Flow-sensitive: only assignments preceding the use can affect
+        // it. Exactly one, straight-line (direct method-body child) —
+        // later reassignments and conditional mixes stay unknown.
         $finder = new NodeFinder();
-        $assigns = $finder->find($method->stmts, static function (Node $node) use ($name): bool {
-            return $node instanceof Node\Expr\Assign
-                && $node->var instanceof Node\Expr\Variable
-                && $node->var->name === $name;
-        });
-        if (count($assigns) !== 1) {
+        $before = [];
+        foreach (
+            $finder->find($method->stmts, static function (Node $node) use ($name, $useLine): bool {
+                return $node instanceof Node\Expr\Assign
+                    && $node->var instanceof Node\Expr\Variable
+                    && $node->var->name === $name
+                    && $node->getStartLine() < $useLine;
+            }) as $assign
+        ) {
+            if ($assign instanceof Node\Expr\Assign) {
+                $before[] = $assign;
+            }
+        }
+        if (count($before) !== 1) {
             return null;
         }
-        $assign = $assigns[0];
-        if (!$assign instanceof Node\Expr\Assign || $assign->getStartLine() >= $useLine) {
+        $assign = $before[0];
+        if (!self::isDirectChild($assign, $method)) {
             return null;
         }
         $rhs = $assign->expr;
@@ -117,6 +127,25 @@ final class ModelTypeResolver
         }
 
         return $namespace !== null ? $namespace . '\\' . $name : $name;
+    }
+
+    /**
+     * Direct method-body child (Stmt\Expression): excludes if/try/loop
+     * and closure bodies without parent attributes.
+     */
+    private static function isDirectChild(Node\Expr\Assign $assign, Node\Stmt\ClassMethod $method): bool
+    {
+        if ($method->stmts === null) {
+            return false;
+        }
+        $id = spl_object_id($assign);
+        foreach ($method->stmts as $stmt) {
+            if ($stmt instanceof Node\Stmt\Expression && spl_object_id($stmt->expr) === $id) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function isBuiltin(string $name): bool
