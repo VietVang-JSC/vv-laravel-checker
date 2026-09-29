@@ -136,6 +136,23 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/PostController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\Gate;\nclass PostController extends Controller {\n    public function store(\\App\\Models\\Post \$post) {\n        if (Gate::forUser(auth()->user())->denies('update', \$post)) {\n            throw new \\RuntimeException('forbidden');\n        }\n        \$post->save();\n    }\n}\n"],
             null,
         ];
+        yield 'bac_fp_policy_chain_resolved' => [
+            static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
+            [
+                'app/Http/Controllers/PostController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Post;\nclass PostController extends Controller {\n    public function update(\\Illuminate\\Http\\Request \$request, Post \$post) {\n        \$this->authorize('update', \$post);\n        \$post->save();\n    }\n}\n",
+                'app/Providers/AuthServiceProvider.php' => "<?php\nnamespace App\\Providers;\nuse App\\Models\\Post;\nuse App\\Policies\\PostPolicy;\nclass AuthServiceProvider {\n    protected \$policies = [\n        Post::class => PostPolicy::class,\n    ];\n}\n",
+                'app/Policies/PostPolicy.php' => "<?php\nnamespace App\\Policies;\nuse App\\Models\\Post;\nuse App\\Models\\User;\nclass PostPolicy {\n    public function update(User \$user, Post \$post) {\n        return \$user->id === \$post->user_id;\n    }\n}\n",
+            ],
+            null,
+        ];
+        yield 'bac_fp_authorize_unmapped_policy' => [
+            static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
+            [
+                'app/Http/Controllers/PostController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Post;\nclass PostController extends Controller {\n    public function update(\\Illuminate\\Http\\Request \$request, Post \$post) {\n        \$this->authorize('update', \$post);\n        \$post->save();\n    }\n}\n",
+                'app/Policies/PostPolicy.php' => "<?php\nnamespace App\\Policies;\nuse App\\Models\\Post;\nuse App\\Models\\User;\nclass PostPolicy {\n    public function update(User \$user, Post \$post) {\n        return \$user->id === \$post->user_id;\n    }\n}\n",
+            ],
+            null,
+        ];
         yield 'bac_fp_authenticate_call' => [
             static fn (): AbstractAnalyzer => new OwaspAccessControlAnalyzer(),
             ['app/Http/Controllers/Auth/LoginController.php' => "<?php\nnamespace App\\Http\\Controllers\\Auth;\nclass LoginController extends Controller {\n    public function store(\\App\\Http\\Requests\\LoginRequest \$request) {\n        \$request->authenticate();\n        return redirect('/dashboard');\n    }\n}\n"],

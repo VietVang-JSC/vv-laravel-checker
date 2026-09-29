@@ -190,6 +190,24 @@ php artisan quality:check --tier=all --fail-on=none
   `*Request` hints keep the legacy name-heuristic suppression (low confidence).
   BAC consumes the same evidence with unchanged outcomes; Voyager config()
   unknowns are kept as the future config-semantics benchmark.
+- **Policy / Gate semantic mapping (v0.3.6)**: `PolicyRegistry` resolves
+  model → policy (`AuthServiceProvider::$policies`, `Gate::policy()`) and
+  ability → `Gate::define()` (trivial `fn () => true` defines are not
+  evidence, mirroring the `authorize() => true` rule). Convention alone
+  (`Post` → `PostPolicy`) never maps — unregistered chains stay
+  medium/unresolved, never guesses. `ModelTypeResolver` recovers subject
+  types from parameter hints, single straight-line `Model::...`/`new Model`
+  assignments and one variable hop; properties and dynamic expressions stay
+  unknown. `resolveAuthorizeCall(ability, model)` returns the full chain
+  (model → policy → method, high) when proven, ability-only (medium) for
+  defined abilities without a model, unresolved (medium) otherwise. Policy
+  methods only need to exist — the framework enforces their boolean, so no
+  body analysis is required (unlike middleware gates). Self-enforcing calls
+  (`$this->authorize()`, `Gate::authorize()`) fail closed at runtime and
+  therefore never flag, even with unresolved chains; bare `Gate::allows()`
+  without an enforcing branch still flags (polarity preserved). BAC outcomes
+  are byte-identical on both pilots (7/7, 19/19); `authorizeResource()`
+  per-action mapping stays a sub-wave.
 
 ### `OWASP_SSRF` / `OWASP_COMMAND_INJECTION` / `OWASP_SSTI`
 - The engine only reports when the URL/template/command is **not a literal** and shows
