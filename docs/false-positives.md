@@ -782,6 +782,32 @@ the traversal-bound group (Redirect/Mass/Ssrf/Ssti/Command). SQLi
 goes its own track (10x ns/node + variance). Median 166s > 120s →
 performance work continues.
 
+PERF-OPT-3A — Redirect on the StructuralFactIndex (PASS).
+Blowup anatomy (per sink!): ScopeResolver::funcId = functions()
+traversal + one containment find PER function; AssignmentMap::visible
+= functions() traversal; guard scans = per-scope finds + per-node
+funcId. ~42 traversals/file → 367K traversals / 126M nodes for
+Redirect alone. New `Analysis\StructuralFactIndex` (ScanContextAware,
+lazy per file): ONE combined find per file buckets canonical refs —
+calls (FuncCall|MethodCall|StaticCall), functions
+(ClassMethod|Function_), assignsAndIfs (Assign|If_) — in traversal
+order, so every consumer sees the identical node set a direct find
+would return. No named buckets yet (string compares were never the
+cost). No copies/wrappers/interpretation; dataflow primitives
+untouched. funcId replaced by a parent-link walk (outermost-wins,
+proven equivalent to traversal-order first-containment, incl. the
+nested-function edge); per-scope guard scans iterate the facts with
+the same subtree+funcId filter. AssignmentMap::visible and traceFor
+kept as-is (per-sink/per-finding, now the residual).
+Gates (2 warm-ups + 3 measured, Snipe-it): Redirect 76.7s → 1.8s
+median [1.6-1.8s], visits 126M → 440K, findings 22 identical,
+Linkstack 108 + redirect 7 identical, corpus 1.000, FactIndex build
+1.0s (<10s), peak unchanged 1252MB (<1.6GB), global parse 1.0x.
+Full median 166s → 105.6s (98.7/105.6/106.0); node amplification
+136x → 68x; traversal 112x → 70x. Next bottleneck by median: Mass
+22.1s, Ssrf 19.6s, SQLi 12.5s (frozen track), Ssti 11.1s, Command
+7.3s. → OPT-3B (Mass + SSRF).
+
 ## 5. Don'ts
 
 - Do not add `baseline.json` to `.gitignore` **while** complaining that CI

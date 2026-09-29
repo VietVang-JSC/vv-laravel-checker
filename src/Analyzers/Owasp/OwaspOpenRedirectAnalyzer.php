@@ -9,6 +9,7 @@ use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
 use Rampart\QualityChecker\Analysis\AssignmentMap;
 use Rampart\QualityChecker\Analysis\FlowTrace;
 use Rampart\QualityChecker\Analysis\ScopeResolver;
+use Rampart\QualityChecker\Analysis\StructuralFactIndex;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
@@ -55,6 +56,49 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
     private ?ScopeResolver $scopes = null;
 
     private ?AssignmentMap $assignments = null;
+
+    private ?StructuralFactIndex $facts = null;
+
+    /**
+     * Shared structural facts for this run (one indexing traversal per
+     * file). Replaces the per-sink full-tree re-traversals; scope
+     * questions below still go through ScopeResolver/AssignmentMap.
+     */
+    private function facts(): StructuralFactIndex
+    {
+        if ($this->facts === null) {
+            $this->facts = new StructuralFactIndex();
+            $this->facts->setScanContext($this->sharedScanContext());
+        }
+
+        return $this->facts;
+    }
+
+    /**
+     * Scope id via parent links (outermost-wins): identical to
+     * ScopeResolver::funcId for real code (nested named functions
+     * resolve to the outermost container, matching traversal-order
+     * first-containment). O(depth), no tree walk.
+     */
+    private function funcIdViaParents(Node $node): int
+    {
+        $id = 0;
+        if ($node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_) {
+            $id = spl_object_id($node);
+        }
+        $current = $node;
+        while (($parent = $current->getAttribute('parent')) instanceof Node) {
+            if (
+                $parent instanceof Node\Stmt\ClassMethod
+                || $parent instanceof Node\Stmt\Function_
+            ) {
+                $id = spl_object_id($parent);
+            }
+            $current = $parent;
+        }
+
+        return $id;
+    }
 
     private function scopes(): ScopeResolver
     {
@@ -108,14 +152,12 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
                 $nodes[] = $node;
             }
         }
-        $guarded = $this->guardSanitizedVars($nodes, []);
+        $guarded = $this->guardSanitizedVars($file, $nodes, []);
 
         $issues = [];
-        $calls = $this->finder()->find($nodes, function (Node $node): bool {
-            return $node instanceof Node\Expr\FuncCall
-                || $node instanceof Node\Expr\MethodCall
-                || $node instanceof Node\Expr\StaticCall;
-        });
+        // Structural facts: all call expressions in one indexed pass,
+        // replacing the per-file full-tree find (resolveSink filters).
+        $calls = $this->facts()->calls($file, $nodes);
 
         foreach ($calls as $call) {
             $sink = $this->resolveSink($call);
@@ -418,7 +460,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
     private function visibleVarMaps(array $nodes, Node $call): array
     {
         $sinkLine = $call->getStartLine();
-        $funcId = $this->scopes()->funcId($call, $nodes);
+        $funcId = $this->funcIdViaParents($call);
 
         $safe = [];
         $pinned = [];
@@ -561,23 +603,34 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
      * @param array<string, true> $known
      * @return array<int, array<string, int>> func id => var name => guard line
      */
-    private function guardSanitizedVars(array $nodes, array $known): array
+    /**
+     * @param list<Node> $nodes
+     * @param array<string, true> $known
+     * @return array<int, array<string, int>>
+     */
+    private function guardSanitizedVars(string $file, array $nodes, array $known): array
     {
         $guarded = [];
 
-        $scopes = $this->scopes()->functions($nodes);
-        $scopes[0] = $nodes;
+        // Scope order mirrors the old implementation: functions in
+        // traversal order, top-level scope 0 last (rememberGuard takes
+        // the minimum line, so order is stability-only). null = whole
+        // file (top-level scope: the old code searched $nodes, then
+        // kept only funcId 0).
+        $scopes = [];
+        foreach ($this->facts()->functions($file, $nodes) as $func) {
+            $scopes[spl_object_id($func)] = $func;
+        }
+        $scopes[0] = null;
 
         foreach ($scopes as $funcId => $scope) {
-            $haystack = $scope === $nodes ? $nodes : [$scope];
-            foreach (
-                $this->finder()->find($haystack, static function (Node $node): bool {
-                    return $node instanceof Node\Expr\Assign || $node instanceof Node\Stmt\If_;
-                }) as $node
-            ) {
-                // Guards only apply inside their own scope: a gate in one
-                // function must never silence a sink in another (or top-level).
-                if ($this->scopes()->funcId($node, $nodes) !== $funcId) {
+            foreach ($this->facts()->assignsAndIfs($file, $nodes) as $node) {
+                // Same filter as the old per-scope find: only nodes
+                // inside this scope's subtree, in this scope's funcId.
+                if ($scope !== null && !$this->isWithin($node, $scope)) {
+                    continue;
+                }
+                if ($this->funcIdViaParents($node) !== $funcId) {
                     continue;
                 }
                 if ($node instanceof Node\Expr\Assign) {
@@ -591,6 +644,22 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
         }
 
         return $guarded;
+    }
+
+    /**
+     * Subtree containment via parent links (O(depth), no tree walk).
+     */
+    private function isWithin(Node $node, Node $ancestor): bool
+    {
+        $current = $node;
+        while (($parent = $current->getAttribute('parent')) instanceof Node) {
+            if ($parent === $ancestor) {
+                return true;
+            }
+            $current = $parent;
+        }
+
+        return false;
     }
 
     /**
@@ -756,7 +825,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
      */
     private function isGuardSanitized(Node\Expr $target, Node $call, array $nodes, array $guarded): bool
     {
-        $funcId = $this->scopes()->funcId($call, $nodes);
+        $funcId = $this->funcIdViaParents($call);
         $vars = [];
         foreach (
             $this->finder()->find($target, static function (Node $node): bool {
