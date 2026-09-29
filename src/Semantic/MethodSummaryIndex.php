@@ -108,20 +108,216 @@ final class MethodSummaryIndex
         return $summary;
     }
 
+    /**
+     * Method lookup starting at the parent: implements `parent::method()`
+     * semantics (private ancestors ARE reachable through parent::).
+     */
+    public function parentSummary(string $callerClass, string $method): MethodSummary
+    {
+        $start = microtime(true);
+        try {
+            $loc = $this->locateClass($callerClass);
+            if ($loc === null) {
+                return MethodSummary::unknown($callerClass, $method, 'unresolved-class');
+            }
+            $parent = $this->extendsName($loc['node'], $loc['uses'], $loc['namespace']);
+            if ($parent === null) {
+                return MethodSummary::unknown($callerClass, $method, 'unresolved-parent');
+            }
+
+            return $this->resolveInHierarchy($parent, $method, $callerClass, 0, true);
+        } finally {
+            $this->seconds += microtime(true) - $start;
+        }
+    }
+
     private function buildSummary(string $class, string $method): MethodSummary
+    {
+        return $this->resolveInHierarchy($class, $method, $class, 0, false);
+    }
+
+    private const MAX_CHAIN = 8;
+
+    /**
+     * Class-hierarchy method lookup: nearest definition wins (child
+     * overrides), private ancestors are skipped (never inherited —
+     * except through an explicit `parent::` call), abstract/interface
+     * machinery stays out of scope.
+     */
+    private function resolveInHierarchy(
+        string $class,
+        string $method,
+        string $origin,
+        int $depth,
+        bool $viaParentCall
+    ): MethodSummary {
+        if ($depth > self::MAX_CHAIN) {
+            return MethodSummary::unknown($origin, $method, 'depth-limit');
+        }
+        $loc = $this->locateClass($class);
+        if ($loc === null) {
+            return MethodSummary::unknown($origin, $method, 'unresolved-class');
+        }
+        $target = $this->findMethodInClass($loc['node'], $method);
+        if ($target !== null) {
+            $visibility = $target->isPrivate() ? 'private' : ($target->isProtected() ? 'protected' : 'public');
+            if ($visibility === 'private' && $class !== $origin && !$viaParentCall) {
+                // Private members are not inherited: keep walking up.
+                $parent = $this->extendsName($loc['node'], $loc['uses'], $loc['namespace']);
+                if ($parent === null) {
+                    return MethodSummary::unknown($origin, $method, 'unresolved-method');
+                }
+
+                return $this->resolveInHierarchy($parent, $method, $origin, $depth + 1, $viaParentCall);
+            }
+
+            return $this->summarizeMethod($target, $class, $method, $visibility);
+        }
+        $parent = $this->extendsName($loc['node'], $loc['uses'], $loc['namespace']);
+        if ($parent === null) {
+            return MethodSummary::unknown($origin, $method, 'unresolved-method');
+        }
+
+        return $this->resolveInHierarchy($parent, $method, $origin, $depth + 1, $viaParentCall);
+    }
+
+    /**
+     * @return array{node: Node\Stmt\Class_, uses: array<string, string>, namespace: string|null, file: string}|null
+     */
+    private function locateClass(string $class): ?array
     {
         $file = $this->classFile($class);
         if ($file === null) {
-            return MethodSummary::unknown($class, $method, 'unresolved-class');
+            return null;
         }
         $nodes = $this->astOf($file);
         if ($nodes === null) {
-            return MethodSummary::unknown($class, $method, 'unresolved-class');
+            return null;
         }
-        $target = $this->findMethod($nodes, $method);
-        if ($target === null) {
-            return MethodSummary::unknown($class, $method, 'unresolved-method');
+        $short = $this->shortClass($class);
+        $namespace = $this->namespaceOf($nodes);
+        $finder = new NodeFinder();
+        $best = null;
+        foreach ($finder->find($nodes, static fn (Node $n): bool => $n instanceof Node\Stmt\Class_) as $node) {
+            if (!$node instanceof Node\Stmt\Class_ || $node->name === null) {
+                continue;
+            }
+            if (strtolower($node->name->toString()) !== strtolower($short)) {
+                continue;
+            }
+            $best = $node;
+            if ($namespace !== null && strtolower($namespace) === strtolower(ltrim($this->namespacePrefix($class), '\\'))) {
+                break;
+            }
         }
+        if ($best === null) {
+            return null;
+        }
+
+        return ['node' => $best, 'uses' => $this->useMap($nodes), 'namespace' => $namespace, 'file' => $file];
+    }
+
+    private function namespacePrefix(string $class): string
+    {
+        $trimmed = ltrim($class, '\\');
+        $pos = strrpos($trimmed, '\\');
+
+        return $pos === false ? '' : substr($trimmed, 0, $pos);
+    }
+
+    /**
+     * @param array<string, string> $uses
+     */
+    private function extendsName(Node\Stmt\Class_ $node, array $uses, ?string $namespace): ?string
+    {
+        if (!$node->extends instanceof Node\Name) {
+            return null;
+        }
+
+        return $this->resolveName($node->extends->toString(), $uses, $namespace, $node->extends);
+    }
+
+    /**
+     * @param array<string, string> $uses
+     */
+    private function resolveName(string $name, array $uses, ?string $namespace, ?Node\Name $node = null): string
+    {
+        if ($node instanceof Node\Name\FullyQualified) {
+            return $node->toString();
+        }
+        if (str_starts_with($name, '\\')) {
+            return ltrim($name, '\\');
+        }
+        $pos = strpos($name, '\\');
+        if ($pos !== false) {
+            $first = strtolower(substr($name, 0, $pos));
+            if (isset($uses[$first])) {
+                return $uses[$first] . substr($name, $pos);
+            }
+
+            return $namespace !== null ? $namespace . '\\' . $name : $name;
+        }
+        $lower = strtolower($name);
+        if (isset($uses[$lower])) {
+            return $uses[$lower];
+        }
+
+        return $namespace !== null ? $namespace . '\\' . $name : $name;
+    }
+
+    private function findMethodInClass(Node\Stmt\Class_ $node, string $method): ?Node\Stmt\ClassMethod
+    {
+        foreach ($node->stmts as $stmt) {
+            if (
+                $stmt instanceof Node\Stmt\ClassMethod
+                && strtolower($stmt->name->toString()) === strtolower($method)
+            ) {
+                return $stmt;
+            }
+        }
+
+        return null;
+    }
+
+    private function summarizeMethod(
+        Node\Stmt\ClassMethod $target,
+        string $declaringClass,
+        string $method,
+        string $visibility
+    ): MethodSummary {
+        // Preserve the original request class in provenance while the
+        // declaring class travels separately.
+        $summary = $this->summarizeBody($target, $declaringClass, $method);
+        if ($summary->kind === MethodSummary::UNKNOWN) {
+            return MethodSummary::unknown(
+                $summary->class,
+                $summary->method,
+                $summary->unresolvedReason ?? 'unsupported-expression',
+                $declaringClass,
+                $visibility
+            );
+        }
+
+        return new MethodSummary(
+            $summary->class,
+            $summary->method,
+            $summary->kind,
+            $summary->params,
+            $summary->paramIndex,
+            $summary->operation,
+            $summary->fields,
+            $summary->confidence,
+            $summary->evidence,
+            null,
+            $declaringClass,
+            $visibility
+        );
+    }
+    private function summarizeBody(
+        Node\Stmt\ClassMethod $target,
+        string $class,
+        string $method
+    ): MethodSummary {
         if ($target->stmts === null) {
             return MethodSummary::unknown($class, $method, 'unsupported-expression');
         }
@@ -286,17 +482,53 @@ final class MethodSummaryIndex
 
     /**
      * @param list<Node> $nodes
+     * @return array<string, string> lowercase alias => FQCN
      */
-    private function findMethod(array $nodes, string $method): ?Node\Stmt\ClassMethod
+    private function useMap(array $nodes): array
+    {
+        $map = [];
+        $finder = new NodeFinder();
+        $imports = $finder->find($nodes, static function (Node $node): bool {
+            return $node instanceof Node\Stmt\Use_ || $node instanceof Node\Stmt\GroupUse;
+        });
+        foreach ($imports as $import) {
+            if ($import instanceof Node\Stmt\GroupUse) {
+                foreach ($import->uses as $use) {
+                    if (!$use instanceof Node\Stmt\UseUse) {
+                        continue;
+                    }
+                    $alias = $use->alias !== null ? $use->alias->toString() : $use->name->getLast();
+                    $map[strtolower($alias)] = $import->prefix->toString() . '\\' . $use->name->toString();
+                }
+                continue;
+            }
+            if (!$import instanceof Node\Stmt\Use_ || $import->type !== Node\Stmt\Use_::TYPE_NORMAL) {
+                continue;
+            }
+            foreach ($import->uses as $use) {
+                if (!$use instanceof Node\Stmt\UseUse) {
+                    continue;
+                }
+                $alias = $use->alias !== null ? $use->alias->toString() : $use->name->getLast();
+                $map[strtolower($alias)] = $use->name->toString();
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param list<Node> $nodes
+     */
+    private function namespaceOf(array $nodes): ?string
     {
         $finder = new NodeFinder();
-        $found = $finder->find($nodes, static function (Node $node) use ($method): bool {
-            return $node instanceof Node\Stmt\ClassMethod
-                && strtolower($node->name->toString()) === strtolower($method);
+        $found = $finder->find($nodes, static function (Node $node): bool {
+            return $node instanceof Node\Stmt\Namespace_;
         });
         foreach ($found as $node) {
-            if ($node instanceof Node\Stmt\ClassMethod) {
-                return $node;
+            if ($node instanceof Node\Stmt\Namespace_ && $node->name instanceof Node\Name) {
+                return $node->name->toString();
             }
         }
 

@@ -15,8 +15,8 @@ use Rampart\QualityChecker\Semantic\MethodSummary;
 use Rampart\QualityChecker\Semantic\MethodSummaryIndex;
 
 /**
- * v0.5.2 bounded interprocedural return summaries: corpus A–T.
- * Soundness first — unresolved beats wrong, always.
+ * v0.5.2 bounded interprocedural return summaries: corpus Aâ€“T.
+ * Soundness first â€” unresolved beats wrong, always.
  */
 final class MethodSummaryTest extends TestCase
 {
@@ -142,7 +142,7 @@ final class MethodSummaryTest extends TestCase
     private function classifySink(string $controllerPath, array $paths, string $body): MassFlow
     {
         // Rewrite controller body per case is complex; instead each case
-        // builds its own project — this helper classifies the FIRST
+        // builds its own project â€” this helper classifies the FIRST
         // create()/fill() sink in the already-written controller.
         $parsed = $this->parse($controllerPath);
         $finder = new NodeFinder();
@@ -286,7 +286,7 @@ final class MethodSummaryTest extends TestCase
 
     public function testRecursiveServiceIsUnknown(): void
     {
-        // F + S: A→B→A cycle stops, no hang.
+        // F + S: Aâ†’Bâ†’A cycle stops, no hang.
         $status = $this->flowStatus(
             [
                 'app/Services/UserService.php' => "<?php\nnamespace App\\Services;\n" .
@@ -354,7 +354,7 @@ final class MethodSummaryTest extends TestCase
         }
         $flow = $this->classifySink($controllerPath, $paths, '');
 
-        // orderService::payload returns validated — not userService's raw.
+        // orderService::payload returns validated â€” not userService's raw.
         self::assertSame(MassFlow::VALIDATED, $flow->status);
     }
 
@@ -547,5 +547,269 @@ final class MethodSummaryTest extends TestCase
         );
 
         self::assertSame(MassFlow::RAW, $status);
+    }
+
+    /**
+     * @param array<string, string> $extra
+     * @return list<string>
+     */
+    private function hierarchyProject(array $extra = []): array
+    {
+        return $this->project(array_merge(
+            [
+                'app/Services/BaseImporter.php' => "<?php\nnamespace App\\Services;\n" .
+                    "class BaseImporter {\n" .
+                    "    protected function sanitize(\$data) {\n" .
+                    "        return \$data;\n" .
+                    "    }\n" .
+                    "}\n",
+            ],
+            $extra
+        ));
+    }
+
+    public function testDirectParentMethodResolves(): void
+    {
+        // U.
+        $paths = $this->hierarchyProject([
+            'app/Services/ItemImporter.php' => "<?php\nnamespace App\\Services;\n" .
+                "class ItemImporter extends BaseImporter {\n" .
+                "}\n",
+        ]);
+        $index = new MethodSummaryIndex($paths);
+        $summary = $index->summary('App\\Services\\ItemImporter', 'sanitize');
+
+        self::assertSame(MethodSummary::PARAM, $summary->kind);
+        self::assertSame('App\\Services\\BaseImporter', $summary->declaringClass);
+    }
+
+    public function testGrandparentMethodResolves(): void
+    {
+        // V.
+        $paths = $this->hierarchyProject([
+            'app/Services/ItemImporter.php' => "<?php\nnamespace App\\Services;\n" .
+                "class ItemImporter extends BaseImporter {\n" .
+                "}\n",
+            'app/Services/AccessoryImporter.php' => "<?php\nnamespace App\\Services;\n" .
+                "class AccessoryImporter extends ItemImporter {\n" .
+                "}\n",
+        ]);
+        $index = new MethodSummaryIndex($paths);
+        $summary = $index->summary('App\\Services\\AccessoryImporter', 'sanitize');
+
+        self::assertSame(MethodSummary::PARAM, $summary->kind);
+        self::assertSame('App\\Services\\BaseImporter', $summary->declaringClass);
+    }
+
+    public function testChildOverrideWins(): void
+    {
+        // W.
+        $paths = $this->project([
+            'app/Services/Base.php' => "<?php\nnamespace App\\Services;\n" .
+                "class Base {\n" .
+                "    public function payload(\\Illuminate\\Http\\Request \$request) {\n" .
+                "        return \$request->all();\n" .
+                "    }\n" .
+                "}\n",
+            'app/Services/Child.php' => "<?php\nnamespace App\\Services;\n" .
+                "class Child extends Base {\n" .
+                "    public function payload(\\Illuminate\\Http\\Request \$request) {\n" .
+                "        return \$request->validated();\n" .
+                "    }\n" .
+                "}\n",
+            'app/Http/Controllers/UserController.php' => "<?php\nnamespace App\\Http\\Controllers;\n" .
+                "use App\\Services\\Child;\n" .
+                "class UserController extends Controller {\n" .
+                "    private Child \$svc;\n" .
+                "    public function store(\\Illuminate\\Http\\Request \$request) {\n" .
+                "        \$data = \$this->svc->payload(\$request); User::create(\$data);\n" .
+                "    }\n" .
+                "}\n",
+        ]);
+        $controllerPath = null;
+        foreach ($paths as $path) {
+            if (str_ends_with($path, 'UserController.php')) {
+                $controllerPath = $path;
+            }
+        }
+        $flow = $this->classifySink($controllerPath, $paths, '');
+
+        // Child::payload (validated), not Base::payload (raw).
+        self::assertSame(MassFlow::VALIDATED, $flow->status);
+    }
+
+    public function testParentCallTargetsParent(): void
+    {
+        // X.
+        $paths = $this->project([
+            'app/Services/Base.php' => "<?php\nnamespace App\\Services;\n" .
+                "class Base {\n" .
+                "    public function payload(\\Illuminate\\Http\\Request \$request) {\n" .
+                "        return \$request->all();\n" .
+                "    }\n" .
+                "}\n",
+            'app/Services/Child.php' => "<?php\nnamespace App\\Services;\n" .
+                "class Child extends Base {\n" .
+                "    public function payload(\\Illuminate\\Http\\Request \$request) {\n" .
+                "        return \$request->validated();\n" .
+                "    }\n" .
+                "}\n",
+        ]);
+        $index = new MethodSummaryIndex($paths);
+        $summary = $index->parentSummary('App\\Services\\Child', 'payload');
+
+        self::assertSame(MethodSummary::PARAM, $summary->kind);
+        self::assertSame('App\\Services\\Base', $summary->declaringClass);
+        self::assertSame(MethodSummary::OP_ALL, $summary->operation);
+    }
+
+    public function testPrivateParentMethodNotInherited(): void
+    {
+        // Y.
+        $paths = $this->project([
+            'app/Services/Base.php' => "<?php\nnamespace App\\Services;\n" .
+                "class Base {\n" .
+                "    private function payload(\\Illuminate\\Http\\Request \$request) {\n" .
+                "        return \$request->all();\n" .
+                "    }\n" .
+                "}\n",
+            'app/Services/Child.php' => "<?php\nnamespace App\\Services;\n" .
+                "class Child extends Base {\n" .
+                "}\n",
+        ]);
+        $index = new MethodSummaryIndex($paths);
+        $summary = $index->summary('App\\Services\\Child', 'payload');
+
+        self::assertSame(MethodSummary::UNKNOWN, $summary->kind);
+        self::assertSame('unresolved-method', $summary->unresolvedReason);
+    }
+
+    public function testProtectedParentMethodWorks(): void
+    {
+        // Z.
+        $paths = $this->hierarchyProject([
+            'app/Services/ItemImporter.php' => "<?php\nnamespace App\\Services;\n" .
+                "class ItemImporter extends BaseImporter {\n" .
+                "}\n",
+        ]);
+        $index = new MethodSummaryIndex($paths);
+        $summary = $index->summary('App\\Services\\ItemImporter', 'sanitize');
+
+        self::assertSame(MethodSummary::PARAM, $summary->kind);
+        self::assertSame('protected', $summary->visibility);
+    }
+
+    public function testProtectedMethodOnOtherObjectIsUnknown(): void
+    {
+        // Visibility gate: protected members are only reachable through
+        // $this — calling them on another object would fatal at runtime.
+        $paths = $this->project([
+            'app/Services/Base.php' => "<?php\nnamespace App\\Services;\n" .
+                "class Base {\n" .
+                "    protected function payload(\\Illuminate\\Http\\Request \$request) {\n" .
+                "        return \$request->all();\n" .
+                "    }\n" .
+                "}\n",
+            'app/Http/Controllers/UserController.php' => "<?php\nnamespace App\\Http\\Controllers;\n" .
+                "use App\\Services\\Base;\n" .
+                "class UserController extends Controller {\n" .
+                "    private Base \$svc;\n" .
+                "    public function store(\\Illuminate\\Http\\Request \$request) {\n" .
+                "        \$data = \$this->svc->payload(\$request); User::create(\$data);\n" .
+                "    }\n" .
+                "}\n",
+        ]);
+        $controllerPath = null;
+        foreach ($paths as $path) {
+            if (str_ends_with($path, 'UserController.php')) {
+                $controllerPath = $path;
+            }
+        }
+        $flow = $this->classifySink($controllerPath, $paths, '');
+
+        self::assertSame(MassFlow::UNKNOWN, $flow->status);
+    }
+
+    public function testUnresolvedParentClassIsUnknown(): void
+    {
+        // AA.
+        $paths = $this->project([
+            'app/Services/Child.php' => "<?php\nnamespace App\\Services;\n" .
+                "class Child extends MissingBase {\n" .
+                "}\n",
+        ]);
+        $index = new MethodSummaryIndex($paths);
+        $summary = $index->summary('App\\Services\\Child', 'payload');
+
+        self::assertSame(MethodSummary::UNKNOWN, $summary->kind);
+        self::assertSame('unresolved-class', $summary->unresolvedReason);
+    }
+
+    public function testInheritanceCycleIsBounded(): void
+    {
+        // AB: malformed Aâ†”B cycle terminates.
+        $paths = $this->project([
+            'app/Services/A.php' => "<?php\nnamespace App\\Services;\nclass A extends B {}\n",
+            'app/Services/B.php' => "<?php\nnamespace App\\Services;\nclass B extends A {}\n",
+        ]);
+        $index = new MethodSummaryIndex($paths);
+        $summary = $index->summary('App\\Services\\A', 'payload');
+
+        self::assertSame(MethodSummary::UNKNOWN, $summary->kind);
+    }
+
+    public function testNoCrossTreeResolution(): void
+    {
+        // AC: same method name in an unrelated tree never resolves.
+        $paths = $this->project([
+            'app/Services/BaseImporter.php' => "<?php\nnamespace App\\Services;\n" .
+                "class BaseImporter {\n" .
+                "    protected function sanitize(\$data) {\n" .
+                "        return \$data;\n" .
+                "    }\n" .
+                "}\n",
+            'app/Other/Worker.php' => "<?php\nnamespace App\\Other;\n" .
+                "class Worker {\n" .
+                "}\n",
+        ]);
+        $index = new MethodSummaryIndex($paths);
+        $summary = $index->summary('App\\Other\\Worker', 'sanitize');
+
+        self::assertSame(MethodSummary::UNKNOWN, $summary->kind);
+        self::assertSame('unresolved-method', $summary->unresolvedReason);
+    }
+
+    public function testInheritedPassthroughPreservesProvenance(): void
+    {
+        // AD: Child call â†’ inherited Base::payload â†’ PARAM(0) â†’ caller
+        // arg RAW. This is the v0.5.2+v0.5.3 join proving itself.
+        $paths = $this->project([
+            'app/Services/Base.php' => "<?php\nnamespace App\\Services;\n" .
+                "class Base {\n" .
+                "    public function payload(\$input) {\n" .
+                "        return \$input;\n" .
+                "    }\n" .
+                "}\n",
+            'app/Services/Child.php' => "<?php\nnamespace App\\Services;\n" .
+                "class Child extends Base {\n" .
+                "}\n",
+            'app/Http/Controllers/UserController.php' => "<?php\nnamespace App\\Http\\Controllers;\n" .
+                "use App\\Services\\Child;\n" .
+                "class UserController extends Controller {\n" .
+                "    private Child \$svc;\n" .
+                "    public function store(\\Illuminate\\Http\\Request \$request) {\n" .
+                "        \$data = \$this->svc->payload(\$request->all()); User::create(\$data);\n" .
+                "    }\n" .
+                "}\n",
+        ]);
+        $controllerPath = null;
+        foreach ($paths as $path) {
+            if (str_ends_with($path, 'UserController.php')) {
+                $controllerPath = $path;
+            }
+        }
+        $flow = $this->classifySink($controllerPath, $paths, '');
+
+        self::assertSame(MassFlow::RAW, $flow->status);
     }
 }

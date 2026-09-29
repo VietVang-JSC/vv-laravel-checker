@@ -47,16 +47,23 @@ final class MethodSummary
         public readonly string $confidence,
         public readonly string $evidence,
         public readonly ?string $unresolvedReason,
+        public readonly ?string $declaringClass = null,
+        public readonly string $visibility = 'public',
     ) {
     }
 
-    public static function unknown(string $class, string $method, string $reason): self
-    {
-        return new self($class, $method, self::UNKNOWN, [], null, null, null, 'low', '', $reason);
+    public static function unknown(
+        string $class,
+        string $method,
+        string $reason,
+        ?string $declaringClass = null,
+        string $visibility = 'public'
+    ): self {
+        return new self($class, $method, self::UNKNOWN, [], null, null, null, 'low', '', $reason, $declaringClass, $visibility);
     }
 
     /**
-     * @return array{class: string, method: string, kind: string, params: list<string>, param_index: int|null, operation: string|null, fields: list<string>|null, confidence: string, evidence: string, unresolved_reason: string|null}
+     * @return array{class: string, method: string, kind: string, params: list<string>, param_index: int|null, operation: string|null, fields: list<string>|null, confidence: string, evidence: string, unresolved_reason: string|null, declaring_class: string|null, visibility: string}
      */
     public function toArray(): array
     {
@@ -71,6 +78,8 @@ final class MethodSummary
             'confidence' => $this->confidence,
             'evidence' => $this->evidence,
             'unresolved_reason' => $this->unresolvedReason,
+            'declaring_class' => $this->declaringClass,
+            'visibility' => $this->visibility,
         ];
     }
 }

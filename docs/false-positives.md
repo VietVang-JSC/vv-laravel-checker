@@ -258,6 +258,18 @@ php artisan quality:check --tier=all --fail-on=none
   methods (explicitly out of scope), untyped receivers and non-call shapes;
   the pattern set is proven by a 17-case A–T corpus instead. Summary cost
   on snipe-it: 19 requests, 11 AST parses, 0.07s.
+- **Parent-chain method resolution, shadow mode (v0.5.3)**: hierarchy-aware
+  lookup — nearest definition wins (child overrides), private ancestors
+  skipped unless reached via `parent::`, protected members only through
+  `$this`, multi-level chains with cycle/depth guards, declaring class +
+  visibility in every summary's provenance. Traits, interfaces, container
+  dispatch and magic methods stay out. Snipe-it 19 unresolved-method
+  candidates: Target Resolution 19/19 (all declaring classes found),
+  Return Resolution 0/19 (7 nested-call, 12 unsupported-expression —
+  verified by hand: collection pipelines, dynamic `only($model
+  ->getFillable())`, closure callbacks; correctly unknown). Incorrect: 0.
+  Per the standing rule (no real resolutions → no production
+  integration), interprocedural machinery stays dormant; cost 0.14s.
 - **Negative evidence trails (v0.5.1)**: every `ROUTE_MISSING_VALIDATION`
   finding carries an `evidence_trail` proving the negative decision —
   which of FormRequest-param/`rules()`/`$request->validate()`/

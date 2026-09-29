@@ -423,6 +423,26 @@ final class MassAssignmentFlow
         if ($summary->kind === MethodSummary::UNKNOWN) {
             return self::unresolvedFlow($expr, $summary->unresolvedReason ?? 'unsupported-expression');
         }
+        // Visibility: protected members are only reachable through
+        // $this; private members only through $this in the declaring
+        // class itself. Anything else is not the resolved method.
+        $isThis = $expr->var instanceof Node\Expr\Variable && $expr->var->name === 'this';
+        if ($summary->visibility === 'protected' && !$isThis) {
+            return self::unresolvedFlow($expr, 'visibility-incompatible');
+        }
+        if ($summary->visibility === 'private') {
+            $callerFqn = $callerClass->name !== null
+                ? ($namespace !== null ? $namespace . '\\' . $callerClass->name->toString() : $callerClass->name->toString())
+                : null;
+            if (
+                !$isThis
+                || $callerFqn === null
+                || $summary->declaringClass === null
+                || strtolower(ltrim($summary->declaringClass, '\\')) !== strtolower(ltrim($callerFqn, '\\'))
+            ) {
+                return self::unresolvedFlow($expr, 'visibility-incompatible');
+            }
+        }
         if ($summary->kind === MethodSummary::INTERNAL) {
             $trace = (new FlowTrace())->source('internal (' . $summary->evidence . ')', $expr->getStartLine())->toMetadata();
 
