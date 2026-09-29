@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
-use Rampart\QualityChecker\Profiling\Profiler;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
 /**
  * Tier 1 middleware resolution: alias → middleware class. Symbol
@@ -19,8 +20,10 @@ use Rampart\QualityChecker\Profiling\Profiler;
  * Alias lookup is by base name (`authorize:superuser` looks up
  * `authorize`); the `:parameter` travels with the route, not the alias.
  */
-final class MiddlewareRegistry
+final class MiddlewareRegistry implements ScanContextAware
 {
+    use ScanContextTrait;
+
     /**
      * @var array<string, array{class: string, file: string, line: int|null}>
      *   lowercase alias => registration
@@ -108,17 +111,11 @@ final class MiddlewareRegistry
 
     private function collectFromFile(string $file): void
     {
-        $code = is_file($file) ? file_get_contents($file) : false;
-        if (!is_string($code) || $code === '') {
+        $code = $this->sharedSource($file);
+        if ($code === '') {
             return;
         }
-        try {
-            $parser = (new \PhpParser\ParserFactory())->createForNewestSupportedVersion();
-            $ast = $parser->parse($code);
-            Profiler::countParse();
-        } catch (\Throwable $e) {
-            return;
-        }
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return;
         }

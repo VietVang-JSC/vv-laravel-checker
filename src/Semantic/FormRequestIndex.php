@@ -6,8 +6,8 @@ namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
-use Rampart\QualityChecker\Profiling\Profiler;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
 /**
  * FormRequest semantics per scanned project: resolve a controller
@@ -26,8 +26,10 @@ use Rampart\QualityChecker\Profiling\Profiler;
  *   not authorization. `can`/`Gate` ability checks and explicit denies
  *   are strong evidence; other non-trivial bodies are custom (medium).
  */
-final class FormRequestIndex
+final class FormRequestIndex implements ScanContextAware
 {
+    use ScanContextTrait;
+
     /**
      * @var array<string, array{fqn: string, file: string, line: int, extends_form_request: bool, has_rules: bool, fields: list<string>|null, rules_confidence: string, authorize: string, authorize_confidence: string, ability: string|null}>
      *   lowercase FQCN => entry
@@ -106,16 +108,11 @@ final class FormRequestIndex
 
     private function collectFromFile(string $file): void
     {
-        $code = is_file($file) ? file_get_contents($file) : false;
-        if (!is_string($code) || $code === '') {
+        $code = $this->sharedSource($file);
+        if ($code === '') {
             return;
         }
-        try {
-            $ast = (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
-            Profiler::countParse($file);
-        } catch (\Throwable $e) {
-            return;
-        }
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return;
         }

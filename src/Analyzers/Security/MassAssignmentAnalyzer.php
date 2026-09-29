@@ -69,7 +69,9 @@ final class MassAssignmentAnalyzer implements ScanContextAware
     {
         $issues = [];
         $modelClassFiles = $this->findModelClassFiles($files);
-        $metaIndex = new ModelMetadataIndex($files, $this->modelDirSegments);
+        $metaIndex = new ModelMetadataIndex([], $this->modelDirSegments);
+        $metaIndex->setScanContext($this->sharedScanContext());
+        $metaIndex->build($files);
         foreach ($files as $file) {
             if (!$this->supports($file)) {
                 continue;
@@ -97,7 +99,11 @@ final class MassAssignmentAnalyzer implements ScanContextAware
         if ($modelClassFiles === []) {
             $modelClassFiles = $this->findModelClassFiles([$file]);
         }
-        $metaIndex ??= new ModelMetadataIndex([$file], $this->modelDirSegments);
+        if ($metaIndex === null) {
+            $metaIndex = new ModelMetadataIndex([], $this->modelDirSegments);
+            $metaIndex->setScanContext($this->sharedScanContext());
+            $metaIndex->build([$file]);
+        }
 
         return $this->findIssues($file, $ast, $modelClassFiles, $metaIndex);
     }

@@ -6,7 +6,8 @@ namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
 /**
  * Bounded interprocedural return summaries (v0.5.2, shadow mode).
@@ -22,8 +23,10 @@ use PhpParser\ParserFactory;
  * miss, parsed file and cycle is counted so a parse-amplification
  * regression shows up immediately.
  */
-final class MethodSummaryIndex
+final class MethodSummaryIndex implements ScanContextAware
 {
+    use ScanContextTrait;
+
     /** @var list<string> */
     private array $files;
 
@@ -536,6 +539,10 @@ final class MethodSummaryIndex
     }
 
     /**
+     * Own lookup cache filled from the shared canonical AST: the index
+     * keeps its request/hit/miss/ast_parses stats contract while the
+     * physical parse happens once per file in ScanContext.
+     *
      * @return list<Node>|null
      */
     private function astOf(string $file): ?array
@@ -545,19 +552,7 @@ final class MethodSummaryIndex
             return $this->astCache[$real];
         }
         ++$this->astParses;
-        $code = is_file($real) ? file_get_contents($real) : false;
-        if (!is_string($code) || $code === '') {
-            $this->astCache[$real] = null;
-
-            return null;
-        }
-        try {
-            $ast = (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
-        } catch (\Throwable $e) {
-            $this->astCache[$real] = null;
-
-            return null;
-        }
+        $ast = $this->sharedAst($real);
         $nodes = [];
         if (is_array($ast)) {
             foreach ($ast as $node) {

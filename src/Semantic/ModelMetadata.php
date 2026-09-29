@@ -6,8 +6,7 @@ namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
-use Rampart\QualityChecker\Profiling\Profiler;
+use Rampart\QualityChecker\Scanning\ScanContext;
 
 /**
  * Eloquent model mass-assignment state. Returns state, never bare
@@ -112,18 +111,14 @@ final class ModelMetadata
         return [self::ASSIGN_UNKNOWN, null];
     }
 
-    public static function fromFile(string $model, string $file): self
+    public static function fromFile(string $model, string $file, ?ScanContext $scan = null): self
     {
-        $code = is_file($file) ? file_get_contents($file) : false;
-        if (!is_string($code) || $code === '') {
+        $scan ??= new ScanContext();
+        $code = $scan->source($file);
+        if ($code === '') {
             return self::unknown($model, $file);
         }
-        try {
-            $ast = (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
-            Profiler::countParse($file);
-        } catch (\Throwable $e) {
-            return self::unknown($model, $file);
-        }
+        $ast = $scan->ast($file);
         if ($ast === null) {
             return self::unknown($model, $file);
         }

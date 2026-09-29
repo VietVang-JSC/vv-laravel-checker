@@ -83,9 +83,17 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
 
     public function analyze(array $files): array
     {
-        $index = $this->routeMiddleware ? (new LaravelSemanticIndex())->build($files) : null;
-        $registry = $this->routeMiddleware ? (new MiddlewareRegistry())->build($files) : null;
-        $formRequests = (new FormRequestIndex())->build($files);
+        $scan = $this->sharedScanContext();
+        $index = $this->routeMiddleware ? (new LaravelSemanticIndex($scan))->build($files) : null;
+        $registry = null;
+        if ($this->routeMiddleware) {
+            $registry = new MiddlewareRegistry();
+            $registry->setScanContext($scan);
+            $registry->build($files);
+        }
+        $formRequests = new FormRequestIndex();
+        $formRequests->setScanContext($scan);
+        $formRequests->build($files);
 
         $issues = [];
         foreach ($files as $file) {
@@ -268,6 +276,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
         }
 
         $inspector = new MiddlewareInspector();
+        $inspector->setScanContext($this->sharedScanContext());
         /** @var array<string, MiddlewareEvidence|null> $inspected */
         $inspected = [];
         $decisions = [];

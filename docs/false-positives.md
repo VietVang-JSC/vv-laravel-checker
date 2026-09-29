@@ -691,6 +691,46 @@ this wave was <150s warm; at 272s no-cache the gate is NOT yet met —
 next lever is sharing ASTs with the semantic indexes, not more
 analyzer work.
 
+PERF-OPT-2A — semantic consumers join the canonical AST.
+Audit of `src/Semantic/**` + `src/Analysis/**` found 8 private-parse
+sites, classified:
+MUST SHARE (parse plain application source already covered by the
+run context): LaravelSemanticIndex (via AstPool), MiddlewareRegistry,
+MiddlewareInspector, FormRequestIndex, ModelMetadataIndex,
+ModelMetadata (static `fromFile` takes `?ScanContext`), PolicyRegistry,
+MethodSummaryIndex (keeps its own lookup cache + `ast_parses` stats,
+filled from the shared tree).
+NEEDS SPECIAL AST: none — no index uses NameResolver/custom visitors
+or reads `parent` attributes.
+INTENTIONALLY INDEPENDENT (named, arch-test allowlisted): ScanContext
+(owner), AstPool (parser infrastructure, kept for its tests/direct
+consumers), AbstractAnalyzer private fallback (unit tests), TaintEngine
+(opt-in engine, off by default).
+Analyzers hand their context down (`sharedScanContext()`); indexes
+implement ScanContextAware with per-instance fallback so unit tests
+keep calling `build()` directly.
+Canonical AST contract (enforced in `ScanContext`, guarded by
+`ScanContextArchitectureTest::testParserOwnershipAcrossSrc` over all
+of `src/**`): parsed once, parent links attached, same tree shared,
+read-only consumers, failures cached, enrichment centralized — a
+consumer needing more must promote it into the contract, never parse
+a side tree.
+GC parking: canonical trees carry parent links (cycles) and are
+retained by design, so the Zend collector rescanned a growing cyclic
+graph (~2x wall on Linkstack: 27.5s -> ~15s; `gc_runs = 0` during the
+run, peak unchanged). `CustomAnalyzerChecker::run()` wraps the
+analyzer loop in `gc_disable()`/`gc_enable()` (finally) with the
+reason documented inline — refcount still frees temporaries.
+Results (OPT-1 vs OPT-2A, no cache): Snipe-it 500 = 500, histogram
+identical, parse_operations 16289 -> 8628 = exactly the 8628 parsed
+files, global amplification 1.89x -> 1.0x; wall ~272s -> ~194s on a
+noisy box (observed 194-436s across runs — wall needs PERF-EVAL-2
+methodology with repeats, not single samples). Linkstack 108 = 108,
+parse_ops 512 -> 222, ~15s. Semantic duplicate parses ~= 0. The <150s
+gate is still open — but parse work is now done; what remains is true
+compute cost, to be profiled in PERF-EVAL-2 before any algorithm
+changes (SqlInjection untouched until then).
+
 ## 5. Don'ts
 
 - Do not add `baseline.json` to `.gitignore` **while** complaining that CI

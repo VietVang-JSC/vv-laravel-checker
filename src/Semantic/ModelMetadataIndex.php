@@ -6,8 +6,8 @@ namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
-use Rampart\QualityChecker\Profiling\Profiler;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
 /**
  * Model class map with global unguard state. Bounded: model files are
@@ -18,8 +18,10 @@ use Rampart\QualityChecker\Profiling\Profiler;
  * `::unguard()` (with an argument other than `false`) and no file calls
  * `::reguard()`. Scoped `unguarded(callback)` never flips global state.
  */
-final class ModelMetadataIndex
+final class ModelMetadataIndex implements ScanContextAware
 {
+    use ScanContextTrait;
+
     /** @var list<string> */
     private array $modelDirSegments;
 
@@ -85,7 +87,7 @@ final class ModelMetadataIndex
             return null;
         }
 
-        return ModelMetadata::fromFile($key, $file);
+        return ModelMetadata::fromFile($key, $file, $this->sharedScanContext());
     }
 
     public function globallyUnguarded(): bool
@@ -107,16 +109,11 @@ final class ModelMetadataIndex
 
     private function collectModelFile(string $file): void
     {
-        $code = is_file($file) ? file_get_contents($file) : false;
-        if (!is_string($code) || $code === '') {
+        $code = $this->sharedSource($file);
+        if ($code === '') {
             return;
         }
-        try {
-            $ast = (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
-            Profiler::countParse($file);
-        } catch (\Throwable $e) {
-            return;
-        }
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return;
         }
@@ -140,16 +137,11 @@ final class ModelMetadataIndex
         if ($this->isSeedDataPath($file)) {
             return [false, false];
         }
-        $code = is_file($file) ? file_get_contents($file) : false;
-        if (!is_string($code) || $code === '') {
+        $code = $this->sharedSource($file);
+        if ($code === '') {
             return [false, false];
         }
-        try {
-            $ast = (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
-            Profiler::countParse($file);
-        } catch (\Throwable $e) {
-            return [false, false];
-        }
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return [false, false];
         }

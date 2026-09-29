@@ -6,10 +6,12 @@ namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use Rampart\QualityChecker\Analysis\AstPool;
 use Rampart\QualityChecker\Analysis\ConstantScope;
 use Rampart\QualityChecker\Analysis\ConstantValue;
 use Rampart\QualityChecker\Analysis\ConstantValueResolver;
+use Rampart\QualityChecker\Scanning\ScanContext;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
 /**
  * Laravel semantic index: Route → Controller resolution.
@@ -30,8 +32,10 @@ use Rampart\QualityChecker\Analysis\ConstantValueResolver;
  * v0.3.1 covers Route → Controller → Middleware. FormRequest/Policy/Gate
  * evidence aggregation lands in v0.3.2/v0.3.3 on top of this graph.
  */
-final class LaravelSemanticIndex
+final class LaravelSemanticIndex implements ScanContextAware
 {
+    use ScanContextTrait;
+
     private const ROUTE_VERBS = [
         'get', 'post', 'put', 'patch', 'delete', 'options',
         'match', 'any', 'resource', 'apiresource',
@@ -62,8 +66,6 @@ final class LaravelSemanticIndex
 
     private ConstantValueResolver $constants;
 
-    private AstPool $pool;
-
     private NodeFinder $finder;
 
     private int $declarations = 0;
@@ -79,10 +81,12 @@ final class LaravelSemanticIndex
 
     private ?string $lastUnresolvedReason = null;
 
-    public function __construct(?AstPool $pool = null)
+    public function __construct(?ScanContext $scan = null)
     {
-        $this->pool = $pool ?? new AstPool();
-        $this->finder = $this->pool->finder();
+        if ($scan !== null) {
+            $this->setScanContext($scan);
+        }
+        $this->finder = new NodeFinder();
         $this->constants = new ConstantValueResolver();
     }
 
@@ -112,7 +116,7 @@ final class LaravelSemanticIndex
     private function scopeFor(string $file): ConstantScope
     {
         if (!isset($this->constScopes[$file])) {
-            $nodes = $this->pool->ast($file) ?? [];
+            $nodes = $this->sharedAst($file) ?? [];
             $this->constScopes[$file] = ConstantScope::forFile($nodes, $file);
         }
 
@@ -320,9 +324,9 @@ final class LaravelSemanticIndex
      */
     private function nodesOf(string $file): ?array
     {
-        $ast = $this->pool->ast($file);
+        $ast = $this->sharedAst($file);
 
-        return $ast === [] ? null : $ast;
+        return $ast === null || $ast === [] ? null : $ast;
     }
 
     private function isRouteFile(string $file): bool

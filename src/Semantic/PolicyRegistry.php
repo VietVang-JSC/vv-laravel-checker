@@ -6,7 +6,8 @@ namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
 /**
  * Tier 1 policy/Gate registration: model → policy and ability → define
@@ -22,8 +23,10 @@ use PhpParser\ParserFactory;
  * the runtime mapping is not proven, the chain stays unresolved and
  * evidence degrades to medium instead of suppressing on a guess.
  */
-final class PolicyRegistry
+final class PolicyRegistry implements ScanContextAware
 {
+    use ScanContextTrait;
+
     /**
      * @var array<string, array{model: string, policy: string, file: string, line: int}>
      *   lowercase model FQCN => registration
@@ -171,15 +174,11 @@ final class PolicyRegistry
      */
     private function policyMethod(string $file, string $ability): ?array
     {
-        $code = is_file($file) ? file_get_contents($file) : false;
-        if (!is_string($code) || $code === '') {
+        $code = $this->sharedSource($file);
+        if ($code === '') {
             return null;
         }
-        try {
-            $ast = (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
-        } catch (\Throwable $e) {
-            return null;
-        }
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return null;
         }
@@ -231,15 +230,11 @@ final class PolicyRegistry
 
     private function collectFromFile(string $file): void
     {
-        $code = is_file($file) ? file_get_contents($file) : false;
-        if (!is_string($code) || $code === '') {
+        $code = $this->sharedSource($file);
+        if ($code === '') {
             return;
         }
-        try {
-            $ast = (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
-        } catch (\Throwable $e) {
-            return;
-        }
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return;
         }

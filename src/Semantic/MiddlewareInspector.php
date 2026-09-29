@@ -6,8 +6,8 @@ namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
-use Rampart\QualityChecker\Profiling\Profiler;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
 /**
  * Tier 2 middleware resolution: inspect a middleware `handle()` for
@@ -40,8 +40,10 @@ use Rampart\QualityChecker\Profiling\Profiler;
  * - Inverted role checks (`if ($role == 'x') abort; else $next`) — they
  *   deny one value instead of authorizing the action.
  */
-final class MiddlewareInspector
+final class MiddlewareInspector implements ScanContextAware
 {
+    use ScanContextTrait;
+
     private const ROLE_PROPS = ['role', 'is_admin', 'isAdmin', 'user_role', 'userRole'];
 
     private const GATE_METHODS = ['allows', 'authorize', 'check', 'any'];
@@ -282,16 +284,11 @@ final class MiddlewareInspector
 
     private function handleMethod(string $file): ?Node\Stmt\ClassMethod
     {
-        $code = is_file($file) ? file_get_contents($file) : false;
-        if (!is_string($code) || $code === '') {
+        $code = $this->sharedSource($file);
+        if ($code === '') {
             return null;
         }
-        try {
-            $ast = (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
-            Profiler::countParse($file);
-        } catch (\Throwable $e) {
-            return null;
-        }
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return null;
         }

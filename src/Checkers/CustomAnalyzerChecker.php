@@ -92,17 +92,29 @@ final class CustomAnalyzerChecker implements CheckerInterface
         // One shared scan context per run: source read once, AST parsed
         // once, failures cached. Analyzers implementing ScanContextAware
         // consume it; the rest parse on their own until migrated.
+        //
+        // GC is parked for the analyzer loop: canonical trees carry
+        // parent links (node cycles) and are retained by design until
+        // the run ends, so the collector would rescan a growing cyclic
+        // graph on every threshold trip (~2x wall time, zero bytes
+        // freed). Refcount still frees analyzer temporaries; GC resumes
+        // in the finally below.
         $scan = new ScanContext();
-        foreach ($this->buildAnalyzers($ctx) as $entry) {
-            if (!$entry['enabled']) {
-                continue;
-            }
+        gc_disable();
+        try {
+            foreach ($this->buildAnalyzers($ctx) as $entry) {
+                if (!$entry['enabled']) {
+                    continue;
+                }
 
-            $analyzer = $entry['analyzer'];
-            if ($analyzer instanceof ScanContextAware) {
-                $analyzer->setScanContext($scan);
+                $analyzer = $entry['analyzer'];
+                if ($analyzer instanceof ScanContextAware) {
+                    $analyzer->setScanContext($scan);
+                }
+                $issues = array_merge($issues, $this->runAnalyzer($analyzer, $files));
             }
-            $issues = array_merge($issues, $this->runAnalyzer($analyzer, $files));
+        } finally {
+            gc_enable();
         }
         $stats = $scan->stats();
         Profiler::gauge('scan_source_requests', $stats['source_requests']);

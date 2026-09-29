@@ -31,6 +31,16 @@ trait ScanContextTrait
         return $this->shared()->ast($file);
     }
 
+    /**
+     * The run's ScanContext for hand-off to collaborators (semantic
+     * indexes, helpers) that cannot receive checker injection directly.
+     * Same instance the analyzer itself reads through above.
+     */
+    protected function sharedScanContext(): ScanContext
+    {
+        return $this->shared();
+    }
+
     private function shared(): ScanContext
     {
         return $this->scanContext ??= new ScanContext();

@@ -40,7 +40,9 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
 
     public function analyze(array $files): array
     {
-        $index = (new FormRequestIndex())->build($files);
+        $index = new FormRequestIndex();
+        $index->setScanContext($this->sharedScanContext());
+        $index->build($files);
 
         $issues = [];
         foreach ($files as $file) {

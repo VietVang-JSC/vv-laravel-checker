@@ -23,6 +23,18 @@ use Rampart\QualityChecker\Profiling\Profiler;
  * parsing is). Callers must treat returned node lists as READ-ONLY;
  * the mutation audit (ParentConnectingVisitor idempotent markers
  * excepted) guarantees no analyzer rewrites shared trees.
+ *
+ * CANONICAL AST CONTRACT (PERF-OPT-2): this is the single owner of
+ * normal application-source parsing. Every tree served here:
+ *
+ *   1. Parsed once per file per run (physical parses ≈ unique files).
+ *   2. Parent links attached (ParentConnectingVisitor, once).
+ *   3. The same tree instance shared across all consumers.
+ *   4. Treated as read-only by consumers (no rewrites, no re-linking).
+ *   5. Parse failure cached (malformed files never retried).
+ *   6. Enrichment performed centrally — a consumer needing more
+ *      (NameResolver, symbol IDs, …) must promote it into this
+ *      contract, never parse a private tree on the side.
  */
 final class ScanContext
 {
