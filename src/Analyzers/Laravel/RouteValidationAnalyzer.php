@@ -9,6 +9,7 @@ use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Semantic\EvidenceTrail;
 use Rampart\QualityChecker\Semantic\FormRequestIndex;
 use Rampart\QualityChecker\Semantic\InlineValidation;
 use Rampart\QualityChecker\Semantic\ValidationEvidence;
@@ -113,6 +114,7 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
             if ($this->validationEvidence($stmt, $useMap, $namespace, $index) !== null) {
                 continue;
             }
+            $trail = $this->validationTrail($stmt, $useMap, $namespace, $index);
 
             $issues[] = $this->makeIssue(
                 self::RULE,
@@ -120,12 +122,92 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
                 $file,
                 $stmt->getStartLine(),
                 Severity::Warning,
-                ['method' => $name, 'validation_evidence' => null],
+                ['method' => $name, 'validation_evidence' => null, 'evidence_trail' => $trail->toArray()],
                 Confidence::Medium
             );
         }
 
         return $issues;
+    }
+
+    /**
+     * Negative evidence for a flagged method: every search performed and
+     * its outcome. Dynamic shapes are unresolved, never missing.
+     *
+     * @param array<string, string> $useMap alias => FQCN
+     */
+    private function validationTrail(
+        Node\Stmt\ClassMethod $method,
+        array $useMap,
+        ?string $namespace,
+        FormRequestIndex $index
+    ): EvidenceTrail {
+        $trail = new EvidenceTrail();
+        $sawRequestParam = false;
+        foreach ($method->params as $param) {
+            if (!$param->type instanceof Node\Name) {
+                continue;
+            }
+            $raw = $param->type->toString();
+            if (!self::isRequestType($raw)) {
+                continue;
+            }
+            $sawRequestParam = true;
+            $fqn = $this->resolveParam($raw, $useMap, $namespace);
+            $entry = $index->find($fqn);
+            if ($entry === null) {
+                if ($this->looksLikeFormRequest($raw, $useMap)) {
+                    $trail->unresolved('form-request-param', $fqn . ' absent from scan, name-heuristic applies');
+                } else {
+                    $trail->missing('form-request-param', $fqn . ' is not a FormRequest');
+                }
+                continue;
+            }
+            $trail->found('form-request-param', $entry['fqn']);
+            if (!$entry['has_rules']) {
+                $trail->missing('form-request-rules', $entry['fqn'] . ' declares no rules()');
+            } elseif ($entry['fields'] === null) {
+                $trail->unresolved('form-request-rules', $entry['fqn'] . ' rules() is dynamic, fields unknown');
+            } else {
+                $trail->found('form-request-rules', count($entry['fields']) . ' fields: ' . implode(',', $entry['fields']));
+            }
+        }
+        if (!$sawRequestParam) {
+            $trail->missing('form-request-param', 'no $request parameter');
+        }
+        $inline = InlineValidation::recognize($method);
+        $sources = [];
+        foreach ($inline as $evidence) {
+            $sources[$evidence->source] = $evidence;
+        }
+        $this->trailSource($trail, $sources, ValidationEvidence::SOURCE_INLINE, 'inline-validate', '$request->validate()');
+        $this->trailSource($trail, $sources, ValidationEvidence::SOURCE_MAKE, 'validator-make', 'Validator::make()');
+        $this->trailSource($trail, $sources, ValidationEvidence::SOURCE_VALIDATED, 'validated-use', 'validated()/safe()');
+
+        return $trail->conclude('missing-validation');
+    }
+
+    /**
+     * @param array<string, ValidationEvidence> $sources
+     */
+    private function trailSource(
+        EvidenceTrail $trail,
+        array $sources,
+        string $source,
+        string $check,
+        string $label
+    ): void {
+        if (isset($sources[$source])) {
+            $fields = $sources[$source]->fields;
+            $trail->found($check, $fields === null ? $label . ' present' : $label . ' fields: ' . implode(',', $fields));
+        } else {
+            $trail->missing($check, $label . ' not found');
+        }
+    }
+
+    private static function isRequestType(string $type): bool
+    {
+        return str_ends_with(strtolower(ltrim($type, '\\')), 'request');
     }
 
     /**

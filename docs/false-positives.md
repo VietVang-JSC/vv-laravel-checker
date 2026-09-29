@@ -242,6 +242,15 @@ php artisan quality:check --tier=all --fail-on=none
   linkstack 0 → 0. Protocol from here on: every new EXPOSED/REVIEW and
   every gone finding gets 100% human review before the semantic engine
   earns production-outcome power.
+- **Negative evidence trails (v0.5.1)**: every `ROUTE_MISSING_VALIDATION`
+  finding carries an `evidence_trail` proving the negative decision —
+  which of FormRequest-param/`rules()`/`$request->validate()`/
+  `Validator::make()`/`validated()` was searched and whether each came
+  back found, missing, or unresolved (dynamic shapes are never labeled
+  missing). `EvidenceTrail` is the shared abstraction so later rules
+  (BAC, mass assignment, SSRF, …) can prove their negatives the same way.
+  Finding count, severity and messages are byte-identical on both pilots
+  (100/100, 3/3) — explainability without outcome drift.
 - **Model metadata + assignability decisions, shadow mode (v0.4.2)**:
   `ModelMetadata` returns state, never bare arrays — `fillable` non-empty
   wins (FILLABLE), `$guarded = []` guards nothing (UNGUARDED), `['*']` or

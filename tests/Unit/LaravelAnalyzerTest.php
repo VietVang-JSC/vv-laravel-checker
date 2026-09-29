@@ -364,4 +364,55 @@ final class LaravelAnalyzerTest extends TestCase
         self::assertNotEmpty($issues);
         self::assertSame('ROUTE_MISSING_VALIDATION', $issues[0]->rule);
     }
+
+    public function testRouteValidationFindingCarriesEvidenceTrail(): void
+    {
+        // Negative evidence: the finding proves what was searched.
+        $file = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Http\\Request;\n" .
+            "class OrderController extends Controller {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
+            'app/Http/Controllers/OrderController.php'
+        );
+
+        $issues = (new RouteValidationAnalyzer())->analyze([$file]);
+
+        self::assertCount(1, $issues);
+        $trail = $issues[0]->metadata['evidence_trail'] ?? null;
+        self::assertIsArray($trail);
+        self::assertSame('missing-validation', $trail['conclusion'] ?? null);
+        $byCheck = [];
+        foreach ($trail['checks'] ?? [] as $check) {
+            $byCheck[$check['check']] = $check['status'];
+        }
+        self::assertSame('missing', $byCheck['form-request-param'] ?? null);
+        self::assertSame('missing', $byCheck['inline-validate'] ?? null);
+        self::assertSame('missing', $byCheck['validator-make'] ?? null);
+        self::assertSame('missing', $byCheck['validated-use'] ?? null);
+    }
+
+    public function testRouteValidationTrailRecordsResolvedRequestWithoutRules(): void
+    {
+        $controller = $this->temp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Http\\Requests\\OpenRequest;\n" .
+            "class AccountController extends Controller {\n    public function store(OpenRequest \$request) {\n        return Account::create(\$request->all());\n    }\n}\n",
+            'app/Http/Controllers/AccountController.php'
+        );
+        $request = $this->temp(
+            "<?php\nnamespace App\\Http\\Requests;\nuse Illuminate\\Foundation\\Http\\FormRequest;\n" .
+            "class OpenRequest extends FormRequest {\n" .
+            "    public function authorize() {\n        return true;\n    }\n" .
+            "}\n",
+            'app/Http/Requests/OpenRequest.php'
+        );
+
+        $issues = (new RouteValidationAnalyzer())->analyze([$controller, $request]);
+
+        self::assertCount(1, $issues);
+        $byCheck = [];
+        foreach (($issues[0]->metadata['evidence_trail']['checks'] ?? []) as $check) {
+            $byCheck[$check['check']] = $check;
+        }
+        self::assertSame('found', $byCheck['form-request-param']['status'] ?? null);
+        self::assertSame('missing', $byCheck['form-request-rules']['status'] ?? null);
+    }
 }
