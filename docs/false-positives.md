@@ -667,6 +667,30 @@ Rules going forward:
   `ParserFactory` per file).
 - No complex caching before a profile proves where time goes.
 
+PERF-EVAL-1 (measured, Snipe-it 8629 files / Linkstack 225 files): parsing
+~80% of wall time; 151116 parse ops for 7976 parsed files = 18.9x
+amplification (22 analyzers x N files); IO 10.8x; visits 22x; superlinear
+scaling at small N. Snipe-it no-cache full run ~449s, Linkstack ~17.2s.
+
+PERF-OPT-1 — shared ScanContext (source + AST + failure cache, one parse
+per file for the whole analyzer engine; parent links attached once):
+all 22 profiled analyzers read via `sharedSource()`/`sharedAst()`, injected
+by CustomAnalyzerChecker; private `parse()`/`readFile()` deleted;
+architecture test `ScanContextArchitectureTest` forbids `new
+ParserFactory` / `->parse(` / `file_get_contents(` in `src/Analyzers/**`
+except `AbstractAnalyzer` (unit-test fallback) and `TaintEngine`
+(separate opt-in engine, off by default).
+Results (old code vs new, same machine, no cache):
+Snipe-it 500 = 500 findings, rule histogram byte-identical,
+parse_operations 158615 -> 16289 (9.7x), wall 448.6s -> 272.4s (1.65x);
+Linkstack 108 = 108, histogram identical, parse_ops 4315 -> 512 (8.4x),
+wall 17.2s -> 13.4s. Analyzer-engine AST amplification is now 1.0x
+(8628 misses = 8628 parsed files); remaining ~7661 parses come from the
+semantic indexes (second parse engine — PERF-OPT-2 candidate). Gate for
+this wave was <150s warm; at 272s no-cache the gate is NOT yet met —
+next lever is sharing ASTs with the semantic indexes, not more
+analyzer work.
+
 ## 5. Don'ts
 
 - Do not add `baseline.json` to `.gitignore` **while** complaining that CI

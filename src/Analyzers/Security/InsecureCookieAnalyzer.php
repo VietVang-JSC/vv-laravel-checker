@@ -6,13 +6,16 @@ namespace Rampart\QualityChecker\Analyzers\Security;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Profiling\Profiler;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
-final class InsecureCookieAnalyzer
+final class InsecureCookieAnalyzer implements ScanContextAware
 {
+    use ScanContextTrait;
+
     private const RULE = 'INSECURE_COOKIE';
 
     private const SECURE_INDEX = 5;
@@ -53,11 +56,7 @@ final class InsecureCookieAnalyzer
         if ($this->isTestPath($file)) {
             return [];
         }
-        $code = $this->readFile($file);
-        if ($code === '') {
-            return [];
-        }
-        $ast = $this->parse($code);
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return [];
         }
@@ -237,30 +236,5 @@ final class InsecureCookieAnalyzer
         return str_contains($normalized, '/tests/')
             || str_contains($normalized, '/test/')
             || str_ends_with($normalized, 'test.php');
-    }
-
-    private function readFile(string $path): string
-    {
-        if (!is_file($path)) {
-            return '';
-        }
-
-        return (string) file_get_contents($path);
-    }
-
-    /**
-     * @return list<Node>|null
-     */
-    private function parse(string $code): ?array
-    {
-        try {
-            $parser = (new ParserFactory())->createForNewestSupportedVersion();
-
-            $parsed = $parser->parse($code);
-            Profiler::countParse();
-            return $parsed;
-        } catch (\Throwable $e) {
-            return null;
-        }
     }
 }

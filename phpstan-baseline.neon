@@ -37,12 +37,6 @@ parameters:
 			path: src/Analyzers/Convention/DeadCodeAnalyzer.php
 
 		-
-			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Convention\\DeadCodeAnalyzer\:\:parse\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Analyzers/Convention/DeadCodeAnalyzer.php
-
-		-
 			message: '#^Strict comparison using \=\=\= between string and null will always evaluate to false\.$#'
 			identifier: identical.alwaysFalse
 			count: 1
@@ -67,12 +61,6 @@ parameters:
 			path: src/Analyzers/Convention/LaravelPitfallAnalyzer.php
 
 		-
-			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Convention\\LaravelPitfallAnalyzer\:\:parse\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Analyzers/Convention/LaravelPitfallAnalyzer.php
-
-		-
 			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Convention\\NamingConventionAnalyzer\:\:analyze\(\) has parameter \$files with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -86,12 +74,6 @@ parameters:
 
 		-
 			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Convention\\NamingConventionAnalyzer\:\:analyzeFile\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Analyzers/Convention/NamingConventionAnalyzer.php
-
-		-
-			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Convention\\NamingConventionAnalyzer\:\:parse\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: src/Analyzers/Convention/NamingConventionAnalyzer.php
@@ -235,19 +217,7 @@ parameters:
 			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
 
 		-
-			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Security\\DisabledCsrfAnalyzer\:\:parse\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Analyzers/Security/DisabledCsrfAnalyzer.php
-
-		-
 			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Security\\InsecureHashAnalyzer\:\:isCredentialContext\(\) has parameter \$ast with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Analyzers/Security/InsecureHashAnalyzer.php
-
-		-
-			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Security\\InsecureHashAnalyzer\:\:parse\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: src/Analyzers/Security/InsecureHashAnalyzer.php
@@ -266,12 +236,6 @@ parameters:
 
 		-
 			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Security\\LaravelTaintAnalyzer\:\:analyzeFile\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Analyzers/Security/LaravelTaintAnalyzer.php
-
-		-
-			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Security\\LaravelTaintAnalyzer\:\:parse\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: src/Analyzers/Security/LaravelTaintAnalyzer.php
@@ -343,15 +307,9 @@ parameters:
 			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
 
 		-
-			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Security\\MassAssignmentAnalyzer\:\:parse\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
-
-		-
 			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Security\\MassAssignmentAnalyzer\:\:resolveClassName\(\) should return array\{string, string\|null\} but returns array\{null, null\}\.$#'
 			identifier: return.type
-			count: 3
+			count: 2
 			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
 
 		-
@@ -565,12 +523,6 @@ parameters:
 			path: src/Analyzers/Security/UnsafeDeserializationAnalyzer.php
 
 		-
-			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Security\\UnsafeDeserializationAnalyzer\:\:parse\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Analyzers/Security/UnsafeDeserializationAnalyzer.php
-
-		-
 			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Security\\UnsafeEvalAnalyzer\:\:analyzeFile\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -626,12 +578,6 @@ parameters:
 
 		-
 			message: '#^Method Rampart\\QualityChecker\\Analyzers\\TestCoverage\\ControllerTestAnalyzer\:\:methodIsTested\(\) has parameter \$testFiles with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
-
-		-
-			message: '#^Method Rampart\\QualityChecker\\Analyzers\\TestCoverage\\ControllerTestAnalyzer\:\:parse\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: src/Analyzers/TestCoverage/ControllerTestAnalyzer.php
@@ -734,12 +680,6 @@ parameters:
 
 		-
 			message: '#^Method Rampart\\QualityChecker\\Analyzers\\TestCoverage\\TestWithoutAssertAnalyzer\:\:hasAssertion\(\) has parameter \$body with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Analyzers/TestCoverage/TestWithoutAssertAnalyzer.php
-
-		-
-			message: '#^Method Rampart\\QualityChecker\\Analyzers\\TestCoverage\\TestWithoutAssertAnalyzer\:\:parse\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
 			path: src/Analyzers/TestCoverage/TestWithoutAssertAnalyzer.php

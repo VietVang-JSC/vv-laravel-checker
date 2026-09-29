@@ -6,12 +6,13 @@ namespace Rampart\QualityChecker\Analyzers\Security;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
 use PhpParser\PrettyPrinter\Standard;
 use Rampart\QualityChecker\Analysis\ScopeResolver;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 use Rampart\QualityChecker\Semantic\MassAssignmentDecision;
 use Rampart\QualityChecker\Semantic\MassAssignmentFlow;
 use Rampart\QualityChecker\Semantic\MassFlow;
@@ -20,8 +21,10 @@ use Rampart\QualityChecker\Semantic\ModelMetadataIndex;
 use Rampart\QualityChecker\Semantic\ModelTypeResolver;
 use Rampart\QualityChecker\Profiling\Profiler;
 
-final class MassAssignmentAnalyzer
+final class MassAssignmentAnalyzer implements ScanContextAware
 {
+    use ScanContextTrait;
+
     private const RULE = 'MASS_ASSIGNMENT';
 
     /** @var list<string> normalized model dir segments (e.g. app/Models) */
@@ -86,12 +89,7 @@ final class MassAssignmentAnalyzer
 
     public function analyzeFile(string $file, array $modelClassFiles = [], ?ModelMetadataIndex $metaIndex = null): array
     {
-        $code = $this->readFile($file);
-        if ($code === '') {
-            return [];
-        }
-
-        $ast = $this->parse($code);
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return [];
         }
@@ -803,12 +801,7 @@ final class MassAssignmentAnalyzer
             return false;
         }
 
-        $code = $this->readFile($modelClassFiles[$model]);
-        if ($code === '') {
-            return false;
-        }
-
-        $ast = $this->parse($code);
+        $ast = $this->sharedAst($modelClassFiles[$model]);
         if ($ast === null) {
             return false;
         }
@@ -882,11 +875,7 @@ final class MassAssignmentAnalyzer
      */
     private function resolveClassName(string $path): array
     {
-        $code = $this->readFile($path);
-        if ($code === '') {
-            return [null, null];
-        }
-        $ast = $this->parse($code);
+        $ast = $this->sharedAst($path);
         if ($ast === null) {
             return [null, null];
         }
@@ -931,27 +920,5 @@ final class MassAssignmentAnalyzer
         }
 
         return false;
-    }
-
-    private function readFile(string $path): string
-    {
-        if (!is_file($path)) {
-            return '';
-        }
-
-        return (string) file_get_contents($path);
-    }
-
-    private function parse(string $code): ?array
-    {
-        try {
-            $parser = (new ParserFactory())->createForNewestSupportedVersion();
-
-            $parsed = $parser->parse($code);
-            Profiler::countParse();
-            return $parsed;
-        } catch (\Throwable $e) {
-            return null;
-        }
     }
 }

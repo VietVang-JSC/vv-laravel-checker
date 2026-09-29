@@ -7,8 +7,6 @@ namespace Rampart\QualityChecker\Analyzers\Owasp;
 use PhpParser\Node;
 use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
 use Rampart\QualityChecker\Analysis\AssignmentMap;
-use Rampart\QualityChecker\Analysis\AstPool;
-use Rampart\QualityChecker\Analysis\AstPoolAware;
 use Rampart\QualityChecker\Analysis\FlowTrace;
 use Rampart\QualityChecker\Analysis\ScopeResolver;
 use Rampart\QualityChecker\Result\Confidence;
@@ -36,7 +34,7 @@ use Rampart\QualityChecker\Result\Severity;
  * such as redirect($page->getUrl()) is Medium — usually an internal URL
  * builder, but not provably safe without cross-method analysis.
  */
-final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer implements AstPoolAware
+final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'OWASP_OPEN_REDIRECT';
 
@@ -54,16 +52,9 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer implements AstPoo
      */
     private const SIGNED_URL_METHODS = ['temporaryurl', 'presignedurl', 'getpresignedurl', 'temporary_url', 'presigned_url', 'getauthorizationurl'];
 
-    private ?AstPool $pool = null;
-
     private ?ScopeResolver $scopes = null;
 
     private ?AssignmentMap $assignments = null;
-
-    public function setAstPool(AstPool $pool): void
-    {
-        $this->pool = $pool;
-    }
 
     private function scopes(): ScopeResolver
     {
@@ -106,7 +97,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer implements AstPoo
      */
     private function analyzeFile(string $file): array
     {
-        $ast = $this->pool !== null ? $this->pool->ast($file) : $this->parse($this->readFile($file));
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return [];
         }

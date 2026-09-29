@@ -138,7 +138,7 @@ final class Profiler
     }
 
     /**
-     * @return array{timers_ms: array<string, float>, counters: array<string, int>, unique_files_read: int, unique_files_parsed: int}
+     * @return array{timers_ms: array<string, float>, counters: array<string, int>, unique_files_read: int, unique_files_parsed: int, peak_mb: float}
      */
     public static function report(): array
     {
@@ -152,6 +152,7 @@ final class Profiler
             'counters' => self::$counters,
             'unique_files_read' => count(self::$uniqueReads),
             'unique_files_parsed' => count(self::$uniqueParses),
+            'peak_mb' => round(memory_get_peak_usage(true) / 1024 / 1024, 1),
         ];
     }
 }

@@ -6,13 +6,16 @@ namespace Rampart\QualityChecker\Analyzers\Security;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Profiling\Profiler;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
-final class UnsafeDeserializationAnalyzer
+final class UnsafeDeserializationAnalyzer implements ScanContextAware
 {
+    use ScanContextTrait;
+
     private const RULE = 'UNSAFE_UNSERIALIZE';
 
     public function analyze(array $files): array
@@ -37,12 +40,7 @@ final class UnsafeDeserializationAnalyzer
 
     public function analyzeFile(string $file): array
     {
-        $code = $this->readFile($file);
-        if ($code === '') {
-            return [];
-        }
-
-        $ast = $this->parse($code);
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return [];
         }
@@ -165,27 +163,5 @@ final class UnsafeDeserializationAnalyzer
         }
 
         return null;
-    }
-
-    private function readFile(string $path): string
-    {
-        if (!is_file($path)) {
-            return '';
-        }
-
-        return (string) file_get_contents($path);
-    }
-
-    private function parse(string $code): ?array
-    {
-        try {
-            $parser = (new ParserFactory())->createForNewestSupportedVersion();
-
-            $parsed = $parser->parse($code);
-            Profiler::countParse();
-            return $parsed;
-        } catch (\Throwable $e) {
-            return null;
-        }
     }
 }

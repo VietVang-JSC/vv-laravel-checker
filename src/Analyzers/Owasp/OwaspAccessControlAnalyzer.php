@@ -159,7 +159,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
         ?MiddlewareRegistry $registry,
         FormRequestIndex $formRequests
     ): array {
-        $ast = $this->parse($this->readFile($file));
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return [];
         }

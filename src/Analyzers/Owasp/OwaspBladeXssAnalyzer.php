@@ -128,7 +128,7 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
      */
     private function analyzeFile(string $file): array
     {
-        $content = $this->readFile($file);
+        $content = $this->sharedSource($file);
         if ($content === '') {
             return [];
         }

@@ -41,12 +41,7 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
 
     private function analyzeFile(string $file): array
     {
-        $code = $this->readFile($file);
-        if ($code === '') {
-            return [];
-        }
-
-        $ast = $this->parse($code);
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return [];
         }

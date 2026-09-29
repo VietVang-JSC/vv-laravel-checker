@@ -6,14 +6,17 @@ namespace Rampart\QualityChecker\Analyzers\Convention;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Profiling\Profiler;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
-final class LaravelPitfallAnalyzer
+final class LaravelPitfallAnalyzer implements ScanContextAware
 {
+    use ScanContextTrait;
+
     private const RULE_ENV_OUTSIDE_CONFIG = 'LARAVEL_PITFALL_ENV_OUTSIDE_CONFIG';
     private const RULE_DEBUG = 'LARAVEL_PITFALL_DEBUG';
     private const RULE_SLEEP_IN_TEST = 'LARAVEL_PITFALL_SLEEP_IN_TEST';
@@ -42,12 +45,7 @@ final class LaravelPitfallAnalyzer
 
     private function analyzeFile(string $file): array
     {
-        $code = $this->readFile($file);
-        if ($code === '') {
-            return [];
-        }
-
-        $ast = $this->parse($code);
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return [];
         }
@@ -112,27 +110,5 @@ final class LaravelPitfallAnalyzer
         $normalized = str_replace('\\', '/', $file);
 
         return str_contains($normalized, '/tests/') || str_starts_with($normalized, 'tests/');
-    }
-
-    private function readFile(string $path): string
-    {
-        if (!is_file($path)) {
-            return '';
-        }
-
-        return (string) file_get_contents($path);
-    }
-
-    private function parse(string $code): ?array
-    {
-        try {
-            $parser = (new ParserFactory())->createForNewestSupportedVersion();
-
-            $parsed = $parser->parse($code);
-            Profiler::countParse();
-            return $parsed;
-        } catch (\Throwable $e) {
-            return null;
-        }
     }
 }

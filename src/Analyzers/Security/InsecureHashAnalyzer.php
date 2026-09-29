@@ -6,13 +6,16 @@ namespace Rampart\QualityChecker\Analyzers\Security;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Profiling\Profiler;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
-final class InsecureHashAnalyzer
+final class InsecureHashAnalyzer implements ScanContextAware
 {
+    use ScanContextTrait;
+
     private const RULE = 'INSECURE_HASH';
 
     private const WEAK_FUNCTIONS = ['md5', 'sha1'];
@@ -58,7 +61,7 @@ final class InsecureHashAnalyzer
      */
     public function analyzeFile(string $file): array
     {
-        $code = $this->readFile($file);
+        $code = $this->sharedSource($file);
         if ($code === '') {
             return [];
         }
@@ -67,7 +70,7 @@ final class InsecureHashAnalyzer
             return [];
         }
 
-        $ast = $this->parse($code);
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return [];
         }
@@ -259,34 +262,5 @@ final class InsecureHashAnalyzer
         $attrs = $call->getAttributes();
 
         return (string) ($attrs['comments'][0] ?? '');
-    }
-
-    private function readFile(string $path): string
-    {
-        if (!is_file($path)) {
-            return '';
-        }
-
-        return (string) file_get_contents($path);
-    }
-
-    private function parse(string $code): ?array
-    {
-        try {
-            $parser = (new ParserFactory())->createForNewestSupportedVersion();
-            $ast = $parser->parse($code);
-            Profiler::countParse();
-            if ($ast === null) {
-                return null;
-            }
-
-            $traverser = new \PhpParser\NodeTraverser();
-            $traverser->addVisitor(new \PhpParser\NodeVisitor\ParentConnectingVisitor());
-            $traverser->traverse($ast);
-
-            return $ast;
-        } catch (\Throwable $e) {
-            return null;
-        }
     }
 }

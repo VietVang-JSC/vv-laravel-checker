@@ -63,7 +63,7 @@ final class TestCoverageAnalyzer extends AbstractAnalyzer
      */
     private function analyzeFile(string $file, array $tests): array
     {
-        $ast = $this->parse($this->readFile($file));
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return [];
         }
@@ -192,7 +192,7 @@ final class TestCoverageAnalyzer extends AbstractAnalyzer
                 continue;
             }
 
-            $ast = $this->parse($this->readFile($file));
+            $ast = $this->sharedAst($file);
             if ($ast === null) {
                 continue;
             }

@@ -107,12 +107,7 @@ final class MissingTestAnalyzer extends AbstractAnalyzer
 
     private function modelHasCustomLogic(string $file): bool
     {
-        $code = $this->readFile($file);
-        if ($code === '') {
-            return false;
-        }
-
-        $ast = $this->parse($code);
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return false;
         }

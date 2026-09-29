@@ -6,12 +6,15 @@ namespace Rampart\QualityChecker\Analyzers\TestCoverage;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
-final class FeatureTestAnalyzer
+final class FeatureTestAnalyzer implements ScanContextAware
 {
+    use ScanContextTrait;
+
     private const RULE = 'MISSING_FEATURE_COVERAGE';
 
     public function analyze(array $files): array
@@ -83,7 +86,7 @@ final class FeatureTestAnalyzer
         }
 
         foreach ($this->listPhpFiles($dir) as $path) {
-            $code = $this->readFile($path);
+            $code = $this->sharedSource($path);
             if ($code === '') {
                 continue;
             }
@@ -154,7 +157,7 @@ final class FeatureTestAnalyzer
         }
 
         foreach ($this->listPhpFiles($dir) as $path) {
-            $result[$path] = $this->readFile($path);
+            $result[$path] = $this->sharedSource($path);
         }
 
         return $result;
@@ -184,14 +187,5 @@ final class FeatureTestAnalyzer
         }
 
         return $files;
-    }
-
-    private function readFile(string $path): string
-    {
-        if (!is_file($path)) {
-            return '';
-        }
-
-        return (string) file_get_contents($path);
     }
 }

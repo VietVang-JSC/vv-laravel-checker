@@ -73,7 +73,7 @@ final class OwaspPathTraversalAnalyzer extends AbstractAnalyzer
      */
     private function analyzeFile(string $file): array
     {
-        $ast = $this->parse($this->readFile($file));
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return [];
         }

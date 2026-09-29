@@ -6,14 +6,17 @@ namespace Rampart\QualityChecker\Analyzers\TestCoverage;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use PhpParser\ParserFactory;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Profiling\Profiler;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
-final class ControllerTestAnalyzer
+final class ControllerTestAnalyzer implements ScanContextAware
 {
+    use ScanContextTrait;
+
     private const RULE = 'MISSING_CONTROLLER_TEST';
 
     public function analyze(array $files): array
@@ -43,12 +46,7 @@ final class ControllerTestAnalyzer
 
     private function analyzeControllerFile(string $file, array $featureTests): array
     {
-        $code = $this->readFile($file);
-        if ($code === '') {
-            return [];
-        }
-
-        $ast = $this->parse($code);
+        $ast = $this->sharedAst($file);
         if ($ast === null) {
             return [];
         }
@@ -156,7 +154,7 @@ final class ControllerTestAnalyzer
         }
 
         foreach ($this->listPhpFiles($dir) as $path) {
-            $result[$path] = $this->readFile($path);
+            $result[$path] = $this->sharedSource($path);
         }
 
         return $result;
@@ -186,27 +184,5 @@ final class ControllerTestAnalyzer
         }
 
         return $files;
-    }
-
-    private function readFile(string $path): string
-    {
-        if (!is_file($path)) {
-            return '';
-        }
-
-        return (string) file_get_contents($path);
-    }
-
-    private function parse(string $code): ?array
-    {
-        try {
-            $parser = (new ParserFactory())->createForNewestSupportedVersion();
-
-            $parsed = $parser->parse($code);
-            Profiler::countParse();
-            return $parsed;
-        } catch (\Throwable $e) {
-            return null;
-        }
     }
 }

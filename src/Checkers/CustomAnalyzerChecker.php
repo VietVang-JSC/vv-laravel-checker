@@ -36,14 +36,14 @@ use Rampart\QualityChecker\Analyzers\TestCoverage\FeatureTestAnalyzer;
 use Rampart\QualityChecker\Analyzers\TestCoverage\MissingTestAnalyzer;
 use Rampart\QualityChecker\Analyzers\TestCoverage\TestCoverageAnalyzer;
 use Rampart\QualityChecker\Analyzers\TestCoverage\TestWithoutAssertAnalyzer;
-use Rampart\QualityChecker\Analysis\AstPool;
-use Rampart\QualityChecker\Analysis\AstPoolAware;
 use Rampart\QualityChecker\Profiling\Profiler;
 use Rampart\QualityChecker\Result\CheckResult;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Scanning\ScanContext;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
 use Rampart\QualityChecker\Suppression\InlineSuppressor;
 
 final class CustomAnalyzerChecker implements CheckerInterface
@@ -89,22 +89,29 @@ final class CustomAnalyzerChecker implements CheckerInterface
         Profiler::end('discovery');
         $issues = [];
 
-        // One shared AST pool per run; analyzers implementing AstPoolAware
-        // parse once and share, the rest parse on their own as before.
-        $pool = new AstPool();
+        // One shared scan context per run: source read once, AST parsed
+        // once, failures cached. Analyzers implementing ScanContextAware
+        // consume it; the rest parse on their own until migrated.
+        $scan = new ScanContext();
         foreach ($this->buildAnalyzers($ctx) as $entry) {
             if (!$entry['enabled']) {
                 continue;
             }
 
             $analyzer = $entry['analyzer'];
-            if ($analyzer instanceof AstPoolAware) {
-                $analyzer->setAstPool($pool);
+            if ($analyzer instanceof ScanContextAware) {
+                $analyzer->setScanContext($scan);
             }
             $issues = array_merge($issues, $this->runAnalyzer($analyzer, $files));
         }
-        Profiler::gauge('ast_pool_files', $pool->stats()['files']);
-        Profiler::gauge('ast_pool_hits', $pool->stats()['hits']);
+        $stats = $scan->stats();
+        Profiler::gauge('scan_source_requests', $stats['source_requests']);
+        Profiler::gauge('scan_source_hits', $stats['source_hits']);
+        Profiler::gauge('scan_ast_requests', $stats['ast_requests']);
+        Profiler::gauge('scan_ast_hits', $stats['ast_hits']);
+        Profiler::gauge('scan_ast_misses', $stats['ast_misses']);
+        Profiler::gauge('scan_parse_failures', $stats['parse_failures']);
+        Profiler::gauge('scan_files', $stats['files']);
 
         if ($this->taintEnabled($ctx)) {
             $issues = array_merge($issues, $this->runTaintEngine($files));

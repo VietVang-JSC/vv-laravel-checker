@@ -73,7 +73,7 @@ final class OwaspMisconfigurationAnalyzer extends AbstractAnalyzer
 
     private function analyzeFile(string $file): array
     {
-        $code = $this->readFile($file);
+        $code = $this->sharedSource($file);
         if ($code === '') {
             return [];
         }

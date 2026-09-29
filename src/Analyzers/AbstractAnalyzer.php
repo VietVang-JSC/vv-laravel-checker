@@ -11,9 +11,14 @@ use Rampart\QualityChecker\Profiling\Profiler;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Scanning\ScanContext;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
-abstract class AbstractAnalyzer
+abstract class AbstractAnalyzer implements ScanContextAware
 {
+    use ScanContextTrait;
+
     /**
      * @param list<string> $files absolute paths
      * @return Issue[]

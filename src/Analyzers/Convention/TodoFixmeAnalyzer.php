@@ -7,9 +7,13 @@ namespace Rampart\QualityChecker\Analyzers\Convention;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Scanning\ScanContextAware;
+use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
-final class TodoFixmeAnalyzer
+final class TodoFixmeAnalyzer implements ScanContextAware
 {
+    use ScanContextTrait;
+
     private const RULE = 'TODO_FIXME';
 
     private const PATTERN = '/(TODO|FIXME|HACK|XXX)/i';
@@ -36,7 +40,7 @@ final class TodoFixmeAnalyzer
 
     private function analyzeFile(string $file): array
     {
-        $code = $this->readFile($file);
+        $code = $this->sharedSource($file);
         if ($code === '') {
             return [];
         }
@@ -76,14 +80,5 @@ final class TodoFixmeAnalyzer
         }
 
         return str_starts_with($trimmed, '/*');
-    }
-
-    private function readFile(string $path): string
-    {
-        if (!is_file($path)) {
-            return '';
-        }
-
-        return (string) file_get_contents($path);
     }
 }

@@ -10,13 +10,9 @@ use PhpParser\ParserFactory;
 use Rampart\QualityChecker\Profiling\Profiler;
 
 /**
- * Shared AST pool: parse each file once per run and hand the same AST to
- * every analyzer that opts in (see AstPoolAware). Analyzers that do not
- * opt in keep parsing on their own — both engines coexist.
- *
- * This is the foundation for data-flow work: one parsed representation
- * feeding symbol indexing, Laravel semantics and taint tracking, instead
- * of N independent parses.
+ * Shared AST pool: parse each file once and hand the same AST to every
+ * consumer. Superseded in the scan path by Scanning\ScanContext (source
+ * + AST + failure cache); retained for direct consumers and its tests.
  */
 final class AstPool
 {
