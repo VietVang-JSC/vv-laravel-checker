@@ -242,6 +242,22 @@ php artisan quality:check --tier=all --fail-on=none
   linkstack 0 → 0. Protocol from here on: every new EXPOSED/REVIEW and
   every gone finding gets 100% human review before the semantic engine
   earns production-outcome power.
+- **Bounded interprocedural return summaries, shadow mode (v0.5.2)**:
+  `MethodSummaryIndex` summarizes one call boundary deep — param-derived
+  returns (`PARAM(i)` + operation, never context-free RAW), literals as
+  internal, mixed provenances as unknown — with cache, cycle guard and
+  full perf counters (requests/hits/misses/methods/AST-parses/cycles).
+  Receivers resolve only when statically proven (promoted/typed/constructor
+  DI, `new X`, `app(X::class)`); untyped properties, containers, facades,
+  magic methods and dynamic dispatch stay unknown with first-class reasons
+  (dynamic-receiver, unresolved-class/method, mixed-return-provenance,
+  nested-call, cycle, depth-limit). The mass-flow classifier consumes
+  summaries opt-in; production analyzers pass none, so outcomes are frozen
+  by construction. Shadow over 534 real unknowns (snipe-it, invoiceninja,
+  firefly): 0 resolved, 0 incorrect — the dominant pools are parent-class
+  methods (explicitly out of scope), untyped receivers and non-call shapes;
+  the pattern set is proven by a 17-case A–T corpus instead. Summary cost
+  on snipe-it: 19 requests, 11 AST parses, 0.07s.
 - **Negative evidence trails (v0.5.1)**: every `ROUTE_MISSING_VALIDATION`
   finding carries an `evidence_trail` proving the negative decision —
   which of FormRequest-param/`rules()`/`$request->validate()`/

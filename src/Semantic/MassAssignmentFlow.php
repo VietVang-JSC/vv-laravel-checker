@@ -6,18 +6,17 @@ namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
-use Rampart\QualityChecker\Analysis\AssignmentMap;
 use Rampart\QualityChecker\Analysis\FlowTrace;
 use Rampart\QualityChecker\Analysis\ScopeResolver;
 
 /**
- * Input-to-Eloquent flow classification (v0.4.1, shadow mode).
+ * Input-to-Eloquent flow classification (v0.4.1+, shadow mode).
  *
  * Classifies the data argument of a mass-assignment sink
  * (`create`/`fill`/`update`/`forceFill`/`forceCreate`/...) by provenance:
  * raw request data, validated data, bounded field-sets (`only()`),
- * internal literals, or unknown. Variable propagation reuses the shared
- * engine (`AssignmentMap::visible` — same scope, straight-line, ordered),
+ * internal literals, or unknown. Variable propagation is flow-sensitive
+ * (one straight-line assignment preceding the use; same-scope filtered),
  * so conditional mixes degrade to unknown instead of false-safe.
  *
  * Classification only — no verdicts. In particular `validated` never
@@ -30,6 +29,7 @@ final class MassAssignmentFlow
 
     /**
      * @param list<Node> $fileNodes
+     * @param array<string, string> $uses
      */
     public static function classify(
         Node\Expr $arg,
@@ -38,11 +38,15 @@ final class MassAssignmentFlow
         array $fileNodes,
         int $funcId,
         string $file,
-        int $useLine
+        int $useLine,
+        ?MethodSummaryIndex $summaries = null,
+        ?Node\Stmt\Class_ $callerClass = null,
+        array $uses = [],
+        ?string $namespace = null
     ): MassFlow {
         $forceBypass = in_array(strtolower($sinkMethod), ['forcefill', 'forcecreate'], true);
         $sinkLabel = $sinkMethod . '()';
-        $flow = self::resolveSource($arg, $method, $fileNodes, $funcId, $file, $useLine, 0, []);
+        $flow = self::resolveSource($arg, $method, $fileNodes, $funcId, $file, $useLine, 0, [], $summaries, $callerClass, $uses, $namespace, false);
         if ($flow === null) {
             return new MassFlow(
                 MassFlow::UNKNOWN,
@@ -70,6 +74,7 @@ final class MassAssignmentFlow
     /**
      * @param list<Node> $fileNodes
      * @param array<int, true> $visited
+     * @param array<string, string> $uses
      * @return array{status: string, fields: list<string>|null, excluded: list<string>|null, source: string, trace: list<array{kind: string, detail: string, line: int|null}>}|null
      */
     private static function resolveSource(
@@ -80,7 +85,12 @@ final class MassAssignmentFlow
         string $file,
         int $useLine,
         int $depth,
-        array $visited
+        array $visited,
+        ?MethodSummaryIndex $summaries = null,
+        ?Node\Stmt\Class_ $callerClass = null,
+        array $uses = [],
+        ?string $namespace = null,
+        bool $inSummary = false
     ): ?array {
         if ($depth > self::MAX_DEPTH) {
             return null;
@@ -99,7 +109,7 @@ final class MassAssignmentFlow
             // safe()->only([...]) / safe()->except([...]): validated base
             // with a field-set operation on top.
             if (in_array($name, ['only', 'except'], true)) {
-                $base = self::resolveSource($expr->var, $method, $fileNodes, $funcId, $file, $useLine, $depth + 1, $visited);
+                $base = self::resolveSource($expr->var, $method, $fileNodes, $funcId, $file, $useLine, $depth + 1, $visited, $summaries, $callerClass, $uses, $namespace, $inSummary);
                 if ($base !== null && $base['status'] === MassFlow::VALIDATED) {
                     $fields = self::literalFields($expr);
                     $trace = [...$base['trace'], [
@@ -126,11 +136,34 @@ final class MassAssignmentFlow
                     ];
                 }
             }
+            // Bounded interprocedural call (opt-in, shadow): one call
+            // boundary via a proven receiver + cached method summary.
+            // Nested applications stay unresolved (depth 1).
+            if (!$inSummary && $summaries !== null && $callerClass !== null) {
+                $applied = self::applySummary(
+                    $expr,
+                    $method,
+                    $callerClass,
+                    $fileNodes,
+                    $funcId,
+                    $file,
+                    $useLine,
+                    $depth,
+                    $summaries,
+                    $uses,
+                    $namespace
+                );
+                if ($applied !== null) {
+                    return $applied;
+                }
+
+                return self::unresolvedFlow($expr, 'dynamic-receiver');
+            }
         }
 
-        // Single-assignment variables via the shared engine.
+        // Single-assignment variables via flow-sensitive discipline.
         if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
-            return self::resolveVariable($expr->name, $method, $fileNodes, $funcId, $file, $useLine, $depth, $visited);
+            return self::resolveVariable($expr, $method, $fileNodes, $funcId, $file, $useLine, $depth, $visited, $summaries, $callerClass, $uses, $namespace, $inSummary);
         }
 
         // Literal arrays are internal data, never request-tainted.
@@ -225,22 +258,37 @@ final class MassAssignmentFlow
     /**
      * @param list<Node> $fileNodes
      * @param array<int, true> $visited
+     * @param array<string, string> $uses
      * @return array{status: string, fields: list<string>|null, excluded: list<string>|null, source: string, trace: list<array{kind: string, detail: string, line: int|null}>}|null
      */
     private static function resolveVariable(
-        string $name,
+        Node\Expr\Variable $use,
         Node\Stmt\ClassMethod $method,
         array $fileNodes,
         int $funcId,
         string $file,
         int $useLine,
         int $depth,
-        array $visited
+        array $visited,
+        ?MethodSummaryIndex $summaries = null,
+        ?Node\Stmt\Class_ $callerClass = null,
+        array $uses = [],
+        ?string $namespace = null,
+        bool $inSummary = false
     ): ?array {
-        // Exactly one assignment to the name in the whole method: any
-        // conditional/loop reassignment degrades to unknown (never
-        // false-safe), even when the straight-line view sees only one.
-        $allInMethod = (new NodeFinder())->find(
+        if (!is_string($use->name)) {
+            return null;
+        }
+        $name = $use->name;
+        // Flow-sensitive single assignment: exactly one straight-line
+        // (direct method-body child) assignment preceding the use; any
+        // other preceding same-scope assignment (conditional, loop)
+        // poisons the proof. Later reassignments cannot affect the use.
+        // Ordering uses file positions so same-line statements resolve.
+        $usePos = (int) $use->getAttribute('startFilePos', -1);
+        $direct = null;
+        $finder = new NodeFinder();
+        $assigns = $finder->find(
             $method->stmts ?? [],
             static function (Node $node) use ($name): bool {
                 return $node instanceof Node\Expr\Assign
@@ -248,44 +296,75 @@ final class MassAssignmentFlow
                     && $node->var->name === $name;
             }
         );
-        if (count($allInMethod) !== 1) {
-            return null;
-        }
-        // Shared-engine discipline with same-scope filtering: file-level
-        // assigns must not leak into method scope.
-        $scopes = new ScopeResolver();
-        $assigns = [];
-        foreach ((new AssignmentMap())->visible($fileNodes, $funcId, $useLine) as $assign) {
-            if (
-                $assign->var instanceof Node\Expr\Variable
-                && $assign->var->name === $name
-                && $scopes->funcId($assign, $fileNodes) === $funcId
-            ) {
-                $assigns[] = $assign;
+        foreach ($assigns as $assign) {
+            if (!$assign instanceof Node\Expr\Assign) {
+                continue;
             }
+            if (!self::strictlyBefore($assign, $useLine, $usePos)) {
+                continue;
+            }
+            if (!self::isDirectChild($assign, $method)) {
+                return null;
+            }
+            if ($direct !== null) {
+                return null;
+            }
+            $direct = $assign;
         }
-        // Shared-engine discipline: exactly one straight-line,
-        // same-scope, preceding assignment. Conditional mixes and
-        // reassignments degrade to unknown (never false-safe).
-        if (count($assigns) !== 1) {
+        if ($direct === null) {
             return null;
         }
-        $assign = $assigns[0];
-        if (isset($visited[spl_object_id($assign)])) {
+        // Same-scope filter: file-level assigns must not leak in.
+        if ((new ScopeResolver())->funcId($direct, $fileNodes) !== $funcId) {
             return null;
         }
-        $visited[spl_object_id($assign)] = true;
-        $inner = self::resolveSource($assign->expr, $method, $fileNodes, $funcId, $file, $useLine, $depth + 1, $visited);
+        if (isset($visited[spl_object_id($direct)])) {
+            return null;
+        }
+        $visited[spl_object_id($direct)] = true;
+        $inner = self::resolveSource($direct->expr, $method, $fileNodes, $funcId, $file, $useLine, $depth + 1, $visited, $summaries, $callerClass, $uses, $namespace, $inSummary);
         if ($inner === null) {
             return null;
         }
         $inner['trace'][] = [
             'kind' => 'propagation',
-            'detail' => '$' . $name . ' = ' . self::describe($assign->expr),
-            'line' => $assign->getStartLine(),
+            'detail' => '$' . $name . ' = ' . self::describe($direct->expr),
+            'line' => $direct->getStartLine(),
         ];
 
         return $inner;
+    }
+
+    /**
+     * Strict source order: earlier line wins; same line falls back to
+     * file positions (absent positions mean unorderable → false).
+     */
+    private static function strictlyBefore(Node\Expr\Assign $assign, int $useLine, int $usePos): bool
+    {
+        if ($assign->getStartLine() < $useLine) {
+            return true;
+        }
+        if ($assign->getStartLine() !== $useLine || $usePos < 0) {
+            return false;
+        }
+        $assignPos = (int) $assign->getAttribute('startFilePos', -1);
+
+        return $assignPos >= 0 && $assignPos < $usePos;
+    }
+
+    private static function isDirectChild(Node\Expr\Assign $assign, Node\Stmt\ClassMethod $method): bool
+    {
+        if ($method->stmts === null) {
+            return false;
+        }
+        $id = spl_object_id($assign);
+        foreach ($method->stmts as $stmt) {
+            if ($stmt instanceof Node\Stmt\Expression && spl_object_id($stmt->expr) === $id) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function isRequestReceiver(Node\Expr $var): bool
@@ -305,6 +384,178 @@ final class MassAssignmentFlow
         if ($var instanceof Node\Expr\FuncCall) {
             return $var->name instanceof Node\Name
                 && strtolower($var->name->toString()) === 'request';
+        }
+
+        return false;
+    }
+
+    /**
+     * One interprocedural step: resolve the receiver, fetch the cached
+     * summary, and apply the call-site arguments. Returns null when
+     * anything is unproven (caller falls back to unknown).
+     *
+     * @param list<Node> $fileNodes
+     * @param array<string, string> $uses
+     * @return array{status: string, fields: list<string>|null, excluded: list<string>|null, source: string, trace: list<array{kind: string, detail: string, line: int|null}>}|null
+     */
+    private static function applySummary(
+        Node\Expr\MethodCall $expr,
+        Node\Stmt\ClassMethod $method,
+        Node\Stmt\Class_ $callerClass,
+        array $fileNodes,
+        int $funcId,
+        string $file,
+        int $useLine,
+        int $depth,
+        MethodSummaryIndex $summaries,
+        array $uses,
+        ?string $namespace
+    ): ?array {
+        if (!$expr->name instanceof Node\Identifier) {
+            return null;
+        }
+        $resolved = ReceiverResolver::resolve($expr->var, $method, $callerClass, $uses, $namespace);
+        if ($resolved === null) {
+            return null;
+        }
+        $methodName = $expr->name->toString();
+        $summary = $summaries->summary($resolved['class'], $methodName);
+        if ($summary->kind === MethodSummary::UNKNOWN) {
+            return self::unresolvedFlow($expr, $summary->unresolvedReason ?? 'unsupported-expression');
+        }
+        if ($summary->kind === MethodSummary::INTERNAL) {
+            $trace = (new FlowTrace())->source('internal (' . $summary->evidence . ')', $expr->getStartLine())->toMetadata();
+
+            return [
+                'status' => MassFlow::INTERNAL,
+                'fields' => null,
+                'excluded' => null,
+                'source' => 'internal via ' . $resolved['class'] . '::' . $methodName . '()',
+                'trace' => $trace,
+            ];
+        }
+        // PARAM(i, op): map the actual argument, then decide at the
+        // call-site. Nested summaries stay unresolved (depth 1).
+        $actual = self::mapArgument($expr, $summary);
+        if ($actual === null) {
+            return self::unresolvedFlow($expr, 'unsupported-expression');
+        }
+        $traceHead = [[
+            'kind' => 'propagation',
+            'detail' => $resolved['class'] . '::' . $methodName . '() => ' . $summary->evidence,
+            'line' => $expr->getStartLine(),
+        ]];
+        if ($summary->operation === MethodSummary::OP_PASSTHROUGH) {
+            $inner = self::resolveSource($actual, $method, $fileNodes, $funcId, $file, $useLine, $depth + 1, [], null, $callerClass, $uses, $namespace, true);
+            if ($inner === null) {
+                return null;
+            }
+            $inner['trace'] = [...$inner['trace'], ...$traceHead];
+
+            return $inner;
+        }
+        if (!self::isRequestObject($actual, $method)) {
+            return null;
+        }
+        $source = self::describe($actual) . ' via ' . $resolved['class'] . '::' . $methodName . '()';
+        $trace = [...$traceHead];
+        switch ($summary->operation) {
+            case MethodSummary::OP_ALL:
+            case MethodSummary::OP_INPUT:
+                return ['status' => MassFlow::RAW, 'fields' => null, 'excluded' => null, 'source' => $source, 'trace' => $trace];
+            case MethodSummary::OP_ONLY:
+                if ($summary->fields === null) {
+                    return null;
+                }
+
+                return ['status' => MassFlow::BOUNDED, 'fields' => $summary->fields, 'excluded' => null, 'source' => $source, 'trace' => $trace];
+            case MethodSummary::OP_EXCEPT:
+                return ['status' => MassFlow::RAW, 'fields' => null, 'excluded' => $summary->fields, 'source' => $source, 'trace' => $trace];
+            case MethodSummary::OP_VALIDATED:
+            case MethodSummary::OP_SAFE:
+                return ['status' => MassFlow::VALIDATED, 'fields' => null, 'excluded' => null, 'source' => $source, 'trace' => $trace];
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * @return array{status: string, fields: list<string>|null, excluded: list<string>|null, source: string, trace: list<array{kind: string, detail: string, line: int|null}>}
+     */
+    private static function unresolvedFlow(Node\Expr $expr, string $reason): array
+    {
+        $trace = (new FlowTrace())->source(self::describe($expr), $expr->getStartLine())->toMetadata();
+        $trace[] = ['kind' => 'unresolved', 'detail' => $reason, 'line' => $expr->getStartLine()];
+
+        return [
+            'status' => MassFlow::UNKNOWN,
+            'fields' => null,
+            'excluded' => null,
+            'source' => self::describe($expr),
+            'trace' => $trace,
+        ];
+    }
+
+    /**
+     * Actual argument expression for summary param $summary->paramIndex,
+     * positional or named. Null when the argument is missing.
+     */
+    private static function mapArgument(
+        Node\Expr\MethodCall $expr,
+        MethodSummary $summary
+    ): ?Node\Expr {
+        if ($summary->paramIndex === null) {
+            return null;
+        }
+        $paramName = $summary->params[$summary->paramIndex] ?? null;
+        foreach ($expr->args as $arg) {
+            if ($arg instanceof Node\Arg && $arg->name instanceof Node\Identifier && $arg->name->toString() === $paramName) {
+                return $arg->value;
+            }
+        }
+        $positional = array_values(array_filter($expr->args, static fn ($a): bool => $a instanceof Node\Arg && $a->name === null));
+        $match = $positional[$summary->paramIndex] ?? null;
+
+        return $match instanceof Node\Arg ? $match->value : null;
+    }
+
+    /**
+     * Is this expression the request object (not request data)? Bounded:
+     * `$request`, `$this->request`, `request()`, or a Request-typed
+     * parameter of the enclosing method.
+     */
+    private static function isRequestObject(Node\Expr $expr, Node\Stmt\ClassMethod $method): bool
+    {
+        if ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+            if ($expr->name === 'request') {
+                return true;
+            }
+            foreach ($method->params as $param) {
+                if (
+                    $param instanceof Node\Param
+                    && $param->var instanceof Node\Expr\Variable
+                    && $param->var->name === $expr->name
+                    && $param->type instanceof Node\Name
+                    && str_contains(strtolower($param->type->toString()), 'request')
+                ) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        if (
+            $expr instanceof Node\Expr\PropertyFetch
+            && $expr->name instanceof Node\Identifier
+            && $expr->name->toString() === 'request'
+            && $expr->var instanceof Node\Expr\Variable
+            && $expr->var->name === 'this'
+        ) {
+            return true;
+        }
+        if ($expr instanceof Node\Expr\FuncCall) {
+            return $expr->name instanceof Node\Name
+                && strtolower($expr->name->toString()) === 'request';
         }
 
         return false;
