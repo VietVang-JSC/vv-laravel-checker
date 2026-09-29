@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 
 /**
  * Bounded receiver resolution for interprocedural calls: prove the
@@ -165,7 +165,7 @@ final class ReceiverResolver
         if ($ctor->stmts === null) {
             return false;
         }
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $found = $finder->find($ctor->stmts, static function (Node $node) use ($prop, $param): bool {
             return $node instanceof Node\Expr\Assign
                 && $node->var instanceof Node\Expr\PropertyFetch
@@ -193,7 +193,7 @@ final class ReceiverResolver
         if ($caller->stmts === null) {
             return null;
         }
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $assigns = [];
         foreach (
             $finder->find($caller->stmts, static function (Node $node) use ($name): bool {

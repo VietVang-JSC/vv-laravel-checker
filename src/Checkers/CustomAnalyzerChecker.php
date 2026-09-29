@@ -90,17 +90,19 @@ final class CustomAnalyzerChecker implements CheckerInterface
         $issues = [];
 
         // One shared scan context per run: source read once, AST parsed
-        // once, failures cached. Analyzers implementing ScanContextAware
-        // consume it; the rest parse on their own until migrated.
-        //
-        // GC is parked for the analyzer loop: canonical trees carry
-        // parent links (node cycles) and are retained by design until
-        // the run ends, so the collector would rescan a growing cyclic
-        // graph on every threshold trip (~2x wall time, zero bytes
-        // freed). Refcount still frees analyzer temporaries; GC resumes
-        // in the finally below.
+        // once, failures cached (canonical AST contract — see
+        // ScanContext). GC is parked for the analyzer loop: canonical
+        // trees carry parent links (node cycles) and are retained by
+        // design until the run ends, so the collector would rescan a
+        // growing cyclic graph on every threshold trip (~2x wall time,
+        // zero bytes freed). Refcount still frees analyzer temporaries;
+        // GC resumes in the finally below. VV_NO_GC_PARK=1 skips parking
+        // for the PERF-EVAL-2 GC A/B experiment.
         $scan = new ScanContext();
-        gc_disable();
+        $parkGc = getenv('VV_NO_GC_PARK') !== '1';
+        if ($parkGc) {
+            gc_disable();
+        }
         try {
             foreach ($this->buildAnalyzers($ctx) as $entry) {
                 if (!$entry['enabled']) {
@@ -114,7 +116,9 @@ final class CustomAnalyzerChecker implements CheckerInterface
                 $issues = array_merge($issues, $this->runAnalyzer($analyzer, $files));
             }
         } finally {
-            gc_enable();
+            if ($parkGc) {
+                gc_enable();
+            }
         }
         $stats = $scan->stats();
         Profiler::gauge('scan_source_requests', $stats['source_requests']);
@@ -244,7 +248,7 @@ final class CustomAnalyzerChecker implements CheckerInterface
         $short = substr((string) strrchr($fqcn, '\\'), 1) ?: $fqcn;
         Profiler::countFilesVisited($short, count($files));
 
-        return Profiler::timeAnalyzer($short, static function () use ($analyzer, $files): array {
+        $issues = Profiler::timeAnalyzer($short, static function () use ($analyzer, $files): array {
             $issues = [];
             foreach ($analyzer->analyze($files) as $issue) {
                 if ($issue instanceof Issue) {
@@ -254,6 +258,9 @@ final class CustomAnalyzerChecker implements CheckerInterface
 
             return $issues;
         });
+        Profiler::countIssues($short, count($issues));
+
+        return $issues;
     }
 
     private function taintEnabled(CheckContext $ctx): bool

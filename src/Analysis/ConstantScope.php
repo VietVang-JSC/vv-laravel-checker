@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Analysis;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 
 /**
  * Resolution scope for constant expressions: one file's AST, one
@@ -33,7 +34,7 @@ final class ConstantScope
      */
     public static function forFile(array $nodes, string $file): self
     {
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
 
         return new self($nodes, 0, $file, self::useMap($finder, $nodes), self::namespaceOf($finder, $nodes));
     }

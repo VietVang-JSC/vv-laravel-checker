@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 
 /**
  * Best-effort model type for an authorization subject expression
@@ -69,7 +69,7 @@ final class ModelTypeResolver
         // Flow-sensitive: only assignments preceding the use can affect
         // it. Exactly one, straight-line (direct method-body child) —
         // later reassignments and conditional mixes stay unknown.
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $before = [];
         foreach (
             $finder->find($method->stmts, static function (Node $node) use ($name, $useLine): bool {

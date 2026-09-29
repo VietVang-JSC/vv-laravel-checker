@@ -119,7 +119,7 @@ final class MiddlewareRegistry implements ScanContextAware
         if ($ast === null) {
             return;
         }
-        $finder = new \PhpParser\NodeFinder();
+        $finder = new \Rampart\QualityChecker\Analysis\CountingNodeFinder();
         $uses = $this->useMap($finder, $ast);
         $namespace = $this->namespaceOf($finder, $ast);
 

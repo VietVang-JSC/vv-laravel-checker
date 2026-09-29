@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Scanning\ScanContext;
 
 /**
@@ -122,7 +122,7 @@ final class ModelMetadata
         if ($ast === null) {
             return self::unknown($model, $file);
         }
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $classes = $finder->findInstanceOf($ast, Node\Stmt\Class_::class);
         foreach ($classes as $class) {
             if (!$class instanceof Node\Stmt\Class_) {

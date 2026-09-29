@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Scanning\ScanContextAware;
 use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
@@ -54,7 +55,7 @@ final class MiddlewareInspector implements ScanContextAware
         if ($handle === null || $handle->stmts === null) {
             return null;
         }
-        if (!$this->passesNext(new NodeFinder(), $handle)) {
+        if (!$this->passesNext(new CountingNodeFinder(), $handle)) {
             return null;
         }
 
@@ -292,7 +293,7 @@ final class MiddlewareInspector implements ScanContextAware
         if ($ast === null) {
             return null;
         }
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $methods = $finder->find($ast, static function (Node $node): bool {
             return $node instanceof Node\Stmt\ClassMethod;
         });
@@ -455,7 +456,7 @@ final class MiddlewareInspector implements ScanContextAware
 
     private function isSelfEnforcingAuthorize(Node\Stmt $stmt): bool
     {
-        $found = (new NodeFinder())->find($stmt, function (Node $node): bool {
+        $found = (new CountingNodeFinder())->find($stmt, function (Node $node): bool {
             return $node instanceof Node\Expr\StaticCall
                 && $node->class instanceof Node\Name
                 && $this->shortClass($node->class->toString()) === 'Gate'
@@ -479,7 +480,7 @@ final class MiddlewareInspector implements ScanContextAware
 
             return null;
         }
-        $found = (new NodeFinder())->find($node, static function (Node $inner): bool {
+        $found = (new CountingNodeFinder())->find($node, static function (Node $inner): bool {
             return ($inner instanceof Node\Expr\StaticCall || $inner instanceof Node\Expr\MethodCall)
                 && $inner->name instanceof Node\Identifier;
         });
@@ -505,7 +506,7 @@ final class MiddlewareInspector implements ScanContextAware
      */
     private function reachesNext(array $stmts): bool
     {
-        $calls = (new NodeFinder())->find($stmts, static function (Node $node): bool {
+        $calls = (new CountingNodeFinder())->find($stmts, static function (Node $node): bool {
             return $node instanceof Node\Expr\FuncCall
                 && $node->name instanceof Node\Expr\Variable
                 && $node->name->name === 'next';
@@ -522,7 +523,7 @@ final class MiddlewareInspector implements ScanContextAware
      */
     private function blockStrength(array $stmts): ?string
     {
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $deny = $finder->find($stmts, static function (Node $node): bool {
             if ($node instanceof Node\Expr\Throw_) {
                 return true;

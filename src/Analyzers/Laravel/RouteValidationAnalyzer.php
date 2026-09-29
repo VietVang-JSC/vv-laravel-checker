@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Analyzers\Laravel;
 
 use PhpParser\Node;
 use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
+use Rampart\QualityChecker\Profiling\Profiler;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
@@ -42,7 +43,9 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
     {
         $index = new FormRequestIndex();
         $index->setScanContext($this->sharedScanContext());
+        Profiler::begin('semantic-index');
         $index->build($files);
+        Profiler::end('semantic-index');
 
         $issues = [];
         foreach ($files as $file) {

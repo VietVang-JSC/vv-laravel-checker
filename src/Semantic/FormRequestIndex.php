@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Scanning\ScanContextAware;
 use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
@@ -116,7 +117,7 @@ final class FormRequestIndex implements ScanContextAware
         if ($ast === null) {
             return;
         }
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $uses = $this->useMap($finder, $ast);
         $namespace = $this->namespaceOf($finder, $ast);
         $classes = $finder->findInstanceOf($ast, Node\Stmt\Class_::class);
@@ -215,7 +216,7 @@ final class FormRequestIndex implements ScanContextAware
                     return ['kind' => 'strong', 'confidence' => 'high', 'ability' => 'deny-all'];
                 }
             }
-            $finder = new NodeFinder();
+            $finder = new CountingNodeFinder();
             $ability = null;
             $strong = $finder->find($stmt->stmts, function (Node $node) use (&$ability): bool {
                 if (

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Analyzers\TestCoverage;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
@@ -52,7 +52,7 @@ final class ControllerTestAnalyzer implements ScanContextAware
         }
 
         $issues = [];
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $classes = $finder->findInstanceOf($ast, Node\Stmt\Class_::class);
 
         $className = null;

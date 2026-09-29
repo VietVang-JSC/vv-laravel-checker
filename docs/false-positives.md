@@ -731,6 +731,57 @@ gate is still open — but parse work is now done; what remains is true
 compute cost, to be profiled in PERF-EVAL-2 before any algorithm
 changes (SqlInjection untouched until then).
 
+PERF-EVAL-2 — true compute profile (Snipe-it 1 warm-up + 5 measured
+runs, median/min/max; Linkstack GC A/B 3+3; snipe-it/app subset A/B).
+Instrumentation only, no optimization: `CountingNodeFinder` (exact
+nodes-visited via filter wrapping; instanceof/first variants delegate
+internally so all four entry points are covered; profiler-off path
+delegates untouched), `NodeCountVisitor` sharing the single canonical
+linker walk for the tree census (zero extra traversals), per-analyzer
+attribution via the `timeAnalyzer` context (inclusive of each
+analyzer's semantic-index work), `semantic-index` phase timers in the
+3 wiring spots, per-analyzer issue counts, and a `VV_NO_GC_PARK=1`
+kill-switch for the GC experiment. Phase note: canonical-parse and
+semantic-index times are subsets of analyzer wall (lazy parse on
+first touch; index builds at analyzer heads), not disjoint phases.
+Totals (runs 163/165/166/167/247s, median 166.1s): 500 findings,
+rule histograms byte-identical across all 5 runs, parse amplification
+1.0x (8628/8628), traversal amplification 112x, node amplification
+136x (250M node visits over 1.8M canonical nodes) — the repeated
+traversal hypothesis is confirmed at full scale. Peak 1252MB,
+gc_runs=0 (parked). Canonical-parse subset 9.2s; semantic-index
+subset 0.93s — neither is the bottleneck; analyzers phase 165.5s of
+166.3s total.
+Top-5 true compute (median wall | traversals | nodes | ns/node):
+OpenRedirect 76.7s | 367K | 126M (half of ALL node visits) | 607,
+stable — pure repeated traversal. MassAssignment 18.7s | 135K |
+31.6M | 590. Ssrf 17.2s | 99K | 27.6M | 624. SqlInjection 11.5s
+[11.4-66.9s!] | 8.6K (1/file) | 1.8M | 6253 — 10x the uniform ~600ns
+of every other AST analyzer: per-node logic/dataflow blowup, not
+traversal count, plus wild run variance needing its own
+investigation. Ssti 9.5s | 103K | 15.5M | 610. ns/node is uniform
+~600ns everywhere else, so cost ~= visit count.
+Zero-yield/high-cost markers (absence proofs, future prefilter
+candidates — not useless rules): SQLi 11.5s/0, CommandInjection
+6.5s/0, Xxe 1.8s/0, InsecureHash 1.2s/0, UnsafeDeser 1.1s/0,
+LaravelTaint 1.1s/0, DisabledCsrf 1.1s/0, InsecureCookie 0.9s/0.
+Regex/source analyzers (BladeXss, Misconfiguration, HardcodedSecret)
+show trav=0/N/A by design — ns/node is AST-only.
+GC A/B verdict: Linkstack parked 8.9s vs normal 9.0s (in noise);
+snipe-it/app subset ranges overlap (parked 117-153s, normal
+108-147s) — no measurable effect either way on this box. The early
+27s linkstack anomaly never reproduced (environmental load, same
+window as the 436s snipe-it outlier). `gc_collected=0` in every
+normal-arm run proves collections reclaim nothing
+(retained-by-design graph), so parking is kept on architectural
+grounds — skips useless full-graph scans at zero peak cost —
+reversible via `VV_NO_GC_PARK`, no further GC work.
+Decision: node amplification 136x + uniform ns/node → PERF-OPT-3 =
+shared fact/node index (one traversal, analyzers query facts) for
+the traversal-bound group (Redirect/Mass/Ssrf/Ssti/Command). SQLi
+goes its own track (10x ns/node + variance). Median 166s > 120s →
+performance work continues.
+
 ## 5. Don'ts
 
 - Do not add `baseline.json` to `.gitignore` **while** complaining that CI

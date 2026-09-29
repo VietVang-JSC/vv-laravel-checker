@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Analyzers\TestCoverage;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
@@ -52,7 +52,7 @@ final class TestWithoutAssertAnalyzer implements ScanContextAware
         }
 
         $issues = [];
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
 
         foreach ($finder->findInstanceOf($ast, Node\Stmt\ClassMethod::class) as $method) {
             if (!$this->isTestMethod($method)) {
@@ -109,7 +109,7 @@ final class TestWithoutAssertAnalyzer implements ScanContextAware
 
     private function hasAssertion(array $body): bool
     {
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $source = '';
 
         $methodCalls = $finder->findInstanceOf($body, Node\Expr\MethodCall::class);

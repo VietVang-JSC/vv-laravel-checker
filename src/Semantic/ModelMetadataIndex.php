@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Scanning\ScanContextAware;
 use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
@@ -117,7 +117,7 @@ final class ModelMetadataIndex implements ScanContextAware
         if ($ast === null) {
             return;
         }
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $class = $finder->findFirstInstanceOf($ast, Node\Stmt\Class_::class);
         if ($class === null || $class->name === null) {
             return;
@@ -145,7 +145,7 @@ final class ModelMetadataIndex implements ScanContextAware
         if ($ast === null) {
             return [false, false];
         }
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $calls = $finder->find($ast, static function (Node $node): bool {
             return $node instanceof Node\Expr\StaticCall && $node->name instanceof Node\Identifier;
         });

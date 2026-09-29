@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Analyzers\Security;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Profiling\Profiler;
@@ -55,7 +55,7 @@ final class LaravelTaintAnalyzer implements ScanContextAware
         }
 
         $issues = [];
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
 
         foreach ($finder->findInstanceOf($ast, Node\Expr\MethodCall::class) as $call) {
             $method = $call->name instanceof Node\Identifier ? $call->name->toString() : null;

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Scanning\ScanContextAware;
 use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
@@ -199,7 +199,7 @@ final class MethodSummaryIndex implements ScanContextAware
         }
         $short = $this->shortClass($class);
         $namespace = $this->namespaceOf($nodes);
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $best = null;
         foreach ($finder->find($nodes, static fn (Node $n): bool => $n instanceof Node\Stmt\Class_) as $node) {
             if (!$node instanceof Node\Stmt\Class_ || $node->name === null) {
@@ -332,7 +332,7 @@ final class MethodSummaryIndex implements ScanContextAware
                 $params[] = '';
             }
         }
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $returns = $finder->find($target->stmts, static function (Node $node): bool {
             return $node instanceof Node\Stmt\Return_;
         });
@@ -490,7 +490,7 @@ final class MethodSummaryIndex implements ScanContextAware
     private function useMap(array $nodes): array
     {
         $map = [];
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $imports = $finder->find($nodes, static function (Node $node): bool {
             return $node instanceof Node\Stmt\Use_ || $node instanceof Node\Stmt\GroupUse;
         });
@@ -525,7 +525,7 @@ final class MethodSummaryIndex implements ScanContextAware
      */
     private function namespaceOf(array $nodes): ?string
     {
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $found = $finder->find($nodes, static function (Node $node): bool {
             return $node instanceof Node\Stmt\Namespace_;
         });

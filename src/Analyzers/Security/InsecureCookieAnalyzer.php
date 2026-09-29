@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Analyzers\Security;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Profiling\Profiler;
@@ -62,7 +62,7 @@ final class InsecureCookieAnalyzer implements ScanContextAware
         }
 
         $issues = [];
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $calls = $finder->find($ast, static function (Node $node): bool {
             if ($node instanceof Node\Expr\FuncCall) {
                 return $node->name instanceof Node\Name && $node->name->toString() === 'cookie';

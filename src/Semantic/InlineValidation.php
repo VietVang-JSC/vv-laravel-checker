@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 
 /**
  * Inline validation recognition for a controller method body:
@@ -28,7 +28,7 @@ final class InlineValidation
         if ($method->stmts === null) {
             return [];
         }
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $out = [];
 
         $validates = $finder->find($method->stmts, static function (Node $node): bool {

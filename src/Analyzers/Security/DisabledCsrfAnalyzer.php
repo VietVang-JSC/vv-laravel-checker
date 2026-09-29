@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Analyzers\Security;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Profiling\Profiler;
@@ -47,7 +47,7 @@ final class DisabledCsrfAnalyzer implements ScanContextAware
         }
 
         $issues = [];
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
 
         foreach ($finder->findInstanceOf($ast, Node\Stmt\Class_::class) as $class) {
             if ($this->isFormRequest($class)) {
@@ -136,7 +136,7 @@ final class DisabledCsrfAnalyzer implements ScanContextAware
 
     private function returnsLiteralTrue(Node\Stmt\ClassMethod $method): bool
     {
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $returns = $finder->findInstanceOf($method, Node\Stmt\Return_::class);
 
         foreach ($returns as $return) {

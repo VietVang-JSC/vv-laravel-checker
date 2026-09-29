@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Analyzers\Security;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
@@ -90,7 +90,7 @@ final class AuthHardeningAnalyzer implements ScanContextAware
      */
     private function findSessionFixationIssues(string $file, array $ast): array
     {
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $calls = $finder->find($ast, static function (Node $node): bool {
             return $node instanceof Node\Expr\FuncCall
                 || $node instanceof Node\Expr\MethodCall
@@ -177,7 +177,7 @@ final class AuthHardeningAnalyzer implements ScanContextAware
      */
     private function findWeakPasswordPolicyIssues(string $file, array $ast): array
     {
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $issues = [];
 
         $staticCalls = $finder->findInstanceOf($ast, Node\Expr\StaticCall::class);

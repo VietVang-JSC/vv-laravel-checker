@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Analyzers\Security;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use PhpParser\PrettyPrinter\Standard;
 use Rampart\QualityChecker\Analysis\ScopeResolver;
 use Rampart\QualityChecker\Result\Confidence;
@@ -71,7 +71,9 @@ final class MassAssignmentAnalyzer implements ScanContextAware
         $modelClassFiles = $this->findModelClassFiles($files);
         $metaIndex = new ModelMetadataIndex([], $this->modelDirSegments);
         $metaIndex->setScanContext($this->sharedScanContext());
+        Profiler::begin('semantic-index');
         $metaIndex->build($files);
+        Profiler::end('semantic-index');
         foreach ($files as $file) {
             if (!$this->supports($file)) {
                 continue;
@@ -115,7 +117,7 @@ final class MassAssignmentAnalyzer implements ScanContextAware
         ModelMetadataIndex $metaIndex
     ): array {
         $issues = [];
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $printer = new Standard();
         $scopes = new ScopeResolver($finder);
         $funcs = $scopes->functions($ast);
@@ -698,7 +700,7 @@ final class MassAssignmentAnalyzer implements ScanContextAware
     private function useMap(array $ast): array
     {
         $map = [];
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         /** @var list<Node\Stmt\Use_> $uses */
         $uses = $finder->findInstanceOf($ast, Node\Stmt\Use_::class);
         foreach ($uses as $use) {
@@ -718,7 +720,7 @@ final class MassAssignmentAnalyzer implements ScanContextAware
      */
     private function namespaceOf(array $ast): ?string
     {
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $found = $finder->find($ast, static function (Node $node): bool {
             return $node instanceof Node\Stmt\Namespace_;
         });
@@ -764,7 +766,7 @@ final class MassAssignmentAnalyzer implements ScanContextAware
             return true;
         }
 
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         /** @var list<Node\Stmt\Use_> $uses */
         $uses = $finder->findInstanceOf($ast, Node\Stmt\Use_::class);
         foreach ($uses as $use) {
@@ -812,7 +814,7 @@ final class MassAssignmentAnalyzer implements ScanContextAware
             return false;
         }
 
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $properties = $finder->findInstanceOf($ast, Node\Stmt\Property::class);
 
         foreach ($properties as $property) {
@@ -886,7 +888,7 @@ final class MassAssignmentAnalyzer implements ScanContextAware
             return [null, null];
         }
 
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $class = $finder->findFirstInstanceOf($ast, Node\Stmt\Class_::class);
         if ($class === null || $class->name === null) {
             return [null, null];

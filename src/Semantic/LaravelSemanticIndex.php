@@ -9,6 +9,7 @@ use PhpParser\NodeFinder;
 use Rampart\QualityChecker\Analysis\ConstantScope;
 use Rampart\QualityChecker\Analysis\ConstantValue;
 use Rampart\QualityChecker\Analysis\ConstantValueResolver;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Scanning\ScanContext;
 use Rampart\QualityChecker\Scanning\ScanContextAware;
 use Rampart\QualityChecker\Scanning\ScanContextTrait;
@@ -86,7 +87,7 @@ final class LaravelSemanticIndex implements ScanContextAware
         if ($scan !== null) {
             $this->setScanContext($scan);
         }
-        $this->finder = new NodeFinder();
+        $this->finder = new CountingNodeFinder();
         $this->constants = new ConstantValueResolver();
     }
 

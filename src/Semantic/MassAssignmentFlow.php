@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Analysis\FlowTrace;
 use Rampart\QualityChecker\Analysis\ScopeResolver;
 
@@ -287,7 +287,7 @@ final class MassAssignmentFlow
         // Ordering uses file positions so same-line statements resolve.
         $usePos = (int) $use->getAttribute('startFilePos', -1);
         $direct = null;
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $assigns = $finder->find(
             $method->stmts ?? [],
             static function (Node $node) use ($name): bool {

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Analysis;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 
 /**
  * Bounded constant-expression resolver for the semantic engine.
@@ -164,7 +164,7 @@ final class ConstantValueResolver
 
             return null;
         }
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $scopes = new ScopeResolver($finder);
         $funcs = $scopes->functions($scope->nodes);
 

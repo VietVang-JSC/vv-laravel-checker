@@ -9,6 +9,7 @@ use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\ParentConnectingVisitor;
 use PhpParser\Parser;
 use PhpParser\ParserFactory;
+use Rampart\QualityChecker\Analysis\NodeCountVisitor;
 use Rampart\QualityChecker\Profiling\Profiler;
 
 /**
@@ -100,6 +101,7 @@ final class ScanContext
             return null;
         }
         Profiler::countParse($path);
+        $parseStart = microtime(true);
         try {
             $parsed = $this->parser()->parse($entry->source);
         } catch (\Throwable $e) {
@@ -108,6 +110,7 @@ final class ScanContext
         if (!is_array($parsed)) {
             $entry->state = FileEntry::PARSE_FAILED;
             ++$this->parseFailures;
+            Profiler::add('canonical-parse', microtime(true) - $parseStart);
 
             return null;
         }
@@ -120,9 +123,15 @@ final class ScanContext
         // Parent links: InsecureHash/AuthHardening read the 'parent'
         // attribute (their old private parse() attached this visitor),
         // so shared trees carry it — traverser runs once per file.
+        // NodeCountVisitor shares the same walk for the PERF-EVAL-2
+        // canonical-node census (zero extra traversals).
         $linker = new NodeTraverser();
         $linker->addVisitor(new ParentConnectingVisitor());
+        $census = new NodeCountVisitor();
+        $linker->addVisitor($census);
         $linker->traverse($nodes);
+        Profiler::countCanonicalNodes($census->count);
+        Profiler::add('canonical-parse', microtime(true) - $parseStart);
         $entry->ast = $nodes;
         $entry->state = FileEntry::PARSED;
 

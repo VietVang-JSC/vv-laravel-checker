@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Scanning\ScanContextAware;
 use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
@@ -182,7 +183,7 @@ final class PolicyRegistry implements ScanContextAware
         if ($ast === null) {
             return null;
         }
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $methods = $finder->find($ast, static function (Node $node): bool {
             return $node instanceof Node\Stmt\ClassMethod;
         });
@@ -238,7 +239,7 @@ final class PolicyRegistry implements ScanContextAware
         if ($ast === null) {
             return;
         }
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
         $uses = $this->useMap($finder, $ast);
         $namespace = $this->namespaceOf($finder, $ast);
 

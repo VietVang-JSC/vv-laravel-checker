@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Analyzers\Security;
 
 use PhpParser\Node;
-use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Profiling\Profiler;
@@ -46,7 +46,7 @@ final class UnsafeDeserializationAnalyzer implements ScanContextAware
         }
 
         $issues = [];
-        $finder = new NodeFinder();
+        $finder = new CountingNodeFinder();
 
         $calls = $finder->findInstanceOf($ast, Node\Expr\FuncCall::class);
         foreach ($calls as $call) {

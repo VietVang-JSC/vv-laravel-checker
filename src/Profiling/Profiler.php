@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Profiling;
 
 /**
- * Lightweight scan profiler (PERF-EVAL-1). OFF by default — every probe
- * is a single boolean check, so disabled overhead is noise. Enable via
- * `CheckContext::$profile` or the `QUALITY_CHECKER_PROFILE` env var.
+ * Lightweight scan profiler (PERF-EVAL-1, extended PERF-EVAL-2). OFF by
+ * default — every probe is a single boolean check, so disabled overhead
+ * is noise. Enable via `CheckContext::$profile` or the
+ * `QUALITY_CHECKER_PROFILE` env var.
  *
  * Measures, never influences: findings are byte-identical with the
  * profiler on or off. Output is a plain array for machine-readable
  * reports (see the --profile driver output).
+ *
+ * PERF-EVAL-2 additions: traversal/node counting (attributed to the
+ * analyzer active in timeAnalyzer, inclusive of its semantic-index
+ * work), canonical-node census, per-analyzer issue counts, and an
+ * add() accumulator for phases timed outside begin/end.
  */
 final class Profiler
 {
@@ -31,6 +37,8 @@ final class Profiler
 
     /** @var array<string, true> */
     private static array $uniqueParses = [];
+
+    private static ?string $context = null;
 
     public static function setEnabled(bool $enabled): void
     {
@@ -57,6 +65,19 @@ final class Profiler
         self::$counters = [];
         self::$uniqueReads = [];
         self::$uniqueParses = [];
+        self::$context = null;
+    }
+
+    /**
+     * Accumulate an externally-measured span (phases timed with a local
+     * microtime pair instead of begin/end).
+     */
+    public static function add(string $section, float $seconds): void
+    {
+        if (!self::$enabled) {
+            return;
+        }
+        self::$timers[$section] = (self::$timers[$section] ?? 0.0) + $seconds;
     }
 
     public static function begin(string $section): void
@@ -82,6 +103,8 @@ final class Profiler
 
     /**
      * Time one analyzer end-to-end (wall time, includes its own parsing).
+     * Sets the attribution context so traversal probes inside (analyzer
+     * body + its semantic-index builds) credit this analyzer.
      *
      * @return mixed analyzer result
      */
@@ -91,12 +114,53 @@ final class Profiler
             return $run();
         }
         $start = microtime(true);
+        $previous = self::$context;
+        self::$context = $name;
         try {
             return $run();
         } finally {
             $key = 'analyzer:' . $name;
             self::$timers[$key] = (self::$timers[$key] ?? 0.0) + (microtime(true) - $start);
+            self::$context = $previous;
         }
+    }
+
+    /**
+     * One full-tree walk finished (a NodeFinder find/findFirst call,
+     * including instanceof variants which delegate). $nodes = exact
+     * nodes the filter was tested against.
+     */
+    public static function countTraversal(int $nodes): void
+    {
+        if (!self::$enabled) {
+            return;
+        }
+        self::$counters['traversals'] = (self::$counters['traversals'] ?? 0) + 1;
+        self::$counters['traversal_nodes'] = (self::$counters['traversal_nodes'] ?? 0) + $nodes;
+        $scope = self::$context ?? 'none';
+        self::$counters['trav:' . $scope] = (self::$counters['trav:' . $scope] ?? 0) + 1;
+        self::$counters['travnodes:' . $scope] = (self::$counters['travnodes:' . $scope] ?? 0) + $nodes;
+    }
+
+    /**
+     * Canonical-tree census: nodes linked into the shared ASTs
+     * (counted once per file inside the single linker traversal —
+     * no extra walk).
+     */
+    public static function countCanonicalNodes(int $nodes): void
+    {
+        if (!self::$enabled) {
+            return;
+        }
+        self::$counters['canonical_nodes'] = (self::$counters['canonical_nodes'] ?? 0) + $nodes;
+    }
+
+    public static function countIssues(string $analyzer, int $count): void
+    {
+        if (!self::$enabled) {
+            return;
+        }
+        self::$counters['issues:' . $analyzer] = (self::$counters['issues:' . $analyzer] ?? 0) + $count;
     }
 
     public static function countRead(string $path): void

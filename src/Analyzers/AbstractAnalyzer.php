@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Analyzers;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use PhpParser\ParserFactory;
 use Rampart\QualityChecker\Profiling\Profiler;
 use Rampart\QualityChecker\Result\Confidence;
@@ -64,7 +65,9 @@ abstract class AbstractAnalyzer implements ScanContextAware
 
     protected function finder(): NodeFinder
     {
-        return new NodeFinder();
+        // CountingNodeFinder is traversal-identical to NodeFinder; with
+        // the profiler off it delegates untouched (PERF-EVAL-2).
+        return new CountingNodeFinder();
     }
 
     protected function makeIssue(

@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Analysis;
 
 use PhpParser\Node;
 use PhpParser\NodeFinder;
+use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 
 /**
  * Variable-origin maps shared by all data-flow consumers.
@@ -30,7 +31,7 @@ final class AssignmentMap
 
     public function __construct(?NodeFinder $finder = null, ?ScopeResolver $scopes = null)
     {
-        $this->finder = $finder ?? new NodeFinder();
+        $this->finder = $finder ?? new CountingNodeFinder();
         $this->scopes = $scopes ?? new ScopeResolver($this->finder);
     }
 

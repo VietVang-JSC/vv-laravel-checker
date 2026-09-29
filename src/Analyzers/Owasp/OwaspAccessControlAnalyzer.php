@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Analyzers\Owasp;
 
 use PhpParser\Node;
 use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
+use Rampart\QualityChecker\Profiling\Profiler;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
@@ -84,6 +85,10 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
     public function analyze(array $files): array
     {
         $scan = $this->sharedScanContext();
+        // PERF-EVAL-2 phase split: semantic index construction is timed
+        // separately from per-file analysis (both roll up into this
+        // analyzer's wall time).
+        Profiler::begin('semantic-index');
         $index = $this->routeMiddleware ? (new LaravelSemanticIndex($scan))->build($files) : null;
         $registry = null;
         if ($this->routeMiddleware) {
@@ -94,6 +99,7 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
         $formRequests = new FormRequestIndex();
         $formRequests->setScanContext($scan);
         $formRequests->build($files);
+        Profiler::end('semantic-index');
 
         $issues = [];
         foreach ($files as $file) {
