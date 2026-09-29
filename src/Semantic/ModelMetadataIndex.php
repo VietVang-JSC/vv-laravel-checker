@@ -7,6 +7,7 @@ namespace Rampart\QualityChecker\Semantic;
 use PhpParser\Node;
 use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
+use Rampart\QualityChecker\Profiling\Profiler;
 
 /**
  * Model class map with global unguard state. Bounded: model files are
@@ -112,6 +113,7 @@ final class ModelMetadataIndex
         }
         try {
             $ast = (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
+            Profiler::countParse($file);
         } catch (\Throwable $e) {
             return;
         }
@@ -144,6 +146,7 @@ final class ModelMetadataIndex
         }
         try {
             $ast = (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
+            Profiler::countParse($file);
         } catch (\Throwable $e) {
             return [false, false];
         }

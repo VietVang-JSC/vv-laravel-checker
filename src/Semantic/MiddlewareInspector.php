@@ -7,6 +7,7 @@ namespace Rampart\QualityChecker\Semantic;
 use PhpParser\Node;
 use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
+use Rampart\QualityChecker\Profiling\Profiler;
 
 /**
  * Tier 2 middleware resolution: inspect a middleware `handle()` for
@@ -287,6 +288,7 @@ final class MiddlewareInspector
         }
         try {
             $ast = (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
+            Profiler::countParse($file);
         } catch (\Throwable $e) {
             return null;
         }

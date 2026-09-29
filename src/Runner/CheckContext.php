@@ -44,6 +44,9 @@ final class CheckContext
 
     public bool $fix = false;
 
+    /** Profiling switch (PERF-EVAL-1): timers + counters, findings unchanged. */
+    public bool $profile = false;
+
     /** @var array<string, mixed> */
     public array $metadata = [];
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Semantic;
 
 use PhpParser\Node;
+use Rampart\QualityChecker\Profiling\Profiler;
 
 /**
  * Tier 1 middleware resolution: alias → middleware class. Symbol
@@ -114,6 +115,7 @@ final class MiddlewareRegistry
         try {
             $parser = (new \PhpParser\ParserFactory())->createForNewestSupportedVersion();
             $ast = $parser->parse($code);
+            Profiler::countParse();
         } catch (\Throwable $e) {
             return;
         }

@@ -7,6 +7,7 @@ namespace Rampart\QualityChecker\Semantic;
 use PhpParser\Node;
 use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
+use Rampart\QualityChecker\Profiling\Profiler;
 
 /**
  * Eloquent model mass-assignment state. Returns state, never bare
@@ -119,6 +120,7 @@ final class ModelMetadata
         }
         try {
             $ast = (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
+            Profiler::countParse($file);
         } catch (\Throwable $e) {
             return self::unknown($model, $file);
         }

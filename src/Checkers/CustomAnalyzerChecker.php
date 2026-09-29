@@ -38,6 +38,7 @@ use Rampart\QualityChecker\Analyzers\TestCoverage\TestCoverageAnalyzer;
 use Rampart\QualityChecker\Analyzers\TestCoverage\TestWithoutAssertAnalyzer;
 use Rampart\QualityChecker\Analysis\AstPool;
 use Rampart\QualityChecker\Analysis\AstPoolAware;
+use Rampart\QualityChecker\Profiling\Profiler;
 use Rampart\QualityChecker\Result\CheckResult;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
@@ -74,12 +75,18 @@ final class CustomAnalyzerChecker implements CheckerInterface
     public function run(CheckContext $ctx): CheckResult
     {
         $start = microtime(true);
+        Profiler::enableFromEnvironment();
+        if ($ctx->profile) {
+            Profiler::setEnabled(true);
+        }
+        Profiler::begin('discovery');
         [$files, $skippedOversized] = $this->collectFiles($ctx);
         $files = array_values(array_unique(array_merge(
             $files,
             $this->collectBladeFiles($ctx),
             $this->collectEnvFiles($ctx)
         )));
+        Profiler::end('discovery');
         $issues = [];
 
         // One shared AST pool per run; analyzers implementing AstPoolAware
@@ -96,6 +103,8 @@ final class CustomAnalyzerChecker implements CheckerInterface
             }
             $issues = array_merge($issues, $this->runAnalyzer($analyzer, $files));
         }
+        Profiler::gauge('ast_pool_files', $pool->stats()['files']);
+        Profiler::gauge('ast_pool_hits', $pool->stats()['hits']);
 
         if ($this->taintEnabled($ctx)) {
             $issues = array_merge($issues, $this->runTaintEngine($files));
@@ -212,14 +221,20 @@ final class CustomAnalyzerChecker implements CheckerInterface
      */
     private function runAnalyzer(object $analyzer, array $files): array
     {
-        $issues = [];
-        foreach ($analyzer->analyze($files) as $issue) {
-            if ($issue instanceof Issue) {
-                $issues[] = $issue;
-            }
-        }
+        $fqcn = get_class($analyzer);
+        $short = substr((string) strrchr($fqcn, '\\'), 1) ?: $fqcn;
+        Profiler::countFilesVisited($short, count($files));
 
-        return $issues;
+        return Profiler::timeAnalyzer($short, static function () use ($analyzer, $files): array {
+            $issues = [];
+            foreach ($analyzer->analyze($files) as $issue) {
+                if ($issue instanceof Issue) {
+                    $issues[] = $issue;
+                }
+            }
+
+            return $issues;
+        });
     }
 
     private function taintEnabled(CheckContext $ctx): bool

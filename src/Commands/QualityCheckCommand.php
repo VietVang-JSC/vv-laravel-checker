@@ -9,6 +9,7 @@ use Rampart\QualityChecker\Baseline\BaselineFilter;
 use Rampart\QualityChecker\Baseline\BaselineManager;
 use Rampart\QualityChecker\Baseline\IssueDelta;
 use Rampart\QualityChecker\Fixer\PhpcsFixer;
+use Rampart\QualityChecker\Profiling\Profiler;
 use Rampart\QualityChecker\Reporters\ConsoleReporter;
 use Rampart\QualityChecker\Reporters\HtmlReporter;
 use Rampart\QualityChecker\Reporters\JsonReporter;
@@ -38,7 +39,8 @@ final class QualityCheckCommand extends Command
         {--fix : Auto-fix fixable issues (currently phpcbf only).}
         {--baseline-generate : Write current issues to the baseline file.}
         {--baseline-update : Rewrite baseline with all current issues.}
-        {--baseline-file= : Baseline file path (default: baseline.json in project root).}';
+        {--baseline-file= : Baseline file path (default: baseline.json in project root).}
+        {--profile : Emit a machine-readable profiler report (timers, parse/file-visit amplification). Findings unchanged.}';
 
     protected $description = 'Run the Laravel quality gate: phpcs, phpstan, phpunit, dependency audit, security & convention analyzers.';
 
@@ -68,7 +70,26 @@ final class QualityCheckCommand extends Command
 
         $this->render($results, $ctx);
 
+        if ($ctx->profile) {
+            $this->writeProfileReport($ctx);
+        }
+
         return $ctx->exitCode;
+    }
+
+    /**
+     * Machine-readable profiler report (PERF-EVAL-1). Emitted only with
+     * --profile; never affects findings.
+     */
+    private function writeProfileReport(CheckContext $ctx): void
+    {
+        $report = Profiler::report();
+        $path = rtrim($ctx->outputDir, '/\\') . DIRECTORY_SEPARATOR . 'profile.json';
+        if (!is_dir($ctx->outputDir)) {
+            @mkdir($ctx->outputDir, 0777, true);
+        }
+        file_put_contents($path, json_encode($report, JSON_PRETTY_PRINT));
+        $this->line(sprintf('Profiler report written to %s.', $path));
     }
 
     private function buildContext(): CheckContext
@@ -134,6 +155,7 @@ final class QualityCheckCommand extends Command
         );
 
         $ctx->fix = (bool) $this->option('fix');
+        $ctx->profile = (bool) $this->option('profile');
 
         $baselineFile = $this->option('baseline-file');
         if (is_string($baselineFile) && $baselineFile !== '') {

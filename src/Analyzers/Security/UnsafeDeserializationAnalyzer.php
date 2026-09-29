@@ -9,6 +9,7 @@ use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Profiling\Profiler;
 
 final class UnsafeDeserializationAnalyzer
 {
@@ -180,7 +181,9 @@ final class UnsafeDeserializationAnalyzer
         try {
             $parser = (new ParserFactory())->createForNewestSupportedVersion();
 
-            return $parser->parse($code);
+            $parsed = $parser->parse($code);
+            Profiler::countParse();
+            return $parsed;
         } catch (\Throwable $e) {
             return null;
         }

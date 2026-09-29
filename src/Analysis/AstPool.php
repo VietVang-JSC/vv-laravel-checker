@@ -7,6 +7,7 @@ namespace Rampart\QualityChecker\Analysis;
 use PhpParser\Node;
 use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
+use Rampart\QualityChecker\Profiling\Profiler;
 
 /**
  * Shared AST pool: parse each file once per run and hand the same AST to
@@ -88,6 +89,7 @@ final class AstPool
         try {
             $parser = (new ParserFactory())->createForNewestSupportedVersion();
             $ast = $parser->parse($code);
+            Profiler::countParse($file);
         } catch (\Throwable $e) {
             return null;
         }

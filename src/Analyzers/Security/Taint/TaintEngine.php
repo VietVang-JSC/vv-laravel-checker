@@ -22,6 +22,7 @@ use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\Return_;
 use PhpParser\Parser;
 use PhpParser\ParserFactory;
+use Rampart\QualityChecker\Profiling\Profiler;
 
 /**
  * A lightweight, intra-file + cross-file-callable taint / data-flow engine.
@@ -192,6 +193,7 @@ final class TaintEngine
 
         try {
             $ast = $this->parser->parse($code);
+            Profiler::countParse($file);
         } catch (\Throwable $e) {
             return;
         }

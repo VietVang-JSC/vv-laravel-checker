@@ -10,6 +10,7 @@ use PhpParser\ParserFactory;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Profiling\Profiler;
 
 final class AuthHardeningAnalyzer
 {
@@ -487,6 +488,7 @@ final class AuthHardeningAnalyzer
         try {
             $parser = (new ParserFactory())->createForNewestSupportedVersion();
             $ast = $parser->parse($code);
+            Profiler::countParse();
             if ($ast === null) {
                 return null;
             }

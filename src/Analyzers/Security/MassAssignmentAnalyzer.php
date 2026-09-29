@@ -18,6 +18,7 @@ use Rampart\QualityChecker\Semantic\MassFlow;
 use Rampart\QualityChecker\Semantic\ModelMetadata;
 use Rampart\QualityChecker\Semantic\ModelMetadataIndex;
 use Rampart\QualityChecker\Semantic\ModelTypeResolver;
+use Rampart\QualityChecker\Profiling\Profiler;
 
 final class MassAssignmentAnalyzer
 {
@@ -946,7 +947,9 @@ final class MassAssignmentAnalyzer
         try {
             $parser = (new ParserFactory())->createForNewestSupportedVersion();
 
-            return $parser->parse($code);
+            $parsed = $parser->parse($code);
+            Profiler::countParse();
+            return $parsed;
         } catch (\Throwable $e) {
             return null;
         }

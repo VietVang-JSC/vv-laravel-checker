@@ -7,6 +7,7 @@ namespace Rampart\QualityChecker\Analyzers;
 use PhpParser\Node;
 use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
+use Rampart\QualityChecker\Profiling\Profiler;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
@@ -38,6 +39,7 @@ abstract class AbstractAnalyzer
         if (!is_file($path)) {
             return '';
         }
+        Profiler::countRead($path);
 
         return (string) file_get_contents($path);
     }
@@ -46,8 +48,10 @@ abstract class AbstractAnalyzer
     {
         try {
             $parser = (new ParserFactory())->createForNewestSupportedVersion();
+            $parsed = $parser->parse($code);
+            Profiler::countParse();
 
-            return $parser->parse($code);
+            return $parsed;
         } catch (\Throwable $e) {
             return null;
         }

@@ -242,6 +242,29 @@ php artisan quality:check --tier=all --fail-on=none
   linkstack 0 → 0. Protocol from here on: every new EXPOSED/REVIEW and
   every gone finding gets 100% human review before the semantic engine
   earns production-outcome power.
+
+## 7. Performance profiling (PERF-EVAL-1, no optimization)
+
+`--profile` (or `QUALITY_CHECKER_PROFILE=1`) emits timers, parse /
+file-visit amplification and AstPool stats as `profile.json`. Findings
+are byte-identical with the profiler on or off (linkstack 108/108 with
+matching rule distribution; snipe-it 500/500; corpus 1.000).
+
+- Snipe-it full scan: 8629 unique files read, 7976 parsed,
+  **151,116 parse operations → 18.9× amplification**,
+  93,034 reads → 10.8×, 189,838 visits → 22× (22 analyzers).
+  Total ~543s. Parsing ≈ 80% of runtime (3.0ms/file measured;
+  151k × 3ms ≈ 450s); sharing the ParserFactory instance alone saves
+  only ~10% — the win is parsing once, not parsing faster.
+- Top contributors: SqlInjection 150s (27.6%, 0 findings),
+  OpenRedirect 78.7s (14.5%), MassAssignment 45.6s, Ssrf 38.4s,
+  CommandInjection 29.4s, Ssti 28.1s. Top-3 ≈ 50%.
+- Discovery 0.9s; AstPool holds 7920 files with 0 hits (populated but
+  never re-requested — each file parsed once through it at most).
+- Scaling (seeded mixes, ms/file over scanned files): 100 → 9.9,
+  250 → 31, 500 → 53, full → 63. Superlinear at small N, flattening
+  later; per-analyzer Pareto + amplification above decide the fix:
+  shared-AST consolidation first, then the SqlInjection outlier.
 - **Bounded interprocedural return summaries, shadow mode (v0.5.2)**:
   `MethodSummaryIndex` summarizes one call boundary deep — param-derived
   returns (`PARAM(i)` + operation, never context-free RAW), literals as

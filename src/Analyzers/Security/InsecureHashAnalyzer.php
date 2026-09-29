@@ -9,6 +9,7 @@ use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Profiling\Profiler;
 
 final class InsecureHashAnalyzer
 {
@@ -274,6 +275,7 @@ final class InsecureHashAnalyzer
         try {
             $parser = (new ParserFactory())->createForNewestSupportedVersion();
             $ast = $parser->parse($code);
+            Profiler::countParse();
             if ($ast === null) {
                 return null;
             }
