@@ -205,9 +205,26 @@ php artisan quality:check --tier=all --fail-on=none
   body analysis is required (unlike middleware gates). Self-enforcing calls
   (`$this->authorize()`, `Gate::authorize()`) fail closed at runtime and
   therefore never flag, even with unresolved chains; bare `Gate::allows()`
-  without an enforcing branch still flags (polarity preserved). BAC outcomes
+  without an enforcing branch still flags (polarity preserved).   BAC outcomes
   are byte-identical on both pilots (7/7, 19/19); `authorizeResource()`
   per-action mapping stays a sub-wave.
+- **Input-to-Eloquent flow classification, shadow mode (v0.4.1)**: the first
+  joint data-flow + framework-semantics analyzer. `MassAssignmentFlow`
+  classifies each mass-assignment sink argument by provenance — raw request
+  (`all()`/`input()`), validated (`validated()`/`safe()`/`validate()`),
+  bounded (`only([...])`, `safe()->only([...])`), internal (literal arrays),
+  unknown (service returns, conditional raw/safe mixes, dynamic keys) — with
+  `except()` exclusions recorded and `forceFill`/`forceCreate` distinguished
+  as guard-bypassing sinks. Variable propagation reuses the shared engine
+  (`AssignmentMap::visible` + same-scope filtering + single-assignment
+  discipline). `validated` never implies mass-assignment safe. Findings carry
+  the classification as `flow_provenance` metadata (source → propagation →
+  sink trace) without changing any decision; the legacy analyzer is untouched
+  otherwise. Snipe-it probe: 194 sinks classified (98 internal, 51 unknown,
+  38 raw, 4 validated, 2 bounded) against 1 legacy finding (`unguard()` —
+  no data flow by design); linkstack 28 sinks, all internal. The 38 raw
+  instance-`fill()` flows the legacy analyzer cannot see are the v0.4.2
+  escalation pool, once `$fillable`/`$guarded` field-set reasoning lands.
 
 ### `OWASP_SSRF` / `OWASP_COMMAND_INJECTION` / `OWASP_SSTI`
 - The engine only reports when the URL/template/command is **not a literal** and shows

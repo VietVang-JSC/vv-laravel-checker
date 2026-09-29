@@ -410,6 +410,47 @@ final class SecurityAnalyzersTest extends TestCase
         self::assertTrue($this->ruleMatches($issues[0], 'MASS_ASSIGNMENT', Severity::Error));
     }
 
+    public function testMassAssignmentFindingCarriesFlowProvenance(): void
+    {
+        // Shadow mode: the decision is unchanged, but the finding carries
+        // the classified input-to-sink flow for later comparison.
+        $controller = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\n" .
+            "class OrderController {\n    public function store(Request \$request) {\n        return Order::create(\$request->all());\n    }\n}\n",
+            'app/Http/Controllers/OrderController.php'
+        );
+        $model = $this->tempPhp(
+            "<?php\nnamespace App\\Models;\nclass Order extends \\Illuminate\\Database\\Eloquent\\Model {}\n",
+            'app/Models/Order.php'
+        );
+
+        $issues = (new MassAssignmentAnalyzer())->analyze([$controller, $model]);
+
+        self::assertNotEmpty($issues);
+        $flow = $issues[0]->metadata['flow_provenance'] ?? null;
+        self::assertIsArray($flow);
+        self::assertSame('tainted-raw', $flow['status'] ?? null);
+        self::assertSame('create()', $flow['sink'] ?? null);
+        self::assertFalse($flow['force_bypass'] ?? true);
+    }
+
+    public function testMassAssignmentForceFillCarriesBypassProvenance(): void
+    {
+        $controller = $this->tempPhp(
+            "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\Order;\nuse Illuminate\\Http\\Request;\n" .
+            "class OrderController {\n    public function update(Request \$request, Order \$order) {\n        \$order->forceFill(\$request->all());\n    }\n}\n",
+            'app/Http/Controllers/OrderController.php'
+        );
+
+        $issues = (new MassAssignmentAnalyzer())->analyze([$controller]);
+
+        self::assertNotEmpty($issues);
+        $flow = $issues[0]->metadata['flow_provenance'] ?? null;
+        self::assertIsArray($flow);
+        self::assertSame('tainted-raw', $flow['status'] ?? null);
+        self::assertTrue($flow['force_bypass'] ?? false);
+    }
+
     public function testMassAssignmentSkipsModelWithFillable(): void
     {
         $controller = $this->tempPhp(

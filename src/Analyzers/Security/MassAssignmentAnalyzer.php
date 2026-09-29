@@ -8,8 +8,10 @@ use PhpParser\Node;
 use PhpParser\NodeFinder;
 use PhpParser\ParserFactory;
 use PhpParser\PrettyPrinter\Standard;
+use Rampart\QualityChecker\Analysis\ScopeResolver;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
+use Rampart\QualityChecker\Semantic\MassAssignmentFlow;
 
 final class MassAssignmentAnalyzer
 {
@@ -98,6 +100,8 @@ final class MassAssignmentAnalyzer
         $issues = [];
         $finder = new NodeFinder();
         $printer = new Standard();
+        $scopes = new ScopeResolver($finder);
+        $funcs = $scopes->functions($ast);
 
         $calls = $finder->find($ast, function (Node $node): bool {
             if (!$node instanceof Node\Expr\StaticCall && !$node instanceof Node\Expr\MethodCall) {
@@ -148,7 +152,11 @@ final class MassAssignmentAnalyzer
             // forceFill([...literals...]) stays silent.
             if ($method === 'forceFill') {
                 $firstArg = $args[0] ?? null;
-                if ($firstArg instanceof Node\Arg && $this->isRequestInput($firstArg->value)) {
+                if (
+                    ($call instanceof Node\Expr\StaticCall || $call instanceof Node\Expr\MethodCall)
+                    && $firstArg instanceof Node\Arg
+                    && $this->isRequestInput($firstArg->value)
+                ) {
                     $issues[] = new Issue(
                         self::RULE,
                         'forceFill() with untrusted request input bypasses mass assignment protection ($fillable/$guarded are ignored) — use fill() with $fillable or validated().',
@@ -156,7 +164,18 @@ final class MassAssignmentAnalyzer
                         $call->getStartLine(),
                         Severity::Error,
                         'custom',
-                        ['method' => $method]
+                        [
+                            'method' => $method,
+                            'flow_provenance' => $this->flowProvenance(
+                                $call,
+                                $firstArg->value,
+                                $method,
+                                $ast,
+                                $funcs,
+                                $scopes,
+                                $file
+                            ),
+                        ]
                     );
                 }
                 continue;
@@ -198,22 +217,88 @@ final class MassAssignmentAnalyzer
                 continue;
             }
 
-            $issues[] = new Issue(
-                self::RULE,
-                sprintf(
-                    'Model::%s() called with untrusted request input (%s) but no $fillable/$guarded is defined.',
-                    $method,
-                    $printer->prettyPrintExpr($firstArg)
-                ),
-                $file,
-                $call->getStartLine(),
-                Severity::Error,
-                'custom',
-                ['method' => $method, 'model' => $target]
-            );
+            if ($call instanceof Node\Expr\StaticCall || $call instanceof Node\Expr\MethodCall) {
+                $issues[] = new Issue(
+                    self::RULE,
+                    sprintf(
+                        'Model::%s() called with untrusted request input (%s) but no $fillable/$guarded is defined.',
+                        $method,
+                        $printer->prettyPrintExpr($firstArg)
+                    ),
+                    $file,
+                    $call->getStartLine(),
+                    Severity::Error,
+                    'custom',
+                    [
+                        'method' => $method,
+                        'model' => $target,
+                        'flow_provenance' => $this->flowProvenance(
+                            $call,
+                            $this->taintingArg($call, $args, $method),
+                            $method,
+                            $ast,
+                            $funcs,
+                            $scopes,
+                            $file
+                        ),
+                    ]
+                );
+            }
         }
 
         return $issues;
+    }
+
+    /**
+     * Shadow-mode flow provenance: classifies the tainting argument
+     * without changing any decision. Null outside class methods.
+     *
+     * @param list<Node> $ast
+     * @param array<int, Node\Stmt\ClassMethod|Node\Stmt\Function_> $funcs
+     * @return array{status: string, fields: list<string>|null, excluded: list<string>|null, force_bypass: bool, source: string, sink: string, trace: list<array{kind: string, detail: string, line: int|null}>}|null
+     */
+    private function flowProvenance(
+        Node\Expr\StaticCall|Node\Expr\MethodCall $call,
+        Node\Expr $arg,
+        string $method,
+        array $ast,
+        array $funcs,
+        ScopeResolver $scopes,
+        string $file
+    ): ?array {
+        $funcId = $scopes->funcId($call, $ast);
+        $func = $funcs[$funcId] ?? null;
+        if (!$func instanceof Node\Stmt\ClassMethod) {
+            return null;
+        }
+
+        return MassAssignmentFlow::classify($arg, $method, $func, $ast, $funcId, $file, $call->getStartLine())->toArray();
+    }
+
+    /**
+     * The argument the finding was raised for: the first argument, or —
+     * for lookup/value sinks — the first tainted later argument.
+     *
+     * @param list<Node\Arg|Node\VariadicPlaceholder> $args
+     */
+    private function taintingArg(Node\Expr\StaticCall|Node\Expr\MethodCall $call, array $args, string $method): Node\Expr
+    {
+        $first = $args[0] ?? null;
+        $firstExpr = $first instanceof Node\Arg ? $first->value : null;
+        if (
+            $firstExpr === null
+            || $this->isRequestInput($firstExpr)
+            || !in_array($method, ['updateOrCreate', 'firstOrCreate', 'updateOrInsert', 'firstOrNew'], true)
+        ) {
+            return $firstExpr ?? $call;
+        }
+        foreach (array_slice($args, 1) as $extra) {
+            if ($extra instanceof Node\Arg && $this->isRequestInput($extra->value)) {
+                return $extra->value;
+            }
+        }
+
+        return $firstExpr;
     }
 
     private function resolveModelTarget(Node $call): ?string
