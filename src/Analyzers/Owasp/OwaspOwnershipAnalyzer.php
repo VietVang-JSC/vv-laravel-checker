@@ -241,20 +241,25 @@ final class OwaspOwnershipAnalyzer extends AbstractAnalyzer
         if ($ownershipEvidence !== [] || $authorizationEvidence !== []) {
             $status = OwnershipDecision::PROTECTED;
             $confidence = 'high';
+            $reason = $this->firstMechanism($ownershipEvidence, $authorizationEvidence);
         } elseif ($routes === []) {
             $status = OwnershipDecision::UNKNOWN;
             $confidence = 'high';
+            $reason = $this->reviewReason($controller, $middleware, $method, $sink, $identifier, $lookup, $principal);
         } elseif ($authenticated || $gated) {
             // Authenticated (or custom-gated, unproven in v0.6.1) but
             // ownership unproven — deleteLink lives here.
             $status = OwnershipDecision::REVIEW;
             $confidence = 'medium';
+            $reason = $this->reviewReason($controller, $middleware, $method, $sink, $identifier, $lookup, $principal);
         } elseif ($this->hasNoAuth($middleware)) {
             $status = OwnershipDecision::EXPOSED;
             $confidence = 'high';
+            $reason = 'NO_AUTH';
         } else {
             $status = OwnershipDecision::UNKNOWN;
             $confidence = 'medium';
+            $reason = $this->reviewReason($controller, $middleware, $method, $sink, $identifier, $lookup, $principal);
         }
 
         $routeRef = null;
@@ -284,7 +289,98 @@ final class OwaspOwnershipAnalyzer extends AbstractAnalyzer
             $authorizationEvidence,
             $confidence,
             $trace,
+            $reason,
         );
+    }
+
+    /**
+     * @param list<array{mechanism: string, detail: string, confidence: string}> $ownership
+     * @param list<array{mechanism: string, detail: string, confidence: string}> $authorization
+     */
+    private function firstMechanism(array $ownership, array $authorization): string
+    {
+        if (isset($ownership[0]['mechanism'])) {
+            return $ownership[0]['mechanism'];
+        }
+        if (isset($authorization[0]['mechanism'])) {
+            return 'auth:' . $authorization[0]['mechanism'];
+        }
+
+        return 'PROTECTED';
+    }
+
+    /**
+     * Calibration bucket (v0.6.1b): why is this REVIEW/UNKNOWN — the
+     * single most actionable label, highest priority first. Labeling
+     * only; never changes the verdict.
+     *
+     * @param list<string> $middleware
+     * @param array{kind: string, detail: string, line: int|null}|null $identifier
+     * @param array{kind: string, detail: string, line: int|null}|null $lookup
+     * @param array{kind: string, detail: string}|null $principal
+     */
+    private function reviewReason(
+        string $controller,
+        array $middleware,
+        Node\Stmt\ClassMethod $method,
+        Node\Expr\MethodCall|Node\Expr\StaticCall $sink,
+        ?array $identifier,
+        ?array $lookup,
+        ?array $principal
+    ): string {
+        if ($this->hasLateAuthorization($method, $sink->getStartLine())) {
+            return 'AUTHORIZATION_AFTER_SINK';
+        }
+        $short = strtolower((string) substr($controller, (int) strrpos($controller, '\\') + 1));
+        if (str_starts_with($short, 'admin')) {
+            return 'ADMIN_CONTEXT';
+        }
+        foreach ($middleware as $item) {
+            if (str_contains(strtolower($item), 'admin')) {
+                return 'ADMIN_CONTEXT';
+            }
+        }
+        if ($this->hasGateMiddleware($middleware)) {
+            return 'CUSTOM_MIDDLEWARE';
+        }
+        if ($identifier === null || $lookup === null || $lookup['kind'] === 'dynamic') {
+            return 'UNRESOLVED_RESOURCE';
+        }
+        if ($principal === null) {
+            return 'UNRESOLVED_PRINCIPAL';
+        }
+
+        return 'AUTH_ONLY';
+    }
+
+    /**
+     * An authorize/Gate/can call positioned at or after the sink —
+     * explains REVIEWs where authorization exists but proves nothing.
+     */
+    private function hasLateAuthorization(Node\Stmt\ClassMethod $method, int $sinkLine): bool
+    {
+        $found = $this->finder()->find($method->stmts ?? [], static function (Node $node): bool {
+            if ($node instanceof Node\Expr\StaticCall && $node->class instanceof Node\Name) {
+                $class = strtolower(ltrim($node->class->toString(), '\\'));
+                if (($class === 'gate' || str_ends_with($class, '\\gate')) && $node->name instanceof Node\Identifier) {
+                    return in_array(strtolower($node->name->toString()), ['allows', 'authorize', 'check', 'any', 'denies'], true);
+                }
+
+                return false;
+            }
+            if ($node instanceof Node\Expr\MethodCall && $node->name instanceof Node\Identifier) {
+                return in_array(strtolower($node->name->toString()), ['authorize', 'authorizeresource', 'can', 'cannot'], true);
+            }
+
+            return false;
+        });
+        foreach ($found as $node) {
+            if ($node->getStartLine() >= $sinkLine) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -787,12 +883,23 @@ final class OwaspOwnershipAnalyzer extends AbstractAnalyzer
         }
         if (
             $root instanceof Node\Expr\MethodCall
-            && $root->var instanceof Node\Expr\Variable
-            && $root->var->name === 'request'
             && $root->name instanceof Node\Identifier
             && strtolower($root->name->toString()) === 'user'
         ) {
-            return true;
+            // $request->user(), auth()->user(), Auth::user().
+            if ($root->var instanceof Node\Expr\Variable && is_string($root->var->name)) {
+                return $root->var->name === 'request';
+            }
+            if ($root->var instanceof Node\Expr\FuncCall && $root->var->name instanceof Node\Name) {
+                return strtolower($root->var->name->toString()) === 'auth';
+            }
+            if ($root->var instanceof Node\Expr\StaticCall && $root->var->class instanceof Node\Name) {
+                $class = strtolower(ltrim($root->var->class->toString(), '\\'));
+
+                return $class === 'auth' || str_ends_with($class, '\\auth');
+            }
+
+            return false;
         }
 
         return false;
@@ -841,12 +948,31 @@ final class OwaspOwnershipAnalyzer extends AbstractAnalyzer
                 return false;
             }
             $col = $node->args[0] ?? null;
-            $val = $node->args[1] ?? null;
             if (!$col instanceof Node\Arg || !$col->value instanceof Node\Scalar\String_) {
                 return false;
             }
-            if (!in_array(strtolower($col->value->value), self::OWNER_COLUMNS, true)) {
+            // Qualified columns (accounts.user_id) match by suffix —
+            // still a literal, no guessing.
+            $column = strtolower($col->value->value);
+            $owned = false;
+            foreach (self::OWNER_COLUMNS as $ownerCol) {
+                if ($column === $ownerCol || str_ends_with($column, '.' . $ownerCol)) {
+                    $owned = true;
+                    break;
+                }
+            }
+            if (!$owned) {
                 return false;
+            }
+            // where(col, val) or where(col, '=', val) — other operators
+            // (<>, >, like) are not ownership equality.
+            $val = $node->args[1] ?? null;
+            if ($val instanceof Node\Arg && $val->value instanceof Node\Scalar\String_) {
+                $op = strtolower($val->value->value);
+                if ($op !== '=' && $op !== '==') {
+                    return false;
+                }
+                $val = $node->args[2] ?? null;
             }
             if (!$val instanceof Node\Arg) {
                 return false;
@@ -880,6 +1006,16 @@ final class OwaspOwnershipAnalyzer extends AbstractAnalyzer
         }
         if ($expr instanceof Node\Expr\FuncCall && $expr->name instanceof Node\Name && strtolower($expr->name->toString()) === 'auth') {
             return true;
+        }
+        if ($expr instanceof Node\Expr\PropertyFetch && $expr->name instanceof Node\Identifier) {
+            // auth()->user()->id / Auth::user()->id / $user->id. The
+            // receiver must be principal-rooted — a bare $link->user_id
+            // value is an owner attribute, not the current user.
+            if (strtolower($expr->name->toString()) === 'id' && $this->isPrincipalRoot($expr->var)) {
+                return true;
+            }
+
+            return false;
         }
         if ($expr instanceof Node\Expr\MethodCall && $expr->name instanceof Node\Identifier) {
             $name = strtolower($expr->name->toString());
@@ -926,12 +1062,16 @@ final class OwaspOwnershipAnalyzer extends AbstractAnalyzer
 
     private function isOwnerComparison(Node\Expr $cond): bool
     {
-        $cond = $cond instanceof Node\Expr\BooleanNot ? $cond->expr : $cond;
+        // Deny-on-INEQUALITY only: if ($link->user_id != Auth::id())
+        // abort proves the requester must be the owner. Deny-on-equality
+        // (if ($admin->id === $user->id) return) is a self/conflict guard
+        // — structurally similar but proves nothing about ownership.
+        if ($cond instanceof Node\Expr\BooleanNot) {
+            return false;
+        }
         if (
             !$cond instanceof Node\Expr\BinaryOp\NotIdentical
             && !$cond instanceof Node\Expr\BinaryOp\NotEqual
-            && !$cond instanceof Node\Expr\BinaryOp\Identical
-            && !$cond instanceof Node\Expr\BinaryOp\Equal
         ) {
             return false;
         }

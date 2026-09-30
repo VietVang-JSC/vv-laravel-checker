@@ -890,6 +890,48 @@ Gate for v0.6.2 production: 100% EXPOSED/REVIEW review + per-
 mechanism PROTECTED sampling (relationship-scoped and owner-where
 have corpus but zero pilot samples so far).
 
+v0.6.1b — Validation / Calibration (shadow stays shadow).
+No new semantics batch; three closed gaps:
+1. REVIEW reason taxonomy (`reason` on every decision): PROTECTED
+carries its proving mechanism; REVIEW/UNKNOWN carry AUTH_ONLY,
+ADMIN_CONTEXT, CUSTOM_MIDDLEWARE, UNRESOLVED_RESOURCE,
+UNRESOLVED_PRINCIPAL, AUTHORIZATION_AFTER_SINK; EXPOSED carries
+NO_AUTH. Priority order documented in `reviewReason()` — labeling
+only, never changes verdicts.
+2. Real-sample mining (4 pilots shadow-run: linkstack, snipe-it,
+firefly-iii, canvas): policy-gate 72+ (Snipe-it), can-middleware 5
+(Canvas Tag/Topic/User destroy), owner-compare-deny 2 genuine
+(Linkstack saveLink; Firefly BudgetLimit@update `$budget->id !==
+$budgetLimit->budget_id → throw`). relationship-scoped and
+owner-where: ZERO in-controller pilot samples — Firefly/Canvas keep
+their owner scoping in repositories/query helpers
+(`visiblePostsQuery`, `BelongsUser`), correctly out of v0.6.1
+in-method scope; both mechanisms stay corpus-covered, NOT
+pilot-proven. Reason distributions: Linkstack 23 REVIEW =
+ADMIN_CONTEXT 7 + CUSTOM_MIDDLEWARE 8 + AUTH_ONLY 5 + others;
+Firefly 66 REVIEW = ADMIN_CONTEXT 36 + CUSTOM_MIDDLEWARE 29
+(model-binding API controllers) + UNRESOLVED_RESOURCE 4; Snipe-it 10
+REVIEW mostly admin token/OAuth/DB ops; Canvas 0 REVIEW.
+3. Calibration bugfixes found by shadow review (the process working
+as designed): (a) `$request->id` PropertyFetch was not request
+input; (b) authorize()/Gate AFTER the sink counted as evidence —
+now requires preceding line (+ AUTHORIZATION_AFTER_SINK reason +
+regression test); (c) deny-on-EQUALITY (`$admin->id ===
+$user->id → return`, a self-guard proving nothing about target
+ownership) counted as owner-compare-deny — now restricted to
+deny-on-inequality (+ regression test; the remaining Firefly
+PROTECTED is the genuine parent-child guard); (d) `auth()->user()
+->id` parses as PropertyFetch, not MethodCall — principal-root
+receiver check added; (e) owner-where extended to qualified columns
+(`t.user_id`) and `where(col, '=', user)` (Firefly's dominant
+shape) — same mechanism, syntactic variants, wrong-operator
+(`<>`) regression test included.
+Perf (2 warm-ups + 3 measured, Snipe-it): ownership wall median
+2.3s (2.24/2.32/2.36s) — gate <5s PASS with margin; full median
+68.4s vs 60s freeze baseline (delta in box noise). No BAC index
+dedup — profiler never showed duplicated construction as material.
+Production findings byte-identical throughout (500/108/483/38).
+
 ## 5. Don'ts
 
 - Do not add `baseline.json` to `.gitignore` **while** complaining that CI

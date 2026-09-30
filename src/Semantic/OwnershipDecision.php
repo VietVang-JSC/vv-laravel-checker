@@ -44,6 +44,10 @@ final class OwnershipDecision
      * @param list<array{mechanism: string, detail: string, confidence: string}> $ownershipEvidence
      * @param list<array{mechanism: string, detail: string, confidence: string}> $authorizationEvidence
      * @param list<array{kind: string, detail: string, line: int|null}> $trace source → lookup → operation chain
+     * @param string $reason calibration bucket (v0.6.1b): for PROTECTED the
+     *   proving mechanism; for REVIEW/UNKNOWN one of AUTH_ONLY,
+     *   ADMIN_CONTEXT, CUSTOM_MIDDLEWARE, UNRESOLVED_RESOURCE,
+     *   UNRESOLVED_PRINCIPAL, AUTHORIZATION_AFTER_SINK; for EXPOSED NO_AUTH
      */
     public function __construct(
         public readonly string $status,
@@ -61,6 +65,7 @@ final class OwnershipDecision
         public readonly array $authorizationEvidence,
         public readonly string $confidence,
         public readonly array $trace,
+        public readonly string $reason = '',
     ) {
     }
 
@@ -85,6 +90,7 @@ final class OwnershipDecision
             'authorization_evidence' => $this->authorizationEvidence,
             'confidence' => $this->confidence,
             'trace' => $this->trace,
+            'reason' => $this->reason,
         ];
     }
 }

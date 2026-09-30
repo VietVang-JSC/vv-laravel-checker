@@ -104,6 +104,7 @@ final class OwnershipSemanticsTest extends TestCase
         self::assertCount(1, $decisions);
         self::assertSame(OwnershipDecision::PROTECTED, $decisions[0]->status);
         self::assertSame('relationship-scoped', $decisions[0]->ownershipEvidence[0]['mechanism']);
+        self::assertSame('relationship-scoped', $decisions[0]->reason);
     }
 
     public function testOwnerWhereIsProtected(): void
@@ -118,6 +119,34 @@ final class OwnershipSemanticsTest extends TestCase
         self::assertCount(1, $decisions);
         self::assertSame(OwnershipDecision::PROTECTED, $decisions[0]->status);
         self::assertSame('owner-where', $decisions[0]->ownershipEvidence[0]['mechanism']);
+    }
+
+    public function testOwnerWhereQualifiedThreeArgIsProtected(): void
+    {
+        // Firefly shape: where('accounts.user_id', '=', auth()->user()->id).
+        $decisions = $this->decisions([
+            'app/Http/Controllers/LinkController.php' => $this->controller(
+                "        Link::where('links.user_id', '=', auth()->user()->id)->where('id', \$request->id)->delete();\n"
+                . "        return redirect('/links');\n"
+            ),
+            'routes/web.php' => $this->routes("'auth'"),
+        ]);
+        self::assertCount(1, $decisions);
+        self::assertSame(OwnershipDecision::PROTECTED, $decisions[0]->status);
+        self::assertSame('owner-where', $decisions[0]->ownershipEvidence[0]['mechanism']);
+    }
+
+    public function testOwnerWhereWrongOperatorStaysReview(): void
+    {
+        $decisions = $this->decisions([
+            'app/Http/Controllers/LinkController.php' => $this->controller(
+                "        Link::where('user_id', '<>', Auth::id())->where('id', \$request->id)->delete();\n"
+                . "        return redirect('/links');\n"
+            ),
+            'routes/web.php' => $this->routes("'auth'"),
+        ]);
+        self::assertCount(1, $decisions);
+        self::assertSame(OwnershipDecision::REVIEW, $decisions[0]->status);
     }
 
     public function testOwnerCompareDenyIsProtected(): void
@@ -136,6 +165,26 @@ final class OwnershipSemanticsTest extends TestCase
         self::assertCount(1, $decisions);
         self::assertSame(OwnershipDecision::PROTECTED, $decisions[0]->status);
         self::assertSame('owner-compare-deny', $decisions[0]->ownershipEvidence[0]['mechanism']);
+    }
+
+    public function testEqualityDenyIsSelfGuardNotOwnership(): void
+    {
+        // Firefly shape: if ($admin->id === $user->id) return — denies
+        // self-action, proves nothing about ownership of the target.
+        $decisions = $this->decisions([
+            'app/Http/Controllers/LinkController.php' => $this->controller(
+                "        \$admin = auth()->user();\n"
+                . "        \$link = Link::find(\$request->id);\n"
+                . "        if (\$admin->id === \$request->user()->id) {\n"
+                . "            return redirect('/links');\n"
+                . "        }\n"
+                . "        \$link->delete();\n"
+                . "        return redirect('/links');\n"
+            ),
+            'routes/web.php' => $this->routes("'auth'"),
+        ]);
+        self::assertCount(1, $decisions);
+        self::assertSame(OwnershipDecision::REVIEW, $decisions[0]->status);
     }
 
     public function testAuthorizeCallIsProtected(): void
@@ -185,6 +234,7 @@ final class OwnershipSemanticsTest extends TestCase
         self::assertSame('request-var', $decisions[0]->identifier['kind']);
         self::assertSame('model-query', $decisions[0]->lookup['kind']);
         self::assertSame([], $decisions[0]->ownershipEvidence);
+        self::assertSame('AUTH_ONLY', $decisions[0]->reason);
     }
 
     public function testPublicDeleteIsExposed(): void
@@ -215,6 +265,7 @@ final class OwnershipSemanticsTest extends TestCase
         ]);
         self::assertCount(1, $decisions);
         self::assertSame(OwnershipDecision::REVIEW, $decisions[0]->status);
+        self::assertSame('CUSTOM_MIDDLEWARE', $decisions[0]->reason);
     }
 
     public function testAuthorizeAfterSinkStaysReview(): void
@@ -231,6 +282,7 @@ final class OwnershipSemanticsTest extends TestCase
         ]);
         self::assertCount(1, $decisions);
         self::assertSame(OwnershipDecision::REVIEW, $decisions[0]->status);
+        self::assertSame('AUTHORIZATION_AFTER_SINK', $decisions[0]->reason);
     }
 
     public function testTwoStepLookupTracksIdentifier(): void
