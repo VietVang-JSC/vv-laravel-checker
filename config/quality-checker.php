@@ -86,6 +86,10 @@ return [
             'misconfiguration' => true,
             'command_injection' => true,
             'xxe' => true,
+            // v0.6.1 object-level authorization (IDOR) — SHADOW ONLY.
+            // Records OwnershipDecision chains to OwnershipShadow, emits
+            // zero Issue objects. Default false; shadow drivers opt in.
+            'ownership_idor' => false,
         ],
 
         // Laravel-specific code quality — medium confidence.

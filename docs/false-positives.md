@@ -850,6 +850,46 @@ Journey so far: 543s → 272s → 166s → 105.6s → 60.0s (~9x) with
 byte-identical detection. STOP as agreed — re-profile before any
 3C decision (Ssti 9.5s + Command 6.6s = 16.1s combined remain).
 
+PERFORMANCE FREEZE BASELINE: fd6fd66 (median ~60s Snipe-it).
+SSTI + Command (16s) and SQLi (11.8s, own track) are backlog — untouched.
+
+v0.6.1 — Ownership / Object-Level Authorization (IDOR), SHADOW mode.
+New `OwaspOwnershipAnalyzer` (opt-in `owasp.ownership_idor`, default
+false; zero Issue objects) records one `OwnershipDecision` per
+controller action doing update/delete/destroy/restore/forceDelete on
+a request-identified resource: PROTECTED | REVIEW | EXPOSED |
+UNKNOWN + identifier/lookup/operation/principal + ownership and
+authorization evidence + confidence + FlowTrace-style chain, dumped
+via the `ownership-shadow.php` sidecar driver. Reuses canonical AST,
+StructuralFactIndex, ScopeIds and the route/middleware indexes — no
+new full-tree traversals (per-method subtree scans only).
+Evidence (bounded, in-method, must precede the sink): relationship-
+scoped receiver ($user->links()->...->delete), where(user_id|
+owner_id|created_by, current-user), explicit owner comparison +
+deny-shape branch (abort/throw/deny/return), $this->authorize()/
+Gate::*/can() (policy-gate), can:* middleware. Auth alone is never
+ownership; custom middleware (even ownership-shaped LinkId) is NOT
+proven in v0.6.1 — the body must prove it. Service returns,
+tenant/team multi-hop and polymorphic ownership stay UNKNOWN/REVIEW.
+Acceptance: Linkstack UserController@deleteLink →
+REVIEW ($linkId request input → Link::where() → delete,
+auth-middleware principal, no owner predicate, no Policy/Gate).
+Pilot shadow: Linkstack 26 decisions (1 protected saveLink via
+owner-compare-deny, 23 review incl. 7 AdminController admin-context
+actions human-clearable, 1 exposed InstallerController@createAdmin
+pre-auth installer, 1 unknown); Snipe-it 84 decisions (72 protected
+all via policy-gate — Snipe-it authorizes pervasively, 10 review
+mostly SettingsController admin token/OAuth/DB ops +
+GroupsController@destroy route-param id, 0 exposed, 2 unknown).
+Production findings byte-identical (500/108). Corpus
+`OwnershipSemanticsTest` 11 cases incl. authorize-after-sink and
+custom-middleware-stays-review. Perf: ownership wall 0.26s
+Linkstack, 5.8s Snipe-it under load (budget <5s — needs quiet-box
+confirmation in v0.6.2; natural dedup: BAC builds the same indexes).
+Gate for v0.6.2 production: 100% EXPOSED/REVIEW review + per-
+mechanism PROTECTED sampling (relationship-scoped and owner-where
+have corpus but zero pilot samples so far).
+
 ## 5. Don'ts
 
 - Do not add `baseline.json` to `.gitignore` **while** complaining that CI

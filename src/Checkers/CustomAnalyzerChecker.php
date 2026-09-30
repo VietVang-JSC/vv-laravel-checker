@@ -16,6 +16,7 @@ use Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer;
 use Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer;
 use Rampart\QualityChecker\Analyzers\Owasp\OwaspMisconfigurationAnalyzer;
 use Rampart\QualityChecker\Analyzers\Owasp\OwaspOpenRedirectAnalyzer;
+use Rampart\QualityChecker\Analyzers\Owasp\OwaspOwnershipAnalyzer;
 use Rampart\QualityChecker\Analyzers\Owasp\OwaspPathTraversalAnalyzer;
 use Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer;
 use Rampart\QualityChecker\Analyzers\Owasp\OwaspSstiAnalyzer;
@@ -209,6 +210,7 @@ final class CustomAnalyzerChecker implements CheckerInterface
             $this->entry($analyzers, 'owasp.misconfiguration', new OwaspMisconfigurationAnalyzer()),
             $this->entry($analyzers, 'owasp.command_injection', new OwaspCommandInjectionAnalyzer()),
             $this->entry($analyzers, 'owasp.xxe', new OwaspXxeAnalyzer()),
+            $this->entry($analyzers, 'owasp.ownership_idor', new OwaspOwnershipAnalyzer()),
             $this->entry($analyzers, 'laravel.migration', new MigrationAnalyzer()),
             $this->entry($analyzers, 'laravel.route_validation', new RouteValidationAnalyzer()),
             $this->entry($analyzers, 'test_coverage.missing_controller_test', new ControllerTestAnalyzer()),
