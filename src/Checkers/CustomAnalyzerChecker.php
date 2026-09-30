@@ -38,6 +38,7 @@ use Rampart\QualityChecker\Analyzers\TestCoverage\MissingTestAnalyzer;
 use Rampart\QualityChecker\Analyzers\TestCoverage\TestCoverageAnalyzer;
 use Rampart\QualityChecker\Analyzers\TestCoverage\TestWithoutAssertAnalyzer;
 use Rampart\QualityChecker\Profiling\Profiler;
+use Rampart\QualityChecker\Semantic\OwnershipShadow;
 use Rampart\QualityChecker\Result\CheckResult;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
@@ -89,6 +90,7 @@ final class CustomAnalyzerChecker implements CheckerInterface
         )));
         Profiler::end('discovery');
         $issues = [];
+        OwnershipShadow::reset();
 
         // One shared scan context per run: source read once, AST parsed
         // once, failures cached (canonical AST contract — see
@@ -136,6 +138,8 @@ final class CustomAnalyzerChecker implements CheckerInterface
 
         $issues = (new Deduplicator())->dedupeList($issues);
 
+        $issues = $this->reconcileOwnership($issues);
+
         $suppressed = 0;
         if ($this->inlineSuppressionEnabled($ctx)) {
             $suppressor = new InlineSuppressor();
@@ -167,6 +171,96 @@ final class CustomAnalyzerChecker implements CheckerInterface
         }
 
         return new CheckResult($this->name(), $status, microtime(true) - $start, $issues, null, $summary);
+    }
+
+    /**
+     * v0.6.2 BAC/ownership reconciliation. Identity is file +
+     * controller + action (both analyzers record the same keys):
+     * - An ownership issue on an action that already has a BAC finding
+     *   merges INTO the BAC finding (full chain preserved under
+     *   access_control.ownership) instead of a second issue.
+     * - A BAC finding with a shadow decision but no ownership issue is
+     *   enriched with the decision (PROTECTED proof, weak REVIEW
+     *   context, or UNKNOWN limitation) — provenance without verdict
+     *   change.
+     * - Ownership issues with no BAC counterpart survive (the deleteLink
+     *   false-negative class BAC never flagged).
+     *
+     * @param Issue[] $issues
+     * @return Issue[]
+     */
+    private function reconcileOwnership(array $issues): array
+    {
+        $decisions = OwnershipShadow::all();
+        if ($decisions === []) {
+            return $issues;
+        }
+        $byAction = [];
+        foreach ($decisions as $decision) {
+            $byAction[$this->ownershipIdentity($decision->file, $decision->controller, $decision->method)] = $decision;
+        }
+
+        $bacIndex = [];
+        foreach ($issues as $i => $issue) {
+            if ($issue->rule !== OwaspAccessControlAnalyzer::RULE) {
+                continue;
+            }
+            $controller = (string) ($issue->metadata['controller'] ?? '');
+            $action = (string) ($issue->metadata['action'] ?? ($issue->metadata['method'] ?? ''));
+            if ($controller === '' || $action === '') {
+                continue;
+            }
+            $bacIndex[$this->ownershipIdentity((string) $issue->file, $controller, $action)] = $i;
+        }
+
+        $merged = 0;
+        $enriched = 0;
+        $drop = [];
+        foreach ($issues as $i => $issue) {
+            if ($issue->rule !== OwaspOwnershipAnalyzer::RULE) {
+                continue;
+            }
+            $controller = (string) ($issue->metadata['controller'] ?? '');
+            $action = (string) ($issue->metadata['action'] ?? '');
+            $key = $this->ownershipIdentity((string) $issue->file, $controller, $action);
+            if (!isset($bacIndex[$key])) {
+                continue;
+            }
+            $bac = $issues[$bacIndex[$key]];
+            $bac->metadata['access_control']['ownership'] = $issue->metadata['access_control']['ownership'] ?? [];
+            $bac->metadata['access_control']['ownership_merged'] = true;
+            $drop[$i] = true;
+            ++$merged;
+        }
+        if ($drop !== []) {
+            $issues = array_values(array_filter(
+                $issues,
+                static fn (Issue $issue, int $i): bool => !isset($drop[$i]),
+                ARRAY_FILTER_USE_BOTH
+            ));
+        }
+        foreach ($issues as $issue) {
+            if ($issue->rule !== OwaspAccessControlAnalyzer::RULE) {
+                continue;
+            }
+            $controller = (string) ($issue->metadata['controller'] ?? '');
+            $action = (string) ($issue->metadata['action'] ?? ($issue->metadata['method'] ?? ''));
+            $key = $this->ownershipIdentity((string) $issue->file, $controller, $action);
+            if (!isset($byAction[$key]) || isset($issue->metadata['access_control']['ownership'])) {
+                continue;
+            }
+            $issue->metadata['access_control']['ownership'] = $byAction[$key]->toArray();
+            ++$enriched;
+        }
+        Profiler::gauge('ownership_merged', $merged);
+        Profiler::gauge('bac_ownership_enriched', $enriched);
+
+        return array_values($issues);
+    }
+
+    private function ownershipIdentity(string $file, string $controller, string $action): string
+    {
+        return strtolower($file . '|' . ltrim($controller, '\\') . '@' . $action);
     }
 
     private function inlineSuppressionEnabled(CheckContext $ctx): bool

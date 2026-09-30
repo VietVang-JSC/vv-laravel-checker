@@ -8,6 +8,9 @@ use PhpParser\Node;
 use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
 use Rampart\QualityChecker\Analysis\ScopeIds;
 use Rampart\QualityChecker\Analysis\StructuralFactIndex;
+use Rampart\QualityChecker\Result\Confidence;
+use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Semantic\LaravelSemanticIndex;
 use Rampart\QualityChecker\Semantic\MiddlewareRegistry;
 use Rampart\QualityChecker\Semantic\MiddlewareTaxonomy;
@@ -39,6 +42,8 @@ use Rampart\QualityChecker\Semantic\RouteNode;
  */
 final class OwaspOwnershipAnalyzer extends AbstractAnalyzer
 {
+    public const RULE = 'OWASP_OWNERSHIP_IDOR';
+
     /** @var list<string> sensitive write operations (lowercased) */
     private const SENSITIVE_OPS = ['delete', 'update', 'destroy', 'restore', 'forcedelete'];
 
@@ -68,6 +73,7 @@ final class OwaspOwnershipAnalyzer extends AbstractAnalyzer
         $registry->setScanContext($scan);
         $registry->build($files);
 
+        OwnershipShadow::reset();
         foreach ($files as $file) {
             if (!$this->supports($file)) {
                 continue;
@@ -75,7 +81,17 @@ final class OwaspOwnershipAnalyzer extends AbstractAnalyzer
             $this->analyzeFile($file, $index, $registry);
         }
 
-        return [];
+        // v0.6.2 production mapping: shadow decisions become BAC findings
+        // per the conservative mapping (UNKNOWN/PROTECTED never emit).
+        $issues = [];
+        foreach (OwnershipShadow::all() as $decision) {
+            $issue = $this->toProductionIssue($decision);
+            if ($issue !== null) {
+                $issues[] = $issue;
+            }
+        }
+
+        return $issues;
     }
 
     public function supports(string $path): bool
@@ -90,6 +106,105 @@ final class OwaspOwnershipAnalyzer extends AbstractAnalyzer
             && !str_contains($normalized, '/database/seeders/')
             && !str_contains($normalized, '/database/factories/')
             && !str_contains($normalized, '/database/migrations/');
+    }
+
+    /**
+     * v0.6.2 production mapping (conservative, asymmetric):
+     * - PROTECTED → null (positive proof suppresses ownership concern;
+     *   never suppresses BAC's own findings — that is the checker's job
+     *   to NOT do).
+     * - UNKNOWN → null (engine limitation is not a developer finding).
+     * - REVIEW → Issue only on a strong chain (request identifier +
+     *   concrete model lookup). Weak chains stay shadow-only unless
+     *   the checker enriches an existing BAC finding with them.
+     * - EXPOSED → always an Issue (public + sensitive write); confidence
+     *   tracks chain strength.
+     *
+     * Messages say "could not be proven", never "IDOR vulnerability".
+     */
+    public function toProductionIssue(OwnershipDecision $decision): ?Issue
+    {
+        if (
+            $decision->status === OwnershipDecision::PROTECTED
+            || $decision->status === OwnershipDecision::UNKNOWN
+        ) {
+            return null;
+        }
+        $strong = $this->isStrongChain($decision);
+        if ($decision->status === OwnershipDecision::REVIEW && !$strong) {
+            return null;
+        }
+        $resource = $decision->lookup['detail'] ?? $decision->identifier['detail'] ?? $decision->method . '()';
+        $identifier = $decision->identifier['detail'] ?? 'request input';
+        $operation = $decision->operation['detail'] ?? 'write';
+        if ($decision->status === OwnershipDecision::EXPOSED) {
+            $message = sprintf(
+                'Publicly reachable %s() performs %s on %s identified by %s without proven ownership or access control.',
+                $decision->method,
+                $operation,
+                $resource,
+                $identifier
+            );
+
+            return $this->makeIssue(
+                self::RULE,
+                $message,
+                $decision->file,
+                $decision->line,
+                Severity::Error,
+                $this->provenanceMetadata($decision),
+                $strong ? Confidence::High : Confidence::Medium
+            );
+        }
+
+        $message = sprintf(
+            'Object-level authorization could not be proven: %s() performs %s on %s identified by %s — ownership unverified.',
+            $decision->method,
+            $operation,
+            $resource,
+            $identifier
+        );
+
+        return $this->makeIssue(
+            self::RULE,
+            $message,
+            $decision->file,
+            $decision->line,
+            Severity::Error,
+            $this->provenanceMetadata($decision),
+            Confidence::Medium
+        );
+    }
+
+    /**
+     * A chain strong enough to surface on its own: request identifier
+     * reaching a concrete (non-dynamic) model lookup.
+     */
+    private function isStrongChain(OwnershipDecision $decision): bool
+    {
+        return $decision->identifier !== null
+            && $decision->lookup !== null
+            && $decision->lookup['kind'] !== 'dynamic';
+    }
+
+    /**
+     * Full evidence chain travels into production (v0.6.2 provenance):
+     * flat controller/action keys for checker dedup identity plus the
+     * nested ownership block.
+     *
+     * @return array<string, mixed>
+     */
+    private function provenanceMetadata(OwnershipDecision $decision): array
+    {
+        return [
+            'controller' => $decision->controller,
+            'action' => $decision->method,
+            'method' => $decision->method,
+            'access_control' => [
+                'decision' => $decision->status,
+                'ownership' => $decision->toArray(),
+            ],
+        ];
     }
 
     private function analyzeFile(
@@ -481,6 +596,12 @@ final class OwaspOwnershipAnalyzer extends AbstractAnalyzer
                     continue;
                 }
                 $type = $param->type instanceof Node\Name ? $param->type->toString() : ($param->type instanceof Node\Identifier ? $param->type->toString() : null);
+                // Constructor-injected services/repositories are collaborators,
+                // not route-controlled resource identifiers. Treating them as
+                // IDs creates false ownership reviews such as $repository->...
+                if ($this->isDependencyType($type)) {
+                    continue;
+                }
                 $out[$param->var->name] = [
                     'kind' => $type !== null && !$this->isBuiltinType($type) ? 'model-binding' : 'route-param',
                     'detail' => '$' . $param->var->name . ($type !== null ? " ({$type})" : ''),
@@ -513,6 +634,17 @@ final class OwaspOwnershipAnalyzer extends AbstractAnalyzer
     private function isBuiltinType(string $type): bool
     {
         return in_array(strtolower(ltrim($type, '\\')), ['int', 'string', 'bool', 'float', 'array', 'callable', 'iterable', 'object', 'mixed', 'void', 'null'], true);
+    }
+
+    private function isDependencyType(?string $type): bool
+    {
+        if ($type === null) {
+            return false;
+        }
+
+        $type = strtolower(ltrim($type, '\\'));
+
+        return str_contains($type, 'repository') || str_contains($type, 'service');
     }
 
     /**

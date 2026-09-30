@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-10-01
+
+### Added (Ownership / Object-Level Authorization)
+- Production mapping for conservative Ownership/IDOR decisions:
+  `PROTECTED` stays silent, strong `REVIEW` and `EXPOSED` decisions become
+  findings, and `UNKNOWN` does not become a false positive.
+- BAC reconciliation merges matching ownership evidence into existing BAC
+  findings and preserves the complete ownership provenance chain.
+- Duplicate BAC/ownership findings are suppressed by controller/action
+  identity; standalone ownership findings remain when BAC has no counterpart.
+- Injected repository/service dependencies are not treated as
+  route-controlled resource identifiers.
+
+### Validation
+- `874` tests and `2,163` assertions pass.
+- Four-pilot production evaluation: Linkstack, Snipe-it, Firefly-III and
+  Canvas; all `11/11` new findings were human-reviewed as useful review,
+  with `0` confirmed false positives and `0` duplicates.
+- Protected mechanisms remained silent, including policy/gate, explicit
+  owner-compare deny, relationship-scoped and owner-where corpus coverage.
+- Parse amplification remained `1.0x`; ownership analyzer wall time was
+  approximately `3.2-3.7s` on the evaluation box.
+- Performance is accepted with benchmark variance. Paired full-engine runs
+  were environment-noisy (`+18.22s`, `-13.96s`, `+4.29s`); memory remained
+  effectively unchanged (`1268MB` off vs `1270MB` on). A quiet-box rerun is
+  post-release verification, not a correctness blocker.
+
 ## [Unreleased]
 
 ### Added (analysis engine foundation)

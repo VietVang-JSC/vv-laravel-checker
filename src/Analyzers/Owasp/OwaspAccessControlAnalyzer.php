@@ -49,7 +49,7 @@ use Rampart\QualityChecker\Semantic\RouteNode;
  */
 final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
 {
-    private const RULE = 'OWASP_BROKEN_ACCESS_CONTROL';
+    public const RULE = 'OWASP_BROKEN_ACCESS_CONTROL';
 
     private const MUTATING_METHODS = [
         'store', 'update', 'delete', 'destroy', 'restore', 'forceDelete',

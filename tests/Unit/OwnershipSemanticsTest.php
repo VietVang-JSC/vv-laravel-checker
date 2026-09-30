@@ -107,6 +107,20 @@ final class OwnershipSemanticsTest extends TestCase
         self::assertSame('relationship-scoped', $decisions[0]->reason);
     }
 
+    public function testInjectedRepositoryIsNotTreatedAsRouteIdentifier(): void
+    {
+        $files = [
+            'app/Http/Controllers/RecurringController.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse App\\Repositories\\RecurringRepositoryInterface;\nclass RecurringController extends Controller {\n    public function destroy(RecurringRepositoryInterface \$repository) {\n        \$repository->destroy();\n    }\n}\n",
+            'routes/web.php' => "<?php\nuse Illuminate\\Support\\Facades\\Route;\nuse App\\Http\\Controllers\\RecurringController;\nRoute::delete('/recurring', [RecurringController::class, 'destroy'])->middleware(['auth']);\n",
+        ];
+
+        $issues = (new OwaspOwnershipAnalyzer())->analyze($this->project($files));
+
+        self::assertSame([], $issues);
+        self::assertCount(1, OwnershipShadow::all());
+        self::assertNull(OwnershipShadow::all()[0]->identifier);
+    }
+
     public function testOwnerWhereIsProtected(): void
     {
         $decisions = $this->decisions([
