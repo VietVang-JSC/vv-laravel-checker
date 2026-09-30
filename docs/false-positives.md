@@ -808,6 +808,48 @@ Full median 166s → 105.6s (98.7/105.6/106.0); node amplification
 22.1s, Ssrf 19.6s, SQLi 12.5s (frozen track), Ssti 11.1s, Command
 7.3s. → OPT-3B (Mass + SSRF).
 
+PERF-OPT-3B — Mass + SSRF on the shared index (PASS).
+Anatomy first (no blind migration): Mass per sink = funcId storm
+(functions() + N containment finds) + useMap/namespaceOf/Use_ finds
+per file + MassFlow method-subtree finds per candidate (kept:
+shared semantic, method-scoped, bounded). SSRF per file =
+origins() (1 traversal, kept) + GuardMap containment storm +
+full calls find + funcId per EVERY call + per-sink subtree finds
+(kept: cheap). New shared helper `Analysis\ScopeIds::outermost`
+(O(depth) parent walk, proven equivalent to traversal-order
+first-containment — OpenRedirect's private version promoted).
+FactIndex extended rule-agnostically (same single pass, refs only):
+combined callsAny (+Nullsafe/ New_), foreaches, properties, uses,
+namespaces. calls() becomes an order-preserving filter over the
+combined list (Redirect behavior unchanged). Named buckets
+deliberately DEFERRED: both analyzers do ordered full scans, so
+buckets would only pay off with skip-logic (future prefilter work,
+not 3B) — no overengineering for a hypothetical.
+Mass: discovery + funcs + uses/namespaces + 3 funcId sites + guard
+properties via facts; decideCall/decideSink/classify/decision
+untouched. SSRF: discovery + sanitiz-gate partition + per-call
+funcId via facts + ScopeIds; origins(), subtree finds, and all sink
+semantics untouched. GuardMap/ScopeResolver/AssignmentMap unchanged.
+Shadow equivalence (profile-only Profiler::countDecision):
+linkstack Mass safe 2/unknown 9, SSRF 38 candidates → 9 flagged —
+identical old-vs-new; snipe-it/app Mass review 2/safe 41/unknown 54,
+SSRF 33 → 3 — identical (old code measured by stashing 3B and
+adding counters only). Full-issue rule histograms identical on both
+pilots + snipe-it full (5/5 runs).
+Gates (2 warm-ups + 5 measured: 58.6/58.7/60.0/75.5/125.9s, median
+60.0s; M5 is another loaded-box outlier, all analyzers inflated
+proportionally): Mass 22.1s → 2.4s, SSRF 19.6s → 2.0s (both <8s,
+both <5s stretch); visits −95% each (31.6M→1.5M, 27.6M→1.4M);
+node amplification 68x → 37x (<40x; <30x stretch left for
+Ssti/Command/SQLi territory — not pursued for the number);
+FactIndex build 3.2s (3 per-analyzer index instances over the same
+files — known duplication, ~5% of total; unifying to a run-scoped
+instance saves ~2s and is documented, not done); peak 1270MB
+(+18MB, refs only); parse 1.0x; 500/108 identical; corpus 1.000.
+Journey so far: 543s → 272s → 166s → 105.6s → 60.0s (~9x) with
+byte-identical detection. STOP as agreed — re-profile before any
+3C decision (Ssti 9.5s + Command 6.6s = 16.1s combined remain).
+
 ## 5. Don'ts
 
 - Do not add `baseline.json` to `.gitignore` **while** complaining that CI

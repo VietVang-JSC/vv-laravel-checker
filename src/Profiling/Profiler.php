@@ -163,6 +163,21 @@ final class Profiler
         self::$counters['issues:' . $analyzer] = (self::$counters['issues:' . $analyzer] ?? 0) + $count;
     }
 
+    /**
+     * Semantic shadow decisions that never become findings (Mass
+     * verdicts, SSRF candidates/guards): the shadow-pool equivalence
+     * signal for PERF-OPT-3B. Profile-only, zero finding impact.
+     */
+    public static function countDecision(string $analyzer, string $verdict): void
+    {
+        if (!self::$enabled) {
+            return;
+        }
+        self::$counters['decisions'] = (self::$counters['decisions'] ?? 0) + 1;
+        $key = 'decision:' . $analyzer . ':' . $verdict;
+        self::$counters[$key] = (self::$counters[$key] ?? 0) + 1;
+    }
+
     public static function countRead(string $path): void
     {
         if (!self::$enabled) {

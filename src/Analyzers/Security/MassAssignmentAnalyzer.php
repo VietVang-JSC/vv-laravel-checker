@@ -7,7 +7,9 @@ namespace Rampart\QualityChecker\Analyzers\Security;
 use PhpParser\Node;
 use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use PhpParser\PrettyPrinter\Standard;
+use Rampart\QualityChecker\Analysis\ScopeIds;
 use Rampart\QualityChecker\Analysis\ScopeResolver;
+use Rampart\QualityChecker\Analysis\StructuralFactIndex;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
@@ -29,6 +31,23 @@ final class MassAssignmentAnalyzer implements ScanContextAware
 
     /** @var list<string> normalized model dir segments (e.g. app/Models) */
     private array $modelDirSegments = ['app/Models'];
+
+    private ?StructuralFactIndex $facts = null;
+
+    /**
+     * Shared structural facts for this run (one indexing traversal per
+     * file). Scope/dataflow questions still go through ScopeResolver,
+     * MassAssignmentFlow and the metadata index.
+     */
+    private function facts(): StructuralFactIndex
+    {
+        if ($this->facts === null) {
+            $this->facts = new StructuralFactIndex();
+            $this->facts->setScanContext($this->sharedScanContext());
+        }
+
+        return $this->facts;
+    }
 
     /**
      * @param array{models_dirs?: string|list<string>} $options
@@ -120,25 +139,38 @@ final class MassAssignmentAnalyzer implements ScanContextAware
         $finder = new CountingNodeFinder();
         $printer = new Standard();
         $scopes = new ScopeResolver($finder);
-        $funcs = $scopes->functions($ast);
-        $uses = $this->useMap($ast);
-        $namespace = $this->namespaceOf($ast);
+        // Structural facts (one indexed pass): same sets and order the
+        // direct finds returned — scope/dataflow logic below untouched.
+        $funcs = [];
+        foreach ($this->facts()->functions($file, $ast) as $func) {
+            $funcs[spl_object_id($func)] = $func;
+        }
+        $uses = $this->useMap($file, $ast);
+        $namespace = $this->namespaceOf($file, $ast);
 
-        $calls = $finder->find($ast, function (Node $node): bool {
-            if (!$node instanceof Node\Expr\StaticCall && !$node instanceof Node\Expr\MethodCall) {
-                return false;
+        /** @var list<Node\Expr> $calls (widened: downstream guards re-check the shape) */
+        $calls = [];
+        foreach ($this->facts()->calls($file, $ast) as $call) {
+            if (!$call instanceof Node\Expr\StaticCall && !$call instanceof Node\Expr\MethodCall) {
+                continue;
             }
 
-            $method = $node->name instanceof Node\Identifier ? $node->name->toString() : null;
-
-            return $method !== null && ($method === 'unguard' || $method === 'forceFill' || $method === 'forceCreate' || in_array($method, self::SOURCE_METHODS, true));
-        });
+            $method = $call->name instanceof Node\Identifier ? $call->name->toString() : null;
+            if ($method !== null && ($method === 'unguard' || $method === 'forceFill' || $method === 'forceCreate' || in_array($method, self::SOURCE_METHODS, true))) {
+                $calls[] = $call;
+            }
+        }
 
         foreach ($calls as $call) {
+            // Shape re-verified: discovery is a prefilter, downstream
+            // logic owns the type contract (also keeps phpstan sound).
+            if (!$call instanceof Node\Expr\StaticCall && !$call instanceof Node\Expr\MethodCall) {
+                continue;
+            }
             $method = $call->name instanceof Node\Identifier ? $call->name->toString() : '';
             $args = is_array($call->args ?? null) ? $call->args : [];
 
-            if ($method === 'unguard' && $call instanceof Node\Expr\StaticCall && $this->isUnguardedModel($call, $ast, $modelClassFiles)) {
+            if ($method === 'unguard' && $call instanceof Node\Expr\StaticCall && $this->isUnguardedModel($call, $file, $ast, $modelClassFiles)) {
                 $state = $call->args[0] ?? null;
                 if (
                     $state instanceof Node\Arg
@@ -170,9 +202,7 @@ final class MassAssignmentAnalyzer implements ScanContextAware
             // forceFill()/forceCreate() bypass $fillable/$guarded by design.
             // Decision-first; the legacy fallback below preserves the exact
             // old behavior (direct request input only; literals silent).
-            if (!($call instanceof Node\Expr\StaticCall || $call instanceof Node\Expr\MethodCall)) {
-                continue;
-            }
+            // ($call shape already verified at loop head.)
             if ($method === 'forceFill' || $method === 'forceCreate') {
                 $this->checkForceCall($call, $args, $method, $ast, $funcs, $scopes, $uses, $namespace, $file, $metaIndex, $issues);
                 continue;
@@ -224,6 +254,8 @@ final class MassAssignmentAnalyzer implements ScanContextAware
         if ($firstArg instanceof Node\Arg) {
             $decision = $this->decideSink($call, $firstArg->value, $method, $ast, $funcs, $scopes, $uses, $namespace, $file, $metaIndex);
             if ($decision instanceof MassAssignmentDecision) {
+                // Shadow-pool signal for PERF-OPT-3B equivalence (profile-only).
+                Profiler::countDecision('MassAssignmentAnalyzer', $decision->verdict);
                 if ($decision->verdict === MassAssignmentDecision::SAFE) {
                     return;
                 }
@@ -298,6 +330,8 @@ final class MassAssignmentAnalyzer implements ScanContextAware
         }
         $decision = $this->decideCall($call, $args, $method, $ast, $funcs, $scopes, $uses, $namespace, $file, $metaIndex);
         if ($decision instanceof MassAssignmentDecision) {
+            // Shadow-pool signal for PERF-OPT-3B equivalence (profile-only).
+            Profiler::countDecision('MassAssignmentAnalyzer', $decision->verdict);
             if ($decision->verdict === MassAssignmentDecision::SAFE) {
                 return;
             }
@@ -400,7 +434,7 @@ final class MassAssignmentAnalyzer implements ScanContextAware
         string $file,
         ModelMetadataIndex $metaIndex
     ): ?MassAssignmentDecision {
-        $funcId = $scopes->funcId($call, $ast);
+        $funcId = ScopeIds::outermost($call);
         $func = $funcs[$funcId] ?? null;
         if (!$func instanceof Node\Stmt\ClassMethod) {
             return null;
@@ -461,7 +495,7 @@ final class MassAssignmentAnalyzer implements ScanContextAware
         string $file,
         ModelMetadataIndex $metaIndex
     ): ?MassAssignmentDecision {
-        $funcId = $scopes->funcId($call, $ast);
+        $funcId = ScopeIds::outermost($call);
         $func = $funcs[$funcId] ?? null;
         if (!$func instanceof Node\Stmt\ClassMethod) {
             return null;
@@ -658,7 +692,7 @@ final class MassAssignmentAnalyzer implements ScanContextAware
         ScopeResolver $scopes,
         string $file
     ): ?array {
-        $funcId = $scopes->funcId($call, $ast);
+        $funcId = ScopeIds::outermost($call);
         $func = $funcs[$funcId] ?? null;
         if (!$func instanceof Node\Stmt\ClassMethod) {
             return null;
@@ -697,12 +731,11 @@ final class MassAssignmentAnalyzer implements ScanContextAware
      * @param list<Node> $ast
      * @return array<string, string> alias => FQCN
      */
-    private function useMap(array $ast): array
+    private function useMap(string $file, array $ast): array
     {
         $map = [];
-        $finder = new CountingNodeFinder();
         /** @var list<Node\Stmt\Use_> $uses */
-        $uses = $finder->findInstanceOf($ast, Node\Stmt\Use_::class);
+        $uses = $this->facts()->uses($file, $ast);
         foreach ($uses as $use) {
             foreach ($use->uses as $useUse) {
                 $alias = $useUse->alias !== null
@@ -718,12 +751,9 @@ final class MassAssignmentAnalyzer implements ScanContextAware
     /**
      * @param list<Node> $ast
      */
-    private function namespaceOf(array $ast): ?string
+    private function namespaceOf(string $file, array $ast): ?string
     {
-        $finder = new CountingNodeFinder();
-        $found = $finder->find($ast, static function (Node $node): bool {
-            return $node instanceof Node\Stmt\Namespace_;
-        });
+        $found = $this->facts()->namespaces($file, $ast);
         foreach ($found as $node) {
             if ($node instanceof Node\Stmt\Namespace_ && $node->name instanceof Node\Name) {
                 return $node->name->toString();
@@ -751,7 +781,7 @@ final class MassAssignmentAnalyzer implements ScanContextAware
      * @param list<Node> $ast
      * @param array<string, string> $modelClassFiles
      */
-    private function isUnguardedModel(Node\Expr\StaticCall $call, array $ast, array $modelClassFiles): bool
+    private function isUnguardedModel(Node\Expr\StaticCall $call, string $file, array $ast, array $modelClassFiles): bool
     {
         if (!$call->class instanceof Node\Name) {
             return false;
@@ -766,9 +796,8 @@ final class MassAssignmentAnalyzer implements ScanContextAware
             return true;
         }
 
-        $finder = new CountingNodeFinder();
         /** @var list<Node\Stmt\Use_> $uses */
-        $uses = $finder->findInstanceOf($ast, Node\Stmt\Use_::class);
+        $uses = $this->facts()->uses($file, $ast);
         foreach ($uses as $use) {
             foreach ($use->uses as $useUse) {
                 $alias = $useUse->alias !== null
@@ -809,13 +838,13 @@ final class MassAssignmentAnalyzer implements ScanContextAware
             return false;
         }
 
-        $ast = $this->sharedAst($modelClassFiles[$model]);
+        $modelFile = $modelClassFiles[$model];
+        $ast = $this->sharedAst($modelFile);
         if ($ast === null) {
             return false;
         }
 
-        $finder = new CountingNodeFinder();
-        $properties = $finder->findInstanceOf($ast, Node\Stmt\Property::class);
+        $properties = $this->facts()->properties($modelFile, $ast);
 
         foreach ($properties as $property) {
             if (!$property->isProtected() && !$property->isPublic()) {

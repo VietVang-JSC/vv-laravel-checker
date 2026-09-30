@@ -8,6 +8,7 @@ use PhpParser\Node;
 use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
 use Rampart\QualityChecker\Analysis\AssignmentMap;
 use Rampart\QualityChecker\Analysis\FlowTrace;
+use Rampart\QualityChecker\Analysis\ScopeIds;
 use Rampart\QualityChecker\Analysis\ScopeResolver;
 use Rampart\QualityChecker\Analysis\StructuralFactIndex;
 use Rampart\QualityChecker\Result\Confidence;
@@ -75,29 +76,12 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
     }
 
     /**
-     * Scope id via parent links (outermost-wins): identical to
-     * ScopeResolver::funcId for real code (nested named functions
-     * resolve to the outermost container, matching traversal-order
-     * first-containment). O(depth), no tree walk.
+     * Scope id via canonical parent links (outermost-wins == funcId;
+     * see ScopeIds). O(depth), no tree walk.
      */
     private function funcIdViaParents(Node $node): int
     {
-        $id = 0;
-        if ($node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Stmt\Function_) {
-            $id = spl_object_id($node);
-        }
-        $current = $node;
-        while (($parent = $current->getAttribute('parent')) instanceof Node) {
-            if (
-                $parent instanceof Node\Stmt\ClassMethod
-                || $parent instanceof Node\Stmt\Function_
-            ) {
-                $id = spl_object_id($parent);
-            }
-            $current = $parent;
-        }
-
-        return $id;
+        return ScopeIds::outermost($node);
     }
 
     private function scopes(): ScopeResolver
@@ -627,7 +611,7 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
             foreach ($this->facts()->assignsAndIfs($file, $nodes) as $node) {
                 // Same filter as the old per-scope find: only nodes
                 // inside this scope's subtree, in this scope's funcId.
-                if ($scope !== null && !$this->isWithin($node, $scope)) {
+                if ($scope !== null && !ScopeIds::isWithin($node, $scope)) {
                     continue;
                 }
                 if ($this->funcIdViaParents($node) !== $funcId) {
@@ -644,22 +628,6 @@ final class OwaspOpenRedirectAnalyzer extends AbstractAnalyzer
         }
 
         return $guarded;
-    }
-
-    /**
-     * Subtree containment via parent links (O(depth), no tree walk).
-     */
-    private function isWithin(Node $node, Node $ancestor): bool
-    {
-        $current = $node;
-        while (($parent = $current->getAttribute('parent')) instanceof Node) {
-            if ($parent === $ancestor) {
-                return true;
-            }
-            $current = $parent;
-        }
-
-        return false;
     }
 
     /**

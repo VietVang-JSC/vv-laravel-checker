@@ -241,12 +241,6 @@ parameters:
 			path: src/Analyzers/Security/LaravelTaintAnalyzer.php
 
 		-
-			message: '#^Access to an undefined property PhpParser\\Node\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Analyzers/Security/MassAssignmentAnalyzer.php
-
-		-
 			message: '#^Instanceof between PhpParser\\Node\\Name and PhpParser\\Node\\Name will always evaluate to true\.$#'
 			identifier: instanceof.alwaysTrue
 			count: 1

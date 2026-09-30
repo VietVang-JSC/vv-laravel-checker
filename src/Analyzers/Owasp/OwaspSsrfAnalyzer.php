@@ -7,8 +7,9 @@ namespace Rampart\QualityChecker\Analyzers\Owasp;
 use PhpParser\Node;
 use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
 use Rampart\QualityChecker\Analysis\AssignmentMap;
-use Rampart\QualityChecker\Analysis\GuardMap;
-use Rampart\QualityChecker\Analysis\ScopeResolver;
+use Rampart\QualityChecker\Analysis\ScopeIds;
+use Rampart\QualityChecker\Analysis\StructuralFactIndex;
+use Rampart\QualityChecker\Profiling\Profiler;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 
@@ -53,6 +54,24 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         'GuzzleHttp\\Client',
     ];
 
+    private ?StructuralFactIndex $facts = null;
+
+    /**
+     * Shared structural facts for this run (one indexing traversal per
+     * file). Scope/dataflow questions still go through AssignmentMap;
+     * guard partitioning uses ScopeIds (same outermost rule GuardMap
+     * applies in code).
+     */
+    private function facts(): StructuralFactIndex
+    {
+        if ($this->facts === null) {
+            $this->facts = new StructuralFactIndex();
+            $this->facts->setScanContext($this->sharedScanContext());
+        }
+
+        return $this->facts;
+    }
+
     public function analyze(array $files): array
     {
         $issues = [];
@@ -87,22 +106,20 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         // Shared origin map: plain, foreach, array-element, $this->property
         // and default origins.
         $origins = (new AssignmentMap($this->finder()))->origins($nodes);
-        $sanitizedScopes = $this->sanitizedVarScopes($nodes);
+        $sanitizedScopes = $this->sanitizedVarScopes($file, $nodes);
 
         $issues = [];
-        $calls = $this->finder()->find($nodes, function (Node $node): bool {
-            return $node instanceof Node\Expr\FuncCall
-                || $node instanceof Node\Expr\MethodCall
-                || $node instanceof Node\Expr\NullsafeMethodCall
-                || $node instanceof Node\Expr\StaticCall
-                || $node instanceof Node\Expr\New_;
-        });
+        // Structural facts: all five call shapes in one indexed pass, in
+        // traversal order (resolveSink filters).
+        $calls = $this->facts()->callsAny($file, $nodes);
 
         foreach ($calls as $call) {
             $sink = $this->resolveSink($call);
             if ($sink === null) {
                 continue;
             }
+            // Shadow-pool signal for PERF-OPT-3B equivalence (profile-only).
+            Profiler::countDecision('OwaspSsrfAnalyzer', 'candidate');
 
             if ($sink === 'fopen()' && $this->isWriteModeOpen($call)) {
                 continue;
@@ -116,6 +133,7 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             if (!$this->isPotentialUserInput($urlArg, $origins, $call, $sanitizedScopes)) {
                 continue;
             }
+            Profiler::countDecision('OwaspSsrfAnalyzer', 'flagged');
 
             $issues[] = $this->makeIssue(
                 self::RULE,
@@ -406,16 +424,16 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
     /**
      * Variables passed through a *sanitiz*() gate in the same scope
      * (`if (!sanitizeRemoteUrl($url)) throw ...;`), so a later sink using
-     * them is reviewed-by-construction. Scope partitioning comes from the
-     * shared GuardMap so a gate in one function never silences another.
+     * them is reviewed-by-construction. Scope partitioning uses the same
+     * outermost rule GuardMap applies in code, so a gate in one function
+     * never silences another.
      *
      * @param list<Node> $nodes
      * @return array<int, array<string, true>> call id => sanitized var names
      */
-    private function sanitizedVarScopes(array $nodes): array
+    private function sanitizedVarScopes(string $file, array $nodes): array
     {
-        $guardMap = new GuardMap($this->finder());
-        $byScope = $guardMap->find($nodes, static function (Node $node): bool {
+        $isGuard = static function (Node $node): bool {
             if ($node instanceof Node\Expr\FuncCall && $node->name instanceof Node\Name) {
                 return str_contains(strtolower($node->name->toString()), 'sanitiz');
             }
@@ -427,51 +445,50 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             }
 
             return false;
-        });
+        };
 
         $namesByScope = [];
-        foreach ($byScope as $funcId => $gates) {
-            $names = [];
-            foreach ($gates as $gate) {
-                if (
-                    !$gate instanceof Node\Expr\FuncCall
-                    && !$gate instanceof Node\Expr\MethodCall
-                    && !$gate instanceof Node\Expr\StaticCall
-                ) {
+        foreach ($this->facts()->callsAny($file, $nodes) as $gate) {
+            if (!$isGuard($gate)) {
+                continue;
+            }
+            if (
+                !$gate instanceof Node\Expr\FuncCall
+                && !$gate instanceof Node\Expr\MethodCall
+                && !$gate instanceof Node\Expr\StaticCall
+            ) {
+                continue;
+            }
+            $funcId = ScopeIds::outermost($gate);
+            foreach ($gate->args as $arg) {
+                if (!$arg instanceof Node\Arg) {
                     continue;
                 }
-                foreach ($gate->args as $arg) {
-                    if (!$arg instanceof Node\Arg) {
-                        continue;
-                    }
-                    $vars = $this->finder()->find($arg->value, static function (Node $node): bool {
-                        return $node instanceof Node\Expr\Variable;
-                    });
-                    foreach ($vars as $var) {
-                        if ($var instanceof Node\Expr\Variable && is_string($var->name)) {
-                            $names[$var->name] = true;
-                        }
+                $vars = $this->finder()->find($arg->value, static function (Node $node): bool {
+                    return $node instanceof Node\Expr\Variable;
+                });
+                foreach ($vars as $var) {
+                    if ($var instanceof Node\Expr\Variable && is_string($var->name)) {
+                        $namesByScope[$funcId][$var->name] = true;
                     }
                 }
-            }
-            if ($names !== []) {
-                $namesByScope[$funcId] = $names;
             }
         }
         if ($namesByScope === []) {
             return [];
         }
 
-        $scopeResolver = new ScopeResolver($this->finder());
         $byCall = [];
-        $calls = $this->finder()->find($nodes, static function (Node $node): bool {
-            return $node instanceof Node\Expr\FuncCall
-                || $node instanceof Node\Expr\MethodCall
-                || $node instanceof Node\Expr\NullsafeMethodCall
-                || $node instanceof Node\Expr\StaticCall;
-        });
-        foreach ($calls as $call) {
-            $funcId = $scopeResolver->funcId($call, $nodes);
+        foreach ($this->facts()->callsAny($file, $nodes) as $call) {
+            if (
+                !$call instanceof Node\Expr\FuncCall
+                && !$call instanceof Node\Expr\MethodCall
+                && !$call instanceof Node\Expr\NullsafeMethodCall
+                && !$call instanceof Node\Expr\StaticCall
+            ) {
+                continue;
+            }
+            $funcId = ScopeIds::outermost($call);
             if (isset($namesByScope[$funcId])) {
                 $byCall[spl_object_id($call)] = $namesByScope[$funcId];
             }
