@@ -1353,7 +1353,7 @@ final class HtmlReporter implements ReporterInterface
         }
         foreach ($priCounts as $pri => $count) {
             if ($count > 0) {
-                $pills .= '<span class="pill ' . $pri . '">' . strtoupper($pri) . '×' . (string) $count . '</span>';
+                $pills .= '<span class="pill ' . $pri . '">' . strtoupper($pri) . 'x' . (string) $count . '</span>';
             }
         }
 

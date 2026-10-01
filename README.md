@@ -150,6 +150,19 @@ report is fully self-contained (no network needed) and works from `file://`.
 File links use `vscode://` deep links (require VS Code); set
 `html.repo_url` in the published config to get GitHub blob links instead.
 
+### Standalone scan (no install in the target project)
+
+When the target cannot install the package (version conflicts, legacy
+toolchain), scan it without touching it — no `vendor`, no `artisan` needed
+in the target:
+
+```bash
+php bin/quality-check /path/to/project --format=all --tier=security --fail-on=none
+```
+
+Defaults to `--only=custom` (static analyzers only). Reports land in
+`<target>/reports/quality-checker` unless `--output=` overrides it.
+
 ### Recommended rollout for an existing project
 
 Do not block the team on every legacy finding on the first day:

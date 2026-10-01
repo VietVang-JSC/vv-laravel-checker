@@ -1,0 +1,23 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+// Standalone scan: no composer install in the target project needed.
+// Usage: php bin/quality-check <target-dir> [--format=all] [options]
+
+$autoload = __DIR__ . '/../vendor/autoload.php';
+if (!is_file($autoload)) {
+    fwrite(STDERR, "Run 'composer install' in the quality-checker directory first.\n");
+    exit(2);
+}
+require $autoload;
+
+use Rampart\QualityChecker\Standalone\StandaloneRunner;
+use Symfony\Component\Console\Output\StreamOutput;
+
+$argv = $_SERVER['argv'] ?? [];
+array_shift($argv);
+
+$output = new StreamOutput(fopen('php://stdout', 'w'));
+exit((new StandaloneRunner($argv))->run($output, dirname(__DIR__)));
