@@ -200,6 +200,15 @@ final class HtmlReporter implements ReporterInterface
     .pill.error { background: color-mix(in srgb, var(--error) 15%, transparent); color: var(--error); }
     .pill.warning { background: color-mix(in srgb, var(--warning) 15%, transparent); color: var(--warning); }
     .pill.info { background: color-mix(in srgb, var(--info) 15%, transparent); color: var(--info); }
+    .pill.p0 { background: color-mix(in srgb, var(--critical) 22%, transparent); color: var(--critical); }
+    .pill.p1 { background: color-mix(in srgb, var(--warning) 25%, transparent); color: var(--warning); }
+    .pill.p2 { background: color-mix(in srgb, var(--info) 18%, transparent); color: var(--info); }
+    .pill.p3 { background: var(--hover); color: var(--muted); }
+    td.priority { font-weight: 700; font-size: 12px; white-space: nowrap; }
+    td.priority.p0 { color: var(--critical); }
+    td.priority.p1 { color: var(--warning); }
+    td.priority.p2 { color: var(--info); }
+    td.priority.p3 { color: var(--muted); }
     .issue-group table { margin: 0; }
     .issue-group tbody tr[data-search]:hover { background: var(--hover); }
     .skipped-hint { color: var(--muted); font-style: italic; }
@@ -744,7 +753,9 @@ final class HtmlReporter implements ReporterInterface
             . $this->buildToolbar()
             . $this->buildSummaryGrid($summary, $rules)
             . $this->buildQualityScore(QualityScore::score($results))
+            . $this->buildRiskCard(QualityScore::riskOverview($results))
             . $this->buildDeltaCard($ctx)
+            . $this->buildPriorityCard($summary)
             . $this->buildRulesTable($rules)
             . $this->buildOwaspSection($owasp, $owaspIssues, $ctx)
             . $this->buildCheckerTable($checkers)
@@ -808,6 +819,8 @@ final class HtmlReporter implements ReporterInterface
             . '<nav aria-label="Report sections"><ul>' . "\n"
             . '<li><a href="#summary">Summary</a></li>' . "\n"
             . '<li><a href="#quality-score">Quality Score</a></li>' . "\n"
+            . '<li><a href="#risk-overview">Risk Overview</a></li>' . "\n"
+            . '<li><a href="#action-plan">Action Plan</a></li>' . "\n"
             . '<li><a href="#delta">Delta</a></li>' . "\n"
             . '<li><a href="#top-rules">Top Rules</a></li>' . "\n"
             . '<li><a href="#owasp">OWASP</a></li>' . "\n"
@@ -970,8 +983,72 @@ final class HtmlReporter implements ReporterInterface
             . $this->stat('Error', (int) ($summary['error'] ?? 0))
             . $this->stat('Warning', (int) ($summary['warning'] ?? 0))
             . $this->stat('Info', (int) ($summary['info'] ?? 0))
+            . $this->stat('P0', (int) ($summary['p0'] ?? 0))
+            . $this->stat('P1', (int) ($summary['p1'] ?? 0))
+            . $this->stat('P2', (int) ($summary['p2'] ?? 0))
+            . $this->stat('P3', (int) ($summary['p3'] ?? 0))
             . '</div>' . "\n"
             . $this->charts($summary, $rules)
+            . '</div>' . "\n";
+    }
+
+    /**
+     * PM-facing risk split: Security vs Testability vs Database vs the
+     * rest, each with findings, highest severity and a scheduling
+     * action — so "115 issues" never reads as "115 vulnerabilities".
+     *
+     * @param list<array{category: string, findings: int, highest: string, p0: int, p1: int, p2: int, p3: int, action: string}> $rows
+     */
+    private function buildRiskCard(array $rows): string
+    {
+        $body = '';
+        foreach ($rows as $row) {
+            $body .= '<tr><td>' . $this->escape($row['category']) . '</td>'
+                . '<td data-sort-value="' . (int) $row['findings'] . '">' . (int) $row['findings'] . '</td>'
+                . '<td class="severity ' . $this->escape(strtolower((string) $row['highest'])) . '">'
+                . $this->escape((string) $row['highest']) . '</td>'
+                . '<td>' . $this->escape($row['action']) . '</td></tr>' . "\n";
+        }
+        if ($body === '') {
+            $body = '<tr><td colspan="4" class="empty">No issues found.</td></tr>' . "\n";
+        }
+
+        return '<div class="card" id="risk-overview">' . "\n"
+            . '<h2>Risk Overview</h2>' . "\n"
+            . '<table>' . "\n"
+            . '<thead><tr><th data-sortable data-type="str">Category</th><th data-sortable data-type="num">Findings</th>'
+            . '<th data-sortable data-type="str">Highest</th><th data-sortable data-type="str">Action</th></tr></thead>' . "\n"
+            . '<tbody>' . "\n" . $body . '</tbody>' . "\n"
+            . '</table>' . "\n"
+            . '</div>' . "\n";
+    }
+
+    /**
+     * Leader action plan: P0-P3 scheduling buckets plus the auditable
+     * mapping table (no magic scores — every level shows its inputs).
+     *
+     * @param array<string, int> $summary
+     */
+    private function buildPriorityCard(array $summary): string
+    {
+        $rows = '';
+        foreach (QualityScore::priorityLegend() as $entry) {
+            $key = strtolower($entry['level']);
+            $rows .= '<tr><td class="priority ' . $this->escape($key) . '">' . $this->escape($entry['level']) . '</td>'
+                . '<td>' . $this->escape($entry['title']) . '</td>'
+                . '<td>' . $this->escape($entry['rule']) . '</td>'
+                . '<td data-sort-value="' . (int) ($summary[$key] ?? 0) . '">' . (int) ($summary[$key] ?? 0) . '</td></tr>' . "\n";
+        }
+
+        return '<div class="card" id="action-plan">' . "\n"
+            . '<h2>Action Plan</h2>' . "\n"
+            . '<p class="empty">Priority is scheduling urgency, not severity: P0 blocks release, P3 is backlog. '
+            . 'Search any finding list for <code>p0</code>–<code>p3</code> to filter.</p>' . "\n"
+            . '<table>' . "\n"
+            . '<thead><tr><th data-sortable data-type="str">Priority</th><th data-sortable data-type="str">Meaning</th>'
+            . '<th data-sortable data-type="str">Mapping</th><th data-sortable data-type="num">Findings</th></tr></thead>' . "\n"
+            . '<tbody>' . "\n" . $rows . '</tbody>' . "\n"
+            . '</table>' . "\n"
             . '</div>' . "\n";
     }
 
@@ -986,11 +1063,12 @@ final class HtmlReporter implements ReporterInterface
     {
         $gateClass = $score['gate'] === 'BLOCKED' ? 'blocked' : 'pass';
         $html = '<div class="card" id="quality-score">' . "\n"
-            . '<h2>Quality Score <span class="gate ' . $gateClass . '">'
+            . '<h2>Quality Score ' . (int) $score['overall'] . '/100 <span class="gate ' . $gateClass . '">'
             . $this->escape($score['gate'] === 'BLOCKED' ? 'Release Gate: BLOCKED' : 'Release Gate: PASS')
             . '</span></h2>' . "\n"
             . '<div class="summary-grid">' . "\n"
             . $this->stat('Overall', (int) $score['overall'])
+            . $this->stat('Release Blockers', (int) $score['must_fix'])
             . $this->stat('Must Fix', (int) $score['must_fix'])
             . $this->stat('Review', (int) $score['review'])
             . $this->stat('Tech Debt', (int) $score['tech_debt'])
@@ -1213,7 +1291,7 @@ final class HtmlReporter implements ReporterInterface
                 $html .= '<p class="empty">No issues found.</p>' . "\n";
             } else {
                 foreach ($this->groupByRule($result['files']) as $rule => $issues) {
-                    $html .= $this->buildRuleGroup($rule, $issues, $ctx, $issueSeq);
+                    $html .= $this->buildRuleGroup($rule, $result['name'], $issues, $ctx, $issueSeq);
                 }
             }
 
@@ -1255,17 +1333,27 @@ final class HtmlReporter implements ReporterInterface
      *
      * @param list<array{rule: string, severity: string, confidence: string, line: int|null, message: string, file: string}> $issues
      */
-    private function buildRuleGroup(string $rule, array $issues, CheckContext $ctx, int &$issueSeq): string
+    private function buildRuleGroup(string $rule, string $checker, array $issues, CheckContext $ctx, int &$issueSeq): string
     {
         $sevCounts = ['critical' => 0, 'error' => 0, 'warning' => 0, 'info' => 0];
-        foreach ($issues as $issue) {
+        $priCounts = ['p0' => 0, 'p1' => 0, 'p2' => 0, 'p3' => 0];
+        $priorities = [];
+        foreach ($issues as $key => $issue) {
             $sevCounts[$issue['severity']] = ($sevCounts[$issue['severity']] ?? 0) + 1;
+            $priority = QualityScore::priorityFor($rule, $checker, $issue['severity'], $issue['confidence']);
+            $priorities[$key] = $priority;
+            ++$priCounts[strtolower($priority)];
         }
 
         $pills = '';
         foreach ($sevCounts as $sev => $count) {
             if ($count > 0) {
                 $pills .= '<span class="pill ' . $sev . '">' . (string) $count . '</span>';
+            }
+        }
+        foreach ($priCounts as $pri => $count) {
+            if ($count > 0) {
+                $pills .= '<span class="pill ' . $pri . '">' . strtoupper($pri) . '×' . (string) $count . '</span>';
             }
         }
 
@@ -1279,6 +1367,7 @@ final class HtmlReporter implements ReporterInterface
             . '<table>' . "\n"
             . '<thead>' . "\n"
             . '<tr><th data-sortable data-type="str">File</th>'
+            . '<th data-sortable data-type="str">Priority</th>'
             . '<th data-sortable data-type="sev">Severity</th>'
             . '<th data-sortable data-type="str">Confidence</th>'
             . '<th data-sortable data-type="num">Line</th>'
@@ -1286,21 +1375,25 @@ final class HtmlReporter implements ReporterInterface
             . '</thead>' . "\n"
             . '<tbody>' . "\n";
 
-        foreach ($issues as $issue) {
+        foreach ($issues as $key => $issue) {
             ++$issueSeq;
             $id = 'iss-' . $issueSeq;
             $file = $issue['file'];
+            $priority = $priorities[$key] ?? 'P3';
             $searchHaystack = strtolower($issue['rule'] . ' ' . $file . ' '
                 . ($issue['line'] !== null ? (string) $issue['line'] : '') . ' '
-                . $issue['message'] . ' ' . $issue['severity'] . ' ' . $issue['confidence']);
+                . $issue['message'] . ' ' . $issue['severity'] . ' ' . $issue['confidence']
+                . ' ' . $priority . ' priority:' . $priority);
 
             $snippet = $this->snippetHtml($ctx, $file, $issue['line']);
             $href = $this->fileLink($file, $issue['line'], $ctx);
 
             $html .= '<tr id="' . $id . '" data-severity="' . $this->escape($issue['severity']) . '"'
+                . ' data-priority="' . $this->escape(strtolower($priority)) . '"'
                 . ' data-search="' . $this->escape($searchHaystack) . '">'
                 . '<td><a class="file-link" href="' . $this->escape($href) . '" title="'
                 . $this->escape($file) . '">' . $this->escape($this->shortPath($file)) . '</a></td>'
+                . '<td class="priority ' . $this->escape(strtolower($priority)) . '">' . $this->escape($priority) . '</td>'
                 . '<td class="severity ' . $this->escape($issue['severity']) . '">' . $this->escape($issue['severity']) . '</td>'
                 . '<td>' . $this->escape($issue['confidence']) . ' <small>('
                 . $this->escape($this->confidenceScoreLabel($issue['confidence'])) . ')</small></td>'
@@ -1313,7 +1406,7 @@ final class HtmlReporter implements ReporterInterface
                 . '</tr>' . "\n";
 
             if ($snippet !== '') {
-                $html .= '<tr class="snippet-row" data-for="' . $id . '" hidden><td colspan="5">' . $snippet . '</td></tr>' . "\n";
+                $html .= '<tr class="snippet-row" data-for="' . $id . '" hidden><td colspan="6">' . $snippet . '</td></tr>' . "\n";
             }
         }
 
@@ -1615,6 +1708,10 @@ final class HtmlReporter implements ReporterInterface
             'error' => 0,
             'warning' => 0,
             'info' => 0,
+            'p0' => 0,
+            'p1' => 0,
+            'p2' => 0,
+            'p3' => 0,
         ];
 
         foreach ($results as $result) {
@@ -1643,6 +1740,13 @@ final class HtmlReporter implements ReporterInterface
                 } else {
                     ++$summary['info'];
                 }
+                $priority = QualityScore::priorityFor(
+                    $issue->rule,
+                    $result->name,
+                    $issue->severity->value,
+                    $issue->confidence->value
+                );
+                ++$summary[strtolower($priority)];
             }
         }
 

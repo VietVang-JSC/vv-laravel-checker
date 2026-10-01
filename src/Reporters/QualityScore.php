@@ -119,6 +119,111 @@ final class QualityScore
         ];
     }
 
+    /**
+     * Action priority P0-P3: deterministic projection of the must_fix /
+     * review / tech_debt buckets, so scheduling never has to infer
+     * urgency from raw severity. Tech debt splits by severity so
+     * error-level non-security findings outrank warning hints.
+     *
+     * - P0: any critical, or security error at high confidence.
+     * - P1: any other security-dimension finding.
+     * - P2: non-security error.
+     * - P3: non-security warning/info.
+     */
+    public static function priorityFor(string $rule, string $checker, string $severity, string $confidence): string
+    {
+        $severity = strtolower($severity);
+        $confidence = strtolower($confidence);
+        $dimension = self::dimensionFor($rule, $checker);
+        if ($severity === 'critical') {
+            return 'P0';
+        }
+        if ($dimension === 'Security' && $severity === 'error' && $confidence === 'high') {
+            return 'P0';
+        }
+        if ($dimension === 'Security') {
+            return 'P1';
+        }
+        if ($severity === 'error') {
+            return 'P2';
+        }
+
+        return 'P3';
+    }
+
+    /**
+     * Auditable mapping table for the report: every priority level shows
+     * exactly which inputs produce it (no magic scores).
+     *
+     * @return list<array{level: string, title: string, rule: string}>
+     */
+    public static function priorityLegend(): array
+    {
+        return [
+            ['level' => 'P0', 'title' => 'Fix before release', 'rule' => 'Critical (any), or Security error at high confidence'],
+            ['level' => 'P1', 'title' => 'Fix this sprint', 'rule' => 'Any other Security finding'],
+            ['level' => 'P2', 'title' => 'Engineering improvement', 'rule' => 'Non-security error'],
+            ['level' => 'P3', 'title' => 'Technical debt / backlog', 'rule' => 'Non-security warning or info'],
+        ];
+    }
+
+    /**
+     * PM-facing risk split: per-dimension findings, highest severity,
+     * P0-P3 counts and a scheduling action. Dimensions with zero
+     * findings are omitted so small reports stay readable.
+     *
+     * @param CheckResult[] $results
+     * @return list<array{category: string, findings: int, highest: string, p0: int, p1: int, p2: int, p3: int, action: string}>
+     */
+    public static function riskOverview(array $results): array
+    {
+        $rank = ['info' => 1, 'warning' => 2, 'error' => 3, 'critical' => 4];
+        $rows = [];
+        foreach (self::DIMENSIONS as $dimension => $_) {
+            $rows[$dimension] = [
+                'category' => $dimension, 'findings' => 0, 'highest' => '—',
+                'p0' => 0, 'p1' => 0, 'p2' => 0, 'p3' => 0, 'rank' => 0,
+            ];
+        }
+        foreach ($results as $result) {
+            if (!$result instanceof CheckResult) {
+                continue;
+            }
+            foreach ($result->issues as $issue) {
+                if (!$issue instanceof Issue) {
+                    continue;
+                }
+                $dimension = self::dimensionFor($issue->rule, $result->name);
+                ++$rows[$dimension]['findings'];
+                $r = $rank[$issue->severity->value] ?? 0;
+                if ($r > $rows[$dimension]['rank']) {
+                    $rows[$dimension]['rank'] = $r;
+                    $rows[$dimension]['highest'] = $issue->severity->value;
+                }
+                ++$rows[$dimension][strtolower(self::priorityFor(
+                    $issue->rule,
+                    $result->name,
+                    $issue->severity->value,
+                    $issue->confidence->value
+                ))];
+            }
+        }
+        $out = [];
+        foreach ($rows as $row) {
+            if ($row['findings'] === 0) {
+                continue;
+            }
+            $action = $row['p0'] > 0 ? 'Immediate'
+                : ($row['p1'] > 0 ? 'High'
+                : ($row['p2'] > 0 ? 'Review' : 'Backlog'));
+            unset($row['rank']);
+            $row['action'] = $action;
+            $out[] = $row;
+        }
+
+        return $out;
+    }
+
     private static function dimensionFor(string $rule, string $checker): string
     {
         if (in_array($checker, ['composer_audit', 'trivy'], true)) {

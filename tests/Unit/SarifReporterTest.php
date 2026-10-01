@@ -115,6 +115,11 @@ final class SarifReporterTest extends TestCase
         self::assertSame('note', $byRule['TODO_FIXME']['level']);
         self::assertSame('warning', $byRule['LARAVEL_PITFALL']['level']);
 
+        // Action priority travels in result properties (P0/P3 here).
+        self::assertSame('P0', $byRule['SQL_INJECTION']['properties']['priority']);
+        self::assertSame('P3', $byRule['TODO_FIXME']['properties']['priority']);
+        self::assertSame('P3', $byRule['LARAVEL_PITFALL']['properties']['priority']);
+
         // Relative URI with forward slashes, region startLine present.
         $location = $byRule['SQL_INJECTION']['locations'][0]['physicalLocation'];
         self::assertSame('app/Http/Controllers/UserController.php', $location['artifactLocation']['uri']);

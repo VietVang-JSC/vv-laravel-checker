@@ -7,8 +7,10 @@ namespace Rampart\QualityChecker\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Rampart\QualityChecker\Reporters\ConsoleReporter;
+use Rampart\QualityChecker\Reporters\HtmlReporter;
 use Rampart\QualityChecker\Reporters\JsonReporter;
 use Rampart\QualityChecker\Reporters\MarkdownReporter;
+use Rampart\QualityChecker\Reporters\QualityScore;
 use Rampart\QualityChecker\Result\CheckResult;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
@@ -130,6 +132,16 @@ final class ReportersTest extends TestCase
         self::assertSame('error', $payload['fail_on']);
         self::assertSame('low', $payload['min_confidence']);
         self::assertSame(1.75, $payload['duration_total']);
+
+        // Action priority: per-issue level plus summary counts and legend.
+        $issues = $payload['checkers'][0]['issues'];
+        self::assertSame('P0', $issues[0]['priority']);
+        self::assertSame('P3', $issues[1]['priority']);
+        self::assertSame(1, $payload['summary']['p0']);
+        self::assertSame(1, $payload['summary']['p3']);
+        self::assertSame('P0', $payload['priority_legend'][0]['level']);
+        self::assertSame('Security', $payload['risk_overview'][0]['category']);
+        self::assertSame('Immediate', $payload['risk_overview'][0]['action']);
     }
 
     public function testJsonPreservesUnicode(): void
@@ -164,6 +176,12 @@ final class ReportersTest extends TestCase
         self::assertStringContainsString('| Error | 0 |', $md);
         self::assertStringContainsString('| Warning | 0 |', $md);
         self::assertStringContainsString('| Info | 1 |', $md);
+        self::assertStringContainsString('| P0 — fix before release | 1 |', $md);
+        self::assertStringContainsString('| P3 — technical debt / backlog | 1 |', $md);
+        self::assertStringContainsString('## Action Plan', $md);
+        self::assertStringContainsString('## Risk Overview', $md);
+        self::assertStringContainsString('| Security | 1 | critical | Immediate |', $md);
+        self::assertStringContainsString('| Rule | Priority | Severity | Confidence | Line | Message |', $md);
         self::assertStringContainsString('<details>', $md);
         self::assertStringContainsString('### `app/Http/Controllers/UserController.php`', $md);
     }
@@ -185,6 +203,8 @@ final class ReportersTest extends TestCase
         self::assertStringContainsString('Issues — custom:', $text);
         self::assertStringContainsString('app/Http/Controllers/UserController.php', $text);
         self::assertStringContainsString('SQL_INJECTION', $text);
+        self::assertStringContainsString('[P0]', $text);
+        self::assertStringContainsString('Action plan: P0 1 (fix before release)', $text);
         self::assertStringContainsString('--format=json', $text);
     }
 
@@ -218,5 +238,64 @@ final class ReportersTest extends TestCase
 
         self::assertStringContainsString('quality-checker:', $text);
         self::assertStringNotContainsString('Issues —', $text);
+    }
+
+    /** Priority P0-P3 (severity x confidence x dimension) */
+
+    public function testPriorityMapping(): void
+    {
+        // P0: any critical, or security error at high confidence.
+        self::assertSame('P0', QualityScore::priorityFor('TODO_FIXME', 'custom', 'critical', 'low'));
+        self::assertSame('P0', QualityScore::priorityFor('OWASP_BLADE_XSS', 'custom', 'error', 'high'));
+        // P1: any other security-dimension finding.
+        self::assertSame('P1', QualityScore::priorityFor('OWASP_BLADE_XSS', 'custom', 'error', 'medium'));
+        self::assertSame('P1', QualityScore::priorityFor('OWASP_BLADE_XSS', 'custom', 'warning', 'low'));
+        self::assertSame('P1', QualityScore::priorityFor('CVE-2024-1', 'composer_audit', 'warning', 'high'));
+        // P2: non-security error.
+        self::assertSame('P2', QualityScore::priorityFor('ROUTE_MISSING_VALIDATION', 'custom', 'error', 'high'));
+        // P3: non-security warning/info.
+        self::assertSame('P3', QualityScore::priorityFor('MISSING_CONTROLLER_TEST', 'custom', 'warning', 'low'));
+        self::assertSame('P3', QualityScore::priorityFor('TODO_FIXME', 'custom', 'info', 'low'));
+    }
+
+    public function testHtmlRendersPriorityColumnAndActionPlan(): void
+    {
+        $ctx = $this->context();
+
+        (new HtmlReporter())->render($this->sampleResults(), $ctx);
+
+        $html = (string) file_get_contents($this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.html');
+
+        // Sample: SQL_INJECTION critical/high (Security) -> P0; TODO_FIXME info/low -> P3.
+        self::assertStringContainsString('>Priority<', $html);
+        self::assertStringContainsString('>P0<', $html);
+        self::assertStringContainsString('>P3<', $html);
+        self::assertStringContainsString('id="action-plan"', $html);
+        self::assertStringContainsString('Fix before release', $html);
+        self::assertStringContainsString('data-priority="p0"', $html);
+        self::assertStringContainsString('id="risk-overview"', $html);
+        self::assertStringContainsString('>Security<', $html);
+        self::assertStringContainsString('/100', $html);
+        self::assertStringContainsString('Release Blockers', $html);
+        self::assertStringContainsString('Release Gate: BLOCKED', $html);
+    }
+
+    public function testRiskOverviewSplitsSecurityFromBacklog(): void
+    {
+        $rows = QualityScore::riskOverview($this->sampleResults());
+        $byCategory = [];
+        foreach ($rows as $row) {
+            $byCategory[$row['category']] = $row;
+        }
+
+        // SQL_INJECTION critical/high -> Security, highest critical, P0, Immediate.
+        self::assertSame(1, $byCategory['Security']['findings']);
+        self::assertSame('critical', $byCategory['Security']['highest']);
+        self::assertSame(1, $byCategory['Security']['p0']);
+        self::assertSame('Immediate', $byCategory['Security']['action']);
+        // TODO_FIXME info/low -> Maintainability, P3, Backlog.
+        self::assertSame(1, $byCategory['Maintainability']['findings']);
+        self::assertSame(1, $byCategory['Maintainability']['p3']);
+        self::assertSame('Backlog', $byCategory['Maintainability']['action']);
     }
 }

@@ -93,6 +93,7 @@ final class RemediationTest extends TestCase
             'OWASP_BROKEN_ACCESS_CONTROL', 'OWASP_SSRF', 'OWASP_SSTI',
             'OWASP_MISCONFIGURATION', 'OWASP_COMMAND_INJECTION', 'OWASP_XXE',
             'OWASP_OPEN_REDIRECT', 'OWASP_PATH_TRAVERSAL', 'OWASP_BLADE_XSS',
+            'OWASP_BLADE_DYNAMIC_INCLUDE', 'OWASP_OWNERSHIP_IDOR',
             ] as $rule
         ) {
             self::assertNotNull(RuleRemediation::for($rule), $rule);

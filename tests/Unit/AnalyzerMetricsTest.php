@@ -1011,12 +1011,12 @@ final class AnalyzerMetricsTest extends TestCase
         yield 'bladexss_tp_dynamic_include' => [
             static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
             ['resources/views/pages/show.blade.php' => "@include(\$view)\n"],
-            'OWASP_BLADE_XSS',
+            'OWASP_BLADE_DYNAMIC_INCLUDE',
         ];
         yield 'bladexss_tp_dynamic_extends' => [
             static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
             ['resources/views/pages/show.blade.php' => "@extends('layouts.' . \$theme)\n"],
-            'OWASP_BLADE_XSS',
+            'OWASP_BLADE_DYNAMIC_INCLUDE',
         ];
         yield 'bladexss_fp_literal_include' => [
             static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),

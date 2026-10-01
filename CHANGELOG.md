@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-10-01
+
+### Added (report actionability, all 5 formats)
+- Action priority P0-P3 on every finding (HTML, JSON, Markdown, console,
+  SARIF): deterministic projection of severity x confidence x dimension,
+  with an auditable mapping table in the report (no magic scores).
+- Risk Overview split (HTML, Markdown, JSON): per-category findings,
+  highest severity and scheduling action — Security vs Testability vs
+  Database vs the rest, so totals never read as pure vulnerabilities.
+- Quality Score card shows `Overall/100` with the release gate badge plus
+  an explicit `Release Blockers` count.
+- Remediation entries for `OWASP_OWNERSHIP_IDOR` and
+  `OWASP_BLADE_DYNAMIC_INCLUDE`.
+
+### Changed
+- New rule `OWASP_BLADE_DYNAMIC_INCLUDE` split out of `OWASP_BLADE_XSS`:
+  dynamic view names (`@include($view)`) are an LFI vector, not script
+  injection. Baselines referencing the old rule id should be regenerated.
+- Laravel 9 support: `illuminate/console` + `illuminate/support`
+  `^9.0|^10.0|^11.0|^12.0` (verified with a real Laravel 9 install).
+
+### Validation
+- `878` tests and `2,222` assertions pass, metrics precision `1.000`.
+- Proven end-to-end via `composer require` + `php artisan quality:check`
+  on a real Laravel 9 project (203 findings, P0 36 / P1 122 / P3 45).
+
 ## [0.6.2] - 2026-10-01
 
 ### Added (Ownership / Object-Level Authorization)

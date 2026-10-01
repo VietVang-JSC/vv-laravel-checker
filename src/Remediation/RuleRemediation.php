@@ -38,6 +38,33 @@ final class RuleRemediation
                     CODE,
                 'docs' => '#owasp_broken_access_control',
             ],
+            'OWASP_OWNERSHIP_IDOR' => [
+                'why' => 'A request-supplied id selects the object but nothing proves the caller owns it, so changing the id can touch someone else\'s data.',
+                'fix' => <<<'CODE'
+                    // WRONG: id from the request, no ownership proof
+                    public function destroy($id) { Order::find($id)->delete(); }
+
+                    // RIGHT: scope the lookup to the caller, or authorize the object
+                    public function destroy($id) {
+                        $order = $request->user()->orders()->findOrFail($id);
+                        $this->authorize('delete', $order);
+                        $order->delete();
+                    }
+                    CODE,
+                'docs' => null,
+            ],
+            'OWASP_BLADE_DYNAMIC_INCLUDE' => [
+                'why' => 'A dynamic Blade view name (@include($view), @extends(\'dir.\' . $theme)) resolves to a template file at runtime, so a steered value can load an unintended template (LFI vector, not XSS).',
+                'fix' => <<<'CODE'
+                    // WRONG: runtime-resolved template
+                    @include($view)
+
+                    // RIGHT: literal or allow-listed template
+                    @include('partials.header')
+                    {{-- or: @include($views[$request->input('tab')] ?? 'partials.default') --}}
+                    CODE,
+                'docs' => null,
+            ],
             'OWASP_SSRF' => [
                 'why' => 'The server fetches a URL built from user input, letting an attacker probe internal services (metadata endpoints, intranet).',
                 'fix' => <<<'CODE'

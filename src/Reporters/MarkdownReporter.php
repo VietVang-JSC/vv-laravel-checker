@@ -32,6 +32,8 @@ final class MarkdownReporter implements ReporterInterface
         $lines[] = '## Contents';
         $lines[] = '';
         $lines[] = '- [Summary](#summary)';
+        $lines[] = '- [Risk Overview](#risk-overview)';
+        $lines[] = '- [Action Plan](#action-plan)';
         $lines[] = '- [Top Rules](#top-rules)';
         $lines[] = '- [OWASP](#owasp)';
         $lines[] = '- [Remediation](#remediation)';
@@ -56,6 +58,29 @@ final class MarkdownReporter implements ReporterInterface
         $lines[] = '| Error | ' . $summary['error'] . ' |';
         $lines[] = '| Warning | ' . $summary['warning'] . ' |';
         $lines[] = '| Info | ' . $summary['info'] . ' |';
+        $lines[] = '| P0 — fix before release | ' . $summary['p0'] . ' |';
+        $lines[] = '| P1 — fix this sprint | ' . $summary['p1'] . ' |';
+        $lines[] = '| P2 — engineering improvement | ' . $summary['p2'] . ' |';
+        $lines[] = '| P3 — technical debt / backlog | ' . $summary['p3'] . ' |';
+        $lines[] = '';
+        $lines[] = '## Risk Overview';
+        $lines[] = '';
+        $lines[] = '| Category | Findings | Highest | Action |';
+        $lines[] = '|---|---|---|---|';
+        foreach (QualityScore::riskOverview($results) as $row) {
+            $lines[] = '| ' . $row['category'] . ' | ' . $row['findings'] . ' | ' . $row['highest'] . ' | ' . $row['action'] . ' |';
+        }
+        $lines[] = '';
+        $lines[] = '## Action Plan';
+        $lines[] = '';
+        $lines[] = 'Priority is scheduling urgency, not severity.';
+        $lines[] = '';
+        $lines[] = '| Priority | Meaning | Mapping | Findings |';
+        $lines[] = '|---|---|---|---|';
+        foreach (QualityScore::priorityLegend() as $entry) {
+            $lines[] = '| ' . $entry['level'] . ' | ' . $entry['title'] . ' | ' . $entry['rule']
+                . ' | ' . $summary[strtolower($entry['level'])] . ' |';
+        }
         $lines[] = '';
 
         $rules = IssueGrouper::byRule($results);
@@ -154,13 +179,14 @@ final class MarkdownReporter implements ReporterInterface
             foreach ($this->groupByFile($result) as $file => $issues) {
                 $lines[] = '### `' . $this->esc($file) . '`';
                 $lines[] = '';
-                $lines[] = '| Rule | Severity | Confidence | Line | Message |';
-                $lines[] = '|---|---|---|---|---|';
+                $lines[] = '| Rule | Priority | Severity | Confidence | Line | Message |';
+                $lines[] = '|---|---|---|---|---|---|';
 
                 foreach ($issues as $issue) {
                     $lines[] = sprintf(
-                        '| %s | %s | %s | %s | %s |',
+                        '| %s | %s | %s | %s | %s | %s |',
                         $this->esc($issue['rule']),
+                        $this->esc($issue['priority']),
                         $this->esc($issue['severity']),
                         $this->esc($issue['confidence']),
                         $this->esc($issue['line'] !== null ? (string) $issue['line'] : '-'),
@@ -240,6 +266,12 @@ final class MarkdownReporter implements ReporterInterface
             $file = $issue->file ?? '(no file)';
             $groups[$file][] = [
                 'rule' => $issue->rule,
+                'priority' => QualityScore::priorityFor(
+                    $issue->rule,
+                    $result->name,
+                    $issue->severity->value,
+                    $issue->confidence->value
+                ),
                 'severity' => $issue->severity->value,
                 'confidence' => $issue->confidence->value,
                 'file' => $file,
@@ -333,6 +365,10 @@ final class MarkdownReporter implements ReporterInterface
             'error' => 0,
             'warning' => 0,
             'info' => 0,
+            'p0' => 0,
+            'p1' => 0,
+            'p2' => 0,
+            'p3' => 0,
         ];
 
         foreach ($results as $result) {
@@ -361,6 +397,12 @@ final class MarkdownReporter implements ReporterInterface
                 } else {
                     ++$summary['info'];
                 }
+                ++$summary[strtolower(QualityScore::priorityFor(
+                    $issue->rule,
+                    $result->name,
+                    $issue->severity->value,
+                    $issue->confidence->value
+                ))];
             }
         }
 

@@ -511,11 +511,7 @@ matching rule distribution; snipe-it 500/500; corpus 1.000).
 
 ### `OWASP_BLADE_XSS`
 - **True positive when**: `{!! ... !!}` contains a `$variable` or `request(` in
-  `*.blade.php` — or a view directive (`@include`/`@extends`/`@includeWhen`/
-  `@includeFirst`/`@each`) takes a dynamic view name (`@include($view)`,
-  `@extends('layouts.' . $theme)`). A steerable template name loads and
-  executes unintended PHP, so it is reported with Medium confidence (Blade has
-  no data-flow analysis — string literals and `config()`/`env()` stay silent).
+  `*.blade.php`.
 - **Severity split**: request-derived output (`request(...)`, `$request`,
   `$_GET`/`$_POST`) is Error/High; other dynamic output is Warning/Medium —
   it may be pre-sanitized or intentionally trusted HTML.
@@ -538,6 +534,15 @@ matching rule distribution; snipe-it 500/500; corpus 1.000).
   (markdown rendered and purified at the model layer).
 - **Correct fix**: switch to `{{ ... }}`; only use `{!! ... !!}` + an inline
   ignore for reviewed HTML.
+
+### `OWASP_BLADE_DYNAMIC_INCLUDE`
+- **True positive when**: a view directive (`@include`/`@extends`/`@includeWhen`/
+  `@includeFirst`/`@each`) takes a dynamic view name (`@include($view)`,
+  `@extends('layouts.' . $theme)`). A steerable template name loads and
+  executes unintended PHP (LFI vector, not XSS), so it is reported with
+  Medium confidence (Blade has no data-flow analysis — string literals and
+  `config()`/`env()` stay silent).
+- **Correct fix**: pin the view to a string literal or an allow-list.
 
 ### `HARDCODED_SECRET`
 - The regex matches `sk-`, `AIza`, `AKIA`, private keys, ... **Obvious fixtures

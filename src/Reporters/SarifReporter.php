@@ -46,7 +46,7 @@ final class SarifReporter implements ReporterInterface
                 }
 
                 $this->registerRule($rules, $issue, $ctx);
-                $sarifResults[] = $this->buildResult($issue, $ctx->basePath);
+                $sarifResults[] = $this->buildResult($issue, $result->name, $ctx->basePath);
             }
         }
 
@@ -164,7 +164,7 @@ final class SarifReporter implements ReporterInterface
     /**
      * @return array<string, mixed>
      */
-    private function buildResult(Issue $issue, string $basePath): array
+    private function buildResult(Issue $issue, string $checker, string $basePath): array
     {
         $result = [
             'ruleId' => $issue->rule,
@@ -192,6 +192,12 @@ final class SarifReporter implements ReporterInterface
         $result['properties'] = [
             'confidence' => $issue->confidence->value,
             'checker' => $issue->source,
+            'priority' => QualityScore::priorityFor(
+                $issue->rule,
+                $checker,
+                $issue->severity->value,
+                $issue->confidence->value
+            ),
         ];
 
         return $result;

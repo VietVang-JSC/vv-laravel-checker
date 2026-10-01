@@ -31,6 +31,13 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
     private const RULE = 'OWASP_BLADE_XSS';
 
     /**
+     * Dynamic view names (@include($view), @extends('dir.' . $theme))
+     * resolve to template files, not HTML output — a separate taxonomy
+     * from unescaped-echo XSS (LFI vector, not script injection).
+     */
+    private const RULE_DYNAMIC_INCLUDE = 'OWASP_BLADE_DYNAMIC_INCLUDE';
+
+    /**
      * Explicit sanitizer/escaper calls wrapping the output. Verified safe
      * renderers are listed by name: md_to_html() (CommonMark with
      * html_input=escape), markdownHelp()/markdownNotes() (HTMLPurifier),
@@ -249,7 +256,7 @@ final class OwaspBladeXssAnalyzer extends AbstractAnalyzer
             }
 
             $issues[] = $this->makeIssue(
-                self::RULE,
+                self::RULE_DYNAMIC_INCLUDE,
                 'Potential Blade LFI: dynamic view name in @' . $name . ' can load an unintended template — pin it to a string literal or an allow-list.',
                 $file,
                 $line,

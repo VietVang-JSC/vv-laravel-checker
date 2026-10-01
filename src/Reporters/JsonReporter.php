@@ -26,6 +26,8 @@ final class JsonReporter implements ReporterInterface
             'duration_total' => $this->totalDuration($results),
             'summary' => $this->buildSummary($results),
             'delta' => $ctx->metadata['delta'] ?? null,
+            'priority_legend' => QualityScore::priorityLegend(),
+            'risk_overview' => QualityScore::riskOverview($results),
             'rules' => IssueGrouper::byRule($results),
             'owasp' => $this->buildOwasp($results),
             'checkers' => $this->buildCheckers($results),
@@ -49,6 +51,7 @@ final class JsonReporter implements ReporterInterface
                 continue;
             }
 
+            $checkerName = $result->name;
             $checkers[] = [
                 'name' => $result->name,
                 'status' => $result->status,
@@ -57,6 +60,12 @@ final class JsonReporter implements ReporterInterface
                 'issues' => array_map(
                     static fn (Issue $issue): array => $issue->toArray() + [
                         'remediation' => RuleRemediation::for($issue->rule),
+                        'priority' => QualityScore::priorityFor(
+                            $issue->rule,
+                            $checkerName,
+                            $issue->severity->value,
+                            $issue->confidence->value
+                        ),
                     ],
                     $result->issues
                 ),
@@ -162,6 +171,10 @@ final class JsonReporter implements ReporterInterface
             'error' => 0,
             'warning' => 0,
             'info' => 0,
+            'p0' => 0,
+            'p1' => 0,
+            'p2' => 0,
+            'p3' => 0,
         ];
 
         foreach ($results as $result) {
@@ -191,6 +204,12 @@ final class JsonReporter implements ReporterInterface
                 } else {
                     ++$summary['info'];
                 }
+                ++$summary[strtolower(QualityScore::priorityFor(
+                    $issue->rule,
+                    $result->name,
+                    $issue->severity->value,
+                    $issue->confidence->value
+                ))];
             }
         }
 

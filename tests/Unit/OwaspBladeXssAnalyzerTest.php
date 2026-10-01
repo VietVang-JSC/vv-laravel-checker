@@ -252,7 +252,7 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
         $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
 
         self::assertCount(1, $issues);
-        self::assertSame('OWASP_BLADE_XSS', $issues[0]->rule);
+        self::assertSame('OWASP_BLADE_DYNAMIC_INCLUDE', $issues[0]->rule);
         self::assertSame('dynamic-include', $issues[0]->metadata['kind'] ?? null);
     }
 
@@ -266,7 +266,21 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
         $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
 
         self::assertCount(1, $issues);
-        self::assertSame('OWASP_BLADE_XSS', $issues[0]->rule);
+        self::assertSame('OWASP_BLADE_DYNAMIC_INCLUDE', $issues[0]->rule);
+    }
+
+    public function testDynamicIncludeIsNotXssTaxonomy(): void
+    {
+        $file = $this->temp(
+            "@include(\$view)\n",
+            'resources/views/pages/show.blade.php'
+        );
+
+        $issues = (new OwaspBladeXssAnalyzer())->analyze([$file]);
+
+        self::assertCount(1, $issues);
+        self::assertSame('OWASP_BLADE_DYNAMIC_INCLUDE', $issues[0]->rule);
+        self::assertNotSame('OWASP_BLADE_XSS', $issues[0]->rule);
     }
 
     public function testFlagsDynamicIncludeWhenView(): void

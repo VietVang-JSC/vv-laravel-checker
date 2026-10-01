@@ -84,6 +84,14 @@ final class ConsoleReporter implements ReporterInterface
 
         $table->render();
 
+        $this->output->writeln(sprintf(
+            'Action plan: P0 %d (fix before release) | P1 %d (this sprint) | P2 %d (improvement) | P3 %d (backlog)',
+            $summary['p0'],
+            $summary['p1'],
+            $summary['p2'],
+            $summary['p3']
+        ));
+
         $this->output->writeln('');
         if ($ctx->exitCode === 0) {
             $this->output->writeln('<fg=green>✔ All checks passed.</>');
@@ -138,10 +146,17 @@ final class ConsoleReporter implements ReporterInterface
                     ++$shown;
 
                     $location = $issue->line !== null ? ':' . $issue->line : '';
+                    $priority = QualityScore::priorityFor(
+                        $issue->rule,
+                        $result->name,
+                        $issue->severity->value,
+                        $issue->confidence->value
+                    );
 
                     $this->output->writeln(sprintf(
-                        '    %s [%s] %s%s — %s (%s)',
+                        '    %s [%s] [%s] %s%s — %s (%s)',
                         $this->severityTag($issue->severity),
+                        $priority,
                         $issue->rule,
                         $file,
                         $location,
@@ -322,6 +337,10 @@ final class ConsoleReporter implements ReporterInterface
             'error' => 0,
             'warning' => 0,
             'info' => 0,
+            'p0' => 0,
+            'p1' => 0,
+            'p2' => 0,
+            'p3' => 0,
         ];
 
         foreach ($results as $result) {
@@ -351,6 +370,12 @@ final class ConsoleReporter implements ReporterInterface
                 } else {
                     ++$summary['info'];
                 }
+                ++$summary[strtolower(QualityScore::priorityFor(
+                    $issue->rule,
+                    $result->name,
+                    $issue->severity->value,
+                    $issue->confidence->value
+                ))];
             }
         }
 
