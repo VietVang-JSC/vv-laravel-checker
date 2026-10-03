@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (complete rule reference, verified in CI)
+- The README documented 29 of the 43 rules and listed two ids that cannot be
+  emitted (`DISABLED_CSRF`, `LARAVEL_PITFALL`). Every OWASP rule except six was
+  missing, including `OWASP_OWNERSHIP_IDOR` — an analyzer with a decision-chain
+  subsystem and 400+ lines of calibration notes had no documentation row at all.
+  The rule tables now cover all 43, one row per id, with the severity and
+  confidence each analyzer actually emits.
+- `RuleDocsTest` parses those tables and fails if a registry rule is
+  undocumented, a documented id does not exist, a rule is listed twice, or an
+  OWASP row disagrees with `RuleIds::owaspCategories()`. `RuleIdsTest` already
+  covered registry ↔ analyzers; this closes registry ↔ docs, which is the drift
+  class that shipped.
+
+### Added (governance and operations docs)
+- `SECURITY.md`: private reporting channel, response targets, what is and is not
+  in scope (findings in a scanned target are the tool working), and hardening
+  notes for operators running the gate on untrusted repositories.
+- `CODE_OF_CONDUCT.md`: Contributor Covenant 2.1 with an enforcement ladder.
+- `UPGRADE.md`: per-release breaking changes, including the `exclude_paths`
+  default that can make findings disappear, plus a re-baselining procedure —
+  a stale baseline is worse than none after a behaviour change.
+- `docs/index.md`: what each document is for, and where the single source of
+  truth lives for rule ids, config defaults and measured precision.
+- CI recipes for GitLab CI, Jenkins (Declarative) and Azure Pipelines, next to
+  the existing GitHub Actions one.
+
+### Changed (documentation status)
+- `SPEC.md` is now labelled as the historical v0.1 design document, with an
+  explicit list of where it drifted from the implementation (OWASP analyzer
+  list, directory tree, roadmap) and a statement that the README and CHANGELOG
+  win on any disagreement. Section 15 lists all 11 OWASP analyzers and pins the
+  category ids to the 2021 edition, which is what `RuleIds` encodes.
+- OWASP edition naming unified on 2021 across README, SPEC and `RuleIds`; the
+  README states why the 2025 reorder does not rename any rule.
+
 ### Added (path exclusion for the custom analyzers)
 - `Scanning/PathExcluder` + `analyzers.exclude_paths`: the analyzers had no way
   to skip a *directory*. `analyzers.exclude` / `--exclude` filter checker names,

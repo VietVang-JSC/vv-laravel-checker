@@ -282,70 +282,108 @@ When an optional tool is not installed, the corresponding checker reports
 
 ## Custom Analyzer Rules
 
-### Security (analyzers/security)
+43 rule ids across 5 groups. Every row below is verified against
+`src/Result/RuleIds.php` by `RuleDocsTest`, so this table cannot drift from what
+the analyzers actually emit — an id that does not exist, or a rule that ships
+undocumented, fails the build.
 
-| Rule ID | Severity | What it detects |
-|---|---|---|
-| `SQL_INJECTION` | Critical | Tainted request input flowing into raw queries (`DB::select`, `whereRaw`, ...). |
-| `UNSAFE_EVAL` | Critical | `eval()` / `assert()` with dynamic data. |
-| `HARDCODED_SECRET` | Critical | Hardcoded secrets/API keys (`sk-`, `AIza`, `AKIA`, private keys, ...). |
-| `MASS_ASSIGNMENT` | Error | `Model::create($request->all())` without `$fillable`/`$guarded`. |
-| `UNSAFE_UNSERIALIZE` | Critical | `unserialize()` of untrusted data. |
-| `INSECURE_HASH` | Warning | Weak hashes (`md5()`, `sha1()`) used for passwords. |
-| `LARAVEL_TAINT` | Error | Tainted variable interpolation into query builder / `whereRaw`. |
-| `DISABLED_CSRF` | Warning / Critical | CSRF protection disabled (`@csrf`, `VerifyCsrfToken` bypassed). |
-| `TAINT_SQL_INJECTION` / `TAINT_COMMAND_INJECTION` / `TAINT_EVAL` / `TAINT_UNSAFE_SERIALIZE` | Critical | Data-flow taint tracking engine (disabled by default). |
+Severity is what the rule emits; where a rule emits more than one, both are
+listed. Confidence is the noise rating: `high` is safe to gate CI on, `low` is a
+heuristic hint. See [Confidence & Tiering](#confidence--tiering).
 
-The `taint_engine` rule is disabled by default in the config.
-
-### Test coverage (analyzers/test_coverage)
+### Security (`analyzers/security`)
 
 | Rule ID | Severity | Confidence | What it detects |
 |---|---|---|---|
-| `MISSING_CONTROLLER_TEST` | Warning | low | Controller with no corresponding test (unit or feature). |
-| `MISSING_SERVICE_TEST` | Warning | low | Service with no corresponding test. |
-| `MISSING_REPOSITORY_TEST` | Warning | low | Repository with no corresponding test. |
-| `MISSING_MODEL_TEST` | Warning | low | Model with custom logic (>= 3 methods) but no test. |
+| `SQL_INJECTION` | Critical | high | Tainted request input flowing into raw queries (`DB::select`, `whereRaw`, ...). |
+| `UNSAFE_EVAL` | Critical | high | `eval()` / `assert()` with dynamic data. |
+| `HARDCODED_SECRET` | Critical | high | Hardcoded secrets and API keys (`sk-`, `AIza`, `AKIA`, private key blocks, default credentials). |
+| `UNSAFE_UNSERIALIZE` | Critical | high | `unserialize()` of untrusted data. |
+| `MASS_ASSIGNMENT` | Error, Warning | high, medium | `Model::create($request->all())` and friends without `$fillable`/`$guarded`; lower severity when the flow is proven safe. |
+| `LARAVEL_TAINT` | Error | high | Tainted variable interpolation into the query builder / `whereRaw`. |
+| `INSECURE_COOKIE` | Error, Warning | high | Cookie flags: `Secure`/`HttpOnly`/`SameSite` missing, or `Secure` set to `false`. |
+| `INSECURE_HASH` | Warning | high | Weak hashes (`md5()`, `sha1()`) used for passwords. |
+| `SESSION_FIXATION` | Warning | medium | Session regenerated on login missing, or `session_regenerate(true)` skipped. |
+| `WEAK_PASSWORD_POLICY` | Warning | medium | Weak `Password::defaults()` policy, or a password compared against a hardcoded literal (master-password pattern). |
+| `DISABLED_CSRF_AUTHORIZE_TRUE` | Warning | high | `VerifyCsrfToken::except = ['*']` or `$except` covering every route. |
+| `DISABLED_CSRF_EXCEPTION_STAR` | Warning | high | `withoutMiddleware(VerifyCsrfToken::class)` on a mutating route. |
 
-These come from the **unified `test_coverage.unified`** detector (on by default) which
-classifies source classes and checks for a matching `*Test.php` in either `tests/Unit`
-or `tests/Feature` (mirrored namespace or flat layout).
+Opt-in data-flow engine (`analyzers.security.taint_engine`, **off by default**):
 
-Opt-in heuristics (off by default): `missing_feature_coverage` (route-level),
-`test_without_assert` (test method with no assertion).
+| Rule ID | Severity | Confidence | What it detects |
+|---|---|---|---|
+| `TAINT_SQL_INJECTION` | Critical | high | Tainted value reaching a raw SQL sink. |
+| `TAINT_COMMAND_INJECTION` | Critical | high | Tainted value reaching `exec`/`system`/`shell_exec`/`Process`. |
+| `TAINT_EVAL` | Critical | high | Tainted value reaching `eval`/`assert`/dynamic `call_user_func`. |
+| `TAINT_UNSAFE_SERIALIZE` | Error | high | Tainted value reaching `unserialize`. |
 
-### Convention (analyzers/convention)
+### OWASP (`analyzers/owasp`)
 
-| Rule ID | Severity | What it detects |
-|---|---|---|
-| `NAMING_CONVENTION` | Info | Class/method/const names that deviate from conventions. |
-| `TODO_FIXME` | Info | Leftover `TODO` / `FIXME` / `HACK` markers. |
-| `DEAD_CODE` | Info | Methods/params never used (heuristic). |
-| `LARAVEL_PITFALL` | Warning | Laravel anti-patterns (`DB::raw` outside migrations, `env()` outside config, leftover `dd()`/`dump()`, `sleep` in tests, ...). |
+All 11 are on by default. Categories follow **OWASP Top 10 (2021)** — the
+edition the mapping encodes. The 2025 revision reorders categories; rule ids and
+category ids here are stable, so a category moves without renaming a rule.
 
-### OWASP Top 10 (2023) — analyzers/owasp
-
-| Rule ID | Severity | Confidence | OWASP | What it detects |
+| Rule ID | Severity | Confidence | OWASP 2021 | What it detects |
 |---|---|---|---|---|
-| `OWASP_BROKEN_ACCESS_CONTROL` | Error | high | A01 | Mutating controller method (`store/update/delete/...`) with no visible `authorize`/`Gate`/`abort`/middleware. |
-| `OWASP_SSRF` | Error | high | A10 | URL from user input flows into `file_get_contents`/`fopen`/`Http::`/Guzzle. |
-| `OWASP_SSTI` | Error | high | A03 | Dynamic template arg flows into `view()`/`Blade::render`. |
-| `OWASP_MISCONFIGURATION` | Warning | high | A05 | Debug mode enabled, permissive CORS wildcard, placeholder/empty secrets (config files only). |
-| `OWASP_COMMAND_INJECTION` | Critical | high | A03 | User input flows into `system`/`exec`/`shell_exec`/`Process`. |
-| `OWASP_XXE` | Error | high | A05 | `simplexml_load_*`/`DOMDocument`/`SimpleXMLElement` without entity-loader guard. |
+| `OWASP_BROKEN_ACCESS_CONTROL` | Error | medium | A01 | Mutating controller method (`store`/`update`/`delete`/...) with no visible `authorize`/`Gate`/`abort`/route middleware. |
+| `OWASP_OWNERSHIP_IDOR` | Error | high, medium | A01 | Action reachable without an ownership check on the loaded record. Emits the decision chain as evidence (`PROTECTED` / `REVIEW` / `UNKNOWN`); see [docs/false-positives.md](docs/false-positives.md). |
+| `OWASP_PATH_TRAVERSAL` | Error | high | A01 | User-controlled path segment reaching `include`/`require`/`file_get_contents`/`fopen`/`unlink`. |
+| `OWASP_BLADE_DYNAMIC_INCLUDE` | Error | medium | A01 | Dynamic `@include`/`{!! !!}` target resolved from user input. |
+| `OWASP_BLADE_XSS` | Error | high | A03 | Unescaped Blade output of a tainted value (`{!! !!}`, `raw()`, `@php echo`). |
+| `OWASP_SSTI` | Error | high | A03 | Tainted data rendered as a template (`view()`, `Blade::render`). |
+| `OWASP_COMMAND_INJECTION` | Critical | high | A03 | User input flowing into `system`/`exec`/`shell_exec`/`Process`. |
+| `OWASP_MISCONFIGURATION` | Warning | high | A05 | Debug mode enabled, permissive CORS wildcard, placeholder or empty secrets (config files only). |
+| `OWASP_XXE` | Error | high | A05 | `simplexml_load_*`/`DOMDocument`/`SimpleXMLElement` without an entity-loader guard. |
+| `OWASP_OPEN_REDIRECT` | Error | high | A07 | Unvalidated redirect target from request input, including `header('Location: ...')` chains. |
+| `OWASP_SSRF` | Error | high | A10 | User-controlled URL reaching `file_get_contents`/`fopen`/`Http::`/Guzzle. |
 
-All OWASP rules are on by default.
-
-### Laravel-specific (analyzers/laravel)
+### Laravel (`analyzers/laravel`)
 
 | Rule ID | Severity | Confidence | What it detects |
 |---|---|---|---|
 | `MIGRATION_MISSING_DOWN` | Warning | medium | Migration defines `up()` but no `down()` — not reversible. |
-| `MIGRATION_DESTRUCTIVE_UP` | Warning | medium | Destructive schema op (`dropTable`/`dropColumn`/...) in `up()` without re-creation. |
-| `ROUTE_MISSING_VALIDATION` | Warning | medium | Mutating action (`store`/`update`/`delete`/...) with no `$request->validate`/FormRequest. |
+| `MIGRATION_DESTRUCTIVE_UP` | Warning | medium | Destructive schema operation (`dropTable`/`dropColumn`/...) in `up()` without re-creation. |
+| `ROUTE_MISSING_VALIDATION` | Warning | medium | Mutating action with no `$request->validate()` and no FormRequest. |
 
-The `laravel` group is on by default (medium confidence).
+### Test coverage (`analyzers/test_coverage`)
 
+`test_coverage.unified` is on by default and emits the first five rules as
+low-confidence hints. The last two are opt-in.
+
+| Rule ID | Severity | Confidence | What it detects |
+|---|---|---|---|
+| `MISSING_CONTROLLER_TEST` | Info | low | Controller with no corresponding test (unit or feature). |
+| `MISSING_SERVICE_TEST` | Info | low | Service with no corresponding test. |
+| `MISSING_REPOSITORY_TEST` | Info | low | Repository with no corresponding test. |
+| `MISSING_MODEL_TEST` | Info | low | Model with custom logic (>= 3 methods) but no test. |
+| `MISSING_UNIT_TEST` | Info | low | Class in `app/` with neither a unit nor a feature test. |
+| `MISSING_FEATURE_COVERAGE` | Info | high | Route declared with no feature test touching it (opt-in). |
+| `TEST_WITHOUT_ASSERT` | Warning | low | Test method with no assertion (opt-in). |
+
+### Convention (`analyzers/convention`, off by default)
+
+| Rule ID | Severity | Confidence | What it detects |
+|---|---|---|---|
+| `LARAVEL_PITFALL_ENV_OUTSIDE_CONFIG` | Warning | medium | `env()` called outside `config/`. |
+| `LARAVEL_PITFALL_DEBUG` | Warning | medium | Leftover `dd()`/`dump()`/`ray()` in shipped code. |
+| `LARAVEL_PITFALL_SLEEP_IN_TEST` | Warning | medium | `sleep()`/`usleep()` in a test — hides flakiness instead of fixing it. |
+| `DEAD_CODE` | Info | low | Methods/parameters never referenced (heuristic). |
+| `NAMING_CONVENTION` | Info | low | Class/method/constant names that deviate from conventions. |
+| `TODO_FIXME` | Info | low | Leftover `TODO` / `FIXME` / `HACK` markers. |
+
+### Wrapped checkers
+
+These are not rule ids — they are the third-party tools this package drives, and
+their findings appear in reports under the `phpcs`, `phpstan`, `phpunit`,
+`composer_audit` and `trivy` sources:
+
+| Checker | What it gates |
+|---|---|
+| `phpcs` | PSR-12 (or your standard) violations; auto-fixable with `--fix`. |
+| `phpstan` | Static type analysis at the configured level (default 5). |
+| `phpunit` | Test suite result, plus the configured coverage threshold. |
+| `composer_audit` | Known CVEs in the dependency tree. |
+| `trivy` | Optional filesystem/config scan (off by default). |
 ### Confidence & Tiering
 
 Every issue carries a **confidence**: `high` | `medium` | `low`.
@@ -604,6 +642,86 @@ Severity mapping: `critical`/`error` → `error`, `warning` → `warning`,
 `info` → `note`. Each rule is registered once with its highest observed
 severity, and OWASP/taint/security rules are tagged accordingly.
 
+### GitLab CI
+
+```yaml
+quality:
+  stage: test
+  image: php:8.3-cli
+  before_script:
+    - apt-get update && apt-get install -y git unzip
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    - php -m | grep -q zip || docker-php-ext-install zip
+    - composer install --prefer-dist --no-progress --no-interaction
+  script:
+    # Review without failing first; switch to the gated command once the
+    # baseline is generated (see docs/baseline.md).
+    - php artisan quality:check --ci --fail-on=none --output=reports/quality-checker
+    - php artisan quality:check --ci
+  artifacts:
+    when: always
+    paths: [reports/quality-checker]
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+```
+
+A `phpcs`/`phpstan`/`phpunit` run needs the dev dependencies; if you install with
+`--no-dev`, add `--only=custom` to the gated command so the analyzer phase still
+runs.
+
+### Jenkins (Declarative Pipeline)
+
+```groovy
+pipeline {
+    agent any
+    environment {
+        // Fail on the first finding above the threshold instead of collecting all of them.
+        QUALITY_FAIL_ON = 'error'
+    }
+    stages {
+        stage('Quality check') {
+            steps {
+                sh 'composer install --prefer-dist --no-progress --no-interaction'
+                sh 'php artisan quality:check --format=all --output=reports/quality-checker'
+            }
+        }
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: 'reports/quality-checker/*', allowEmptyArchive: true
+            junit testResults: 'reports/quality-checker/*.xml', allowEmptyResults: true
+        }
+        unstable {
+            // Exit code 1 = findings above the threshold. Treat the build as
+            // unstable rather than failed so a red build is always a red build
+            // for a real error, not for a finding.
+            echo 'Quality gate not met: see reports/quality-checker/quality-report.html'
+        }
+    }
+}
+```
+
+The HTML report is the artifact to link from the build page; it is
+self-contained and needs no server.
+
+### Azure Pipelines
+
+```yaml
+- task: UsePHP@2
+  inputs:
+    version: '8.3'
+- script: composer install --prefer-dist --no-progress --no-interaction
+  displayName: Install
+- script: php artisan quality:check --format=all --output=reports/quality-checker
+  displayName: Quality check
+- task: PublishBuildArtifacts@1
+  condition: always()
+  inputs:
+    PathtoPublish: reports/quality-checker
+    ArtifactName: quality-report
+```
+
 ---
 
 ## Pre-commit Hook
@@ -658,6 +776,26 @@ composer validate --no-check-publish
    analyzer samples, which are true positives. Everything else must be clean —
    findings in `src/` are either fixed or carry a written
    `// quality-checker-ignore-next-line` justification.
+
+---
+
+## Documentation
+
+| Document | Read it when |
+|---|---|
+| [docs/index.md](docs/index.md) | You want the map of what exists and where the source of truth is. |
+| [docs/baseline.md](docs/baseline.md) | Your first run reports hundreds of pre-existing findings. |
+| [docs/false-positives.md](docs/false-positives.md) | A finding looks wrong, or you are choosing between fixing, suppressing and baselining. |
+| [UPGRADE.md](UPGRADE.md) | You are moving between versions — **read before re-baselining**. |
+| [SECURITY.md](SECURITY.md) | You found a vulnerability, or you run the gate on untrusted repositories. |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | You are contributing. |
+| [CHANGELOG.md](CHANGELOG.md) | You want the full per-release history. |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | You are adding an analyzer or opening a pull request. |
+| [SPEC.md](SPEC.md) | You want the original design document and the contracts it fixed. |
+
+The rule tables above are parsed by `tests/Unit/RuleDocsTest.php`, which fails
+if the docs and `src/Result/RuleIds.php` disagree — a rule cannot ship
+undocumented, and a documented id cannot be one the analyzers never emit.
 
 ---
 

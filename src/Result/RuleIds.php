@@ -131,8 +131,12 @@ final class RuleIds
     /**
      * OWASP-2021 category per OWASP rule id.
      *
-     * Every `OWASP_*` rule an analyzer can emit must appear here, otherwise it
-     * is dropped from the JSON `owasp` block. `RuleIdsTest` enforces that.
+     * The ids follow the OWASP Top 10 **2021** edition — the edition this
+     * mapping encodes. The 2025 revision reorders and renames categories, but
+     * rule ids here are stable, so adopting it is a data change in this map
+     * rather than a rename across the analyzers. `RuleIdsTest` requires every
+     * `OWASP_*` rule to appear here, and `RuleDocsTest` requires the README rule
+     * tables to document the same category.
      *
      * Memoised: `owaspCategory()` / `isOwasp()` run per issue while reporters
      * render, so rebuilding the map each time would be wasteful.

@@ -1,5 +1,14 @@
 # Laravel Quality Checker — Plan & Technical Specification
 
+> **This is the original design document (v0.1 draft), kept for reference.** It
+> describes the architecture as planned, before implementation. Parts of it are
+> behind the code — the OWASP analyzer list, the directory tree, and the phased
+> roadmap in section 11. Section 15 carries a detailed list of what drifted.
+>
+> **For current behaviour, the [README](README.md) and
+> [CHANGELOG](CHANGELOG.md) are authoritative.** Where the two disagree, the code
+> wins.
+>
 > Version: 0.1 (draft)
 > Goal: A Laravel package running as a CLI (Artisan) for comprehensive code quality checks,
 > covering coding standard, static analysis, unit test, missing test cases, security, convention.
@@ -558,18 +567,48 @@ and `TaintEngine` (dataflow).
 
 ---
 
-## 15. OWASP Top 10 (2023) API mapping
+## 15. OWASP Top 10 (2021) API mapping
+
+Module `src/Analyzers/Owasp/`, rule prefix `OWASP_`, confidence **high**.
+
+> **Status: historical design document.** This file is the specification written
+> before implementation. It is kept because the contracts below (data model,
+> checker interface, reporter contract, exit codes) still describe the package,
+> but several parts are behind the code:
+>
+> - Section 15 lists 6 of the 11 OWASP analyzers. `OWASP_OWNERSHIP_IDOR`,
+>   `OWASP_PATH_TRAVERSAL`, `OWASP_BLADE_XSS`, `OWASP_BLADE_DYNAMIC_INCLUDE` and
+>   `OWASP_OPEN_REDIRECT` shipped in 0.6.x–0.7.0. The authoritative list is
+>   `src/Result/RuleIds.php` and the README rule tables.
+> - The 2021 edition is what the category ids encode; the 2025 revision
+>   reorders categories, which is why the mapping below stays on 2021.
+> - The architecture has since gained `Scanning/ScanContext` (parse-once-per-run
+>   AST sharing), `Analysis/StructuralFactIndex`, `Standalone/StandaloneRunner`,
+>   `Remediation/`, `Suppression/`, `Profiling/` and `Result/RuleIds.php`, none
+>   of which appear in section 2.1.
+> - Sections 11 and 13 ("Phase 1 — MVP", "To confirm before coding") describe the
+>   original plan, not remaining work.
+>
+> For current behaviour, the README and `CHANGELOG.md` win over this file.
 
 Module `src/Analyzers/Owasp/`, rule prefix `OWASP_`, confidence **high**.
 
 | Rule ID | Severity | OWASP | Analyzer |
 |---|---|---|---|
 | `OWASP_BROKEN_ACCESS_CONTROL` | Error | A01 Broken Access Control | `OwaspAccessControlAnalyzer` |
-| `OWASP_SSRF` | Error | A10 Server-Side Request Forgery | `OwaspSsrfAnalyzer` |
+| `OWASP_OWNERSHIP_IDOR` | Error | A01 Broken Access Control | `OwaspOwnershipAnalyzer` |
+| `OWASP_PATH_TRAVERSAL` | Error | A01 Path Traversal | `OwaspPathTraversalAnalyzer` |
+| `OWASP_BLADE_DYNAMIC_INCLUDE` | Error | A01 Path Traversal | `OwaspBladeXssAnalyzer` |
+| `OWASP_BLADE_XSS` | Error | A03 Injection (XSS) | `OwaspBladeXssAnalyzer` |
 | `OWASP_SSTI` | Error | A03 Injection (SSTI) | `OwaspSstiAnalyzer` |
-| `OWASP_MISCONFIGURATION` | Warning | A05 Security Misconfiguration | `OwaspMisconfigurationAnalyzer` |
 | `OWASP_COMMAND_INJECTION` | Critical | A03 Injection (Command) | `OwaspCommandInjectionAnalyzer` |
-| `OWASP_XXE` | Error | A05 XML External Entity | `OwaspXxeAnalyzer` |
+| `OWASP_MISCONFIGURATION` | Warning | A05 Security Misconfiguration | `OwaspMisconfigurationAnalyzer` |
+| `OWASP_XXE` | Error | A05 XXE | `OwaspXxeAnalyzer` |
+| `OWASP_OPEN_REDIRECT` | Error | A07 Open Redirect | `OwaspOpenRedirectAnalyzer` |
+| `OWASP_SSRF` | Error | A10 SSRF | `OwaspSsrfAnalyzer` |
+
+Category ids come from `RuleIds::owaspCategories()`; `RuleIdsTest` fails if an
+`OWASP_*` rule ships without one.
 
 Config: `analyzers.owasp.{rule}` (default `true`). Reports add an OWASP section:
 - JSON: key `owasp` = `{ categories: {A01...: n}, total }`.
