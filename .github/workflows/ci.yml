@@ -93,13 +93,11 @@ jobs:
           path: build/coverage.xml
 
   # composer.json advertises `php: ^8.1`, so 8.1 has to be verified somewhere.
-  # The blocker is orchestra/testbench: v9/v10 need PHP 8.2+, and v8 drags in
-  # Laravel 10 releases that Composer's security-audit policy refuses. Dropping
-  # Testbench leaves a pure library install that resolves on 8.1, which is
-  # enough to lint, analyse and run the whole Unit suite (only the Feature
-  # suite boots a Laravel app through Testbench).
+  # Testbench v9/v10 need PHP 8.2+, so on 8.1 the job pins v8 and runs against
+  # Laravel 10 — the oldest framework this package supports. That is the point:
+  # the lower bound is where incompatibilities surface.
   php81:
-    name: PHP 8.1 (unit suite, no Testbench)
+    name: PHP 8.1 (lowest supported, Laravel 10)
     runs-on: ubuntu-latest
 
     steps:
@@ -110,7 +108,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.1'
-          extensions: mbstring, dom, xml
+          extensions: mbstring, dom, xml, fileinfo
           ini-values: error_reporting=E_ALL, display_errors=On
           tools: composer:v2
 
@@ -120,7 +118,9 @@ jobs:
       # `config()` helper does not exist, so `phpstan analyse src` fails on
       # Commands/QualityCheckCommand.php:99 ("Function config not found"), and
       # the Feature suite cannot boot at all. v8's Laravel 10 releases do trip
-      # Composer's security-audit policy, hence block-insecure below.
+      # Composer's security-audit policy, hence block-insecure below — that
+      # policy is about *this project's* dependencies, and Laravel 10 here is a
+      # test-time fixture, not something we ship.
       - name: Install dependencies
         run: |
           composer config audit.block-insecure false

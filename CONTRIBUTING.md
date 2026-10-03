@@ -112,6 +112,56 @@ Analyzers inspect PHP source with `nikic/php-parser` and emit `Issue` objects.
 - Run `composer check` locally and make sure it passes before opening a PR.
 - Do not include unrelated refactors or dependency bumps.
 
+## Remotes and releases
+
+This repository has two remotes and both must stay in step:
+
+| Remote | Repository | Role |
+|---|---|---|
+| `origin` | `VietVang-JSC/vv-laravel-checker` | The project's working repository. |
+| `rampart` | `thiennhant95/Rampart` | **The distribution source Packagist tracks.** Tags here are what `composer require rampart/quality-checker` resolves. |
+
+`remote.pushDefault` is set to `rampart`, and a local alias pushes to both:
+
+```bash
+git pushall            # pushes to origin and rampart
+git pushall --tags     # pushes tags to both
+```
+
+Prefer `git pushall` over `git push`. A commit that reaches one remote but not
+the other is invisible until Packagist serves a release that does not exist
+locally.
+
+### Cutting a release
+
+```bash
+composer check                                   # never tag a red build
+git pushall --tags                               # if CI is green on both remotes
+```
+
+Packagist crawls the `rampart` remote, so a tag must exist **there** — a tag
+pushed only to `origin` produces a release nobody can install. Publish only the
+`0.x` tags: `v1.0.0` / `v1.1.0` are a dead line (see [UPGRADE.md](UPGRADE.md)) and
+are deliberately absent from the distribution remote.
+
+After tagging, confirm what Composer will actually resolve — the website's
+`.json` endpoint serves a stale cache, use the p2 endpoint instead:
+
+```bash
+curl -s https://repo.packagist.org/p2/rampart/quality-checker.json | jq -r '.packages["rampart/quality-checker"][].version'
+```
+
+## Reading a red CI run
+
+`composer check` passing locally does not mean CI passes — the matrix runs PHP
+8.1 against Laravel 10, and Windows runners differ from Linux in which PHP
+extensions are enabled. When CI is red, read the job log rather than guessing:
+
+```bash
+gh run list --limit 5
+gh run view --log-failed
+```
+
 ## Reporting bugs
 
 - Open an issue describing the expected vs. actual behaviour, the PHP version,

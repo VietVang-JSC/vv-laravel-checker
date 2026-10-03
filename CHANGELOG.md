@@ -29,10 +29,22 @@ and its documentation is verified by the build.
   yet. The directory is now created first (under `shell: bash`, so one command
   covers both runner images) and the cache step is `continue-on-error`, because
   a cache is an optimisation and must never gate a build.
+- The Windows jobs also needed `ext-fileinfo`, which the setup-php Windows
+  builds do not enable: `league/flysystem-local` (via `laravel/framework`)
+  requires it, so the dependency graph was unsatisfiable and
+  `composer install` failed outright.
 - Both fixes came out of reading the GitHub Actions run, not the local suite:
   `composer check` was green locally while CI was failing on every push.
+- The `php81` job is now named for what it verifies — `PHP 8.1 (lowest
+  supported, Laravel 10)` — since it no longer skips Testbench or the Feature
+  suite.
 
-### Changed (distribution)
+### Changed (contributor workflow)
+- `CONTRIBUTING.md` documents the two remotes (`origin` for development,
+  `rampart` as the source Packagist tracks), how to cut a release so the tag
+  reaches the distribution remote, how to verify what Composer resolves via the
+  p2 endpoint rather than the cached website JSON, and how to read a red CI run
+  instead of guessing from a green local suite.
 - The canonical repository is now `thiennhant95/Rampart`, which is the VCS
   source Packagist tracks for `rampart/quality-checker`. `composer.json`
   `homepage`/`support`, the README clone instructions, `SECURITY.md`,
