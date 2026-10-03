@@ -28,13 +28,19 @@ jobs:
 
       - name: Get composer cache directory
         id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+        shell: bash
+        run: |
+          dir="$(composer config cache-files-dir)"
+          echo "dir=$dir" >> $GITHUB_OUTPUT
+          mkdir -p "$dir"
 
+      # composer.lock is gitignored (library convention), so hash composer.json.
+      # continue-on-error: caching is an optimisation, never a gate.
       - name: Cache composer dependencies
+        continue-on-error: true
         uses: actions/cache@v4
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          # composer.lock is gitignored (library convention), so hash composer.json.
           key: ${{ runner.os }}-composer-${{ hashFiles('composer.json') }}
           restore-keys: |
             ${{ runner.os }}-composer-

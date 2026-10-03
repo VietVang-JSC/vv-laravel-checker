@@ -13,6 +13,25 @@ The release that makes the tool honest about itself: it reports a real version,
 it can be told to skip a directory, it gates its own analyzers on its own code,
 and its documentation is verified by the build.
 
+### Fixed (CI was red on 3 of 5 jobs)
+- The `php81` job removed `orchestra/testbench` to make the dependency graph
+  resolve on PHP 8.1, which also removed `laravel/framework` — so `phpstan
+  analyse src` failed on `Commands/QualityCheckCommand.php:99` with "Function
+  config not found" (the `config()` helper ships with the framework, not with
+  `illuminate/support`), and the Feature suite could not have booted. The job now
+  pins `orchestra/testbench:^8.0`, which resolves to Laravel 10 on PHP 8.1, and
+  runs lint, full phpstan and the **whole** suite instead of Unit only. Verified
+  locally by resolving that exact graph: phpcs, phpstan and all 933 tests pass on
+  it.
+- The Composer cache step failed on both `windows-latest` jobs:
+  `actions/cache` errors on a path that does not exist, and on Windows
+  `composer config cache-files-dir` points at a directory nothing has created
+  yet. The directory is now created first (under `shell: bash`, so one command
+  covers both runner images) and the cache step is `continue-on-error`, because
+  a cache is an optimisation and must never gate a build.
+- Both fixes came out of reading the GitHub Actions run, not the local suite:
+  `composer check` was green locally while CI was failing on every push.
+
 ### Changed (distribution)
 - The canonical repository is now `thiennhant95/Rampart`, which is the VCS
   source Packagist tracks for `rampart/quality-checker`. `composer.json`

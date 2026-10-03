@@ -39,14 +39,25 @@ jobs:
           ini-values: error_reporting=E_ALL, display_errors=On
           tools: composer:v2
 
+      # On Windows `composer config cache-files-dir` returns a path that does not
+      # exist until the first download, and actions/cache fails outright on a
+      # missing path ("Path Validation Error"). Hence the explicit mkdir, run
+      # under bash so one command works on both runner images.
       - name: Get composer cache directory
         id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+        shell: bash
+        run: |
+          dir="$(composer config cache-files-dir)"
+          echo "dir=$dir" >> $GITHUB_OUTPUT
+          mkdir -p "$dir"
 
       # composer.lock is intentionally not committed (library convention), so
       # hashing it would freeze this key at the empty hash forever. composer.json
       # is the file that actually decides the dependency graph here.
+      # continue-on-error: caching is an optimisation; it must never fail the
+      # build, whatever the runner image does with the path.
       - name: Cache composer dependencies
+        continue-on-error: true
         uses: actions/cache@v4
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
@@ -100,19 +111,24 @@ jobs:
           ini-values: error_reporting=E_ALL, display_errors=On
           tools: composer:v2
 
-      - name: Install dependencies without Testbench
+      # Testbench v9/v10 need PHP 8.2+, so on 8.1 Composer resolves v8, which
+      # pairs with Laravel 10 — itself PHP 8.1-compatible. That keeps the
+      # framework installed, which matters: without laravel/framework the
+      # `config()` helper does not exist, so `phpstan analyse src` fails on
+      # Commands/QualityCheckCommand.php:99 ("Function config not found"), and
+      # the Feature suite cannot boot at all. v8's Laravel 10 releases do trip
+      # Composer's security-audit policy, hence block-insecure below.
+      - name: Install dependencies
         run: |
           composer config audit.block-insecure false
-          composer remove --dev --no-update orchestra/testbench
+          composer require --dev "orchestra/testbench:^8.0" --no-update --no-interaction
           composer update --prefer-dist --no-progress --no-interaction
 
       - name: Lint (phpcs)
         run: composer lint
 
-      # phpstan analyses src + tests; tests/Feature references Testbench, so
-      # this job scopes it to src.
-      - name: Analyse (phpstan, src)
-        run: vendor/bin/phpstan analyse src --memory-limit=1G --no-progress
+      - name: Analyse (phpstan)
+        run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
 
-      - name: Test (unit suite)
-        run: vendor/bin/phpunit --testsuite Unit --no-coverage
+      - name: Test
+        run: vendor/bin/phpunit --no-coverage
