@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (distribution)
+- The canonical repository is now `thiennhant95/Rampart`, which is the VCS
+  source Packagist tracks for `rampart/quality-checker`. `composer.json`
+  `homepage`/`support`, the README clone instructions, `SECURITY.md`,
+  `CODE_OF_CONDUCT.md` and the release links below were repointed from the
+  previous repository.
+- Only the `0.x` tags are published to the distribution repository. The
+  `v1.0.0` / `v1.1.0` tags stay local: `UPGRADE.md` records them as a dead line,
+  and publishing them would offer `^1.0` as a resolvable constraint.
+
 ### Added (both entry points documented as peers)
 - `## Two Ways to Run` in the README: the Artisan command and the standalone
   binary were previously presented as one primary path and a footnote, so the
@@ -604,9 +614,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Baseline generation and filtering, JSON / Markdown / console reporters, exit codes and `--fail-on` control.
 - Configuration via `config/quality-checker.php`.
 
-[Unreleased]: https://github.com/VietVang-JSC/vv-laravel-checker/compare/v0.7.0...HEAD
-[0.7.0]: https://github.com/VietVang-JSC/vv-laravel-checker/releases/tag/v0.7.0
-[0.6.2]: https://github.com/VietVang-JSC/vv-laravel-checker/releases/tag/v0.6.2
-[0.2.0 - 0.6.1]: https://github.com/VietVang-JSC/vv-laravel-checker/compare/v1.1.0...v0.6.2
-[1.1.0 / 1.0.0]: https://github.com/VietVang-JSC/vv-laravel-checker/releases/tag/v1.1.0
-[0.1.0]: https://github.com/VietVang-JSC/vv-laravel-checker/releases/tag/0.1.0
+[Unreleased]: https://github.com/thiennhant95/Rampart/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/thiennhant95/Rampart/releases/tag/v0.7.0
+[0.6.2]: https://github.com/thiennhant95/Rampart/releases/tag/v0.6.2
+[0.2.0 - 0.6.1]: https://github.com/thiennhant95/Rampart/compare/v1.1.0...v0.6.2
+[1.1.0 / 1.0.0]: https://github.com/thiennhant95/Rampart/releases/tag/v1.1.0
+[0.1.0]: https://github.com/thiennhant95/Rampart/releases/tag/0.1.0

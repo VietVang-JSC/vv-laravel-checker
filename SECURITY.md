@@ -5,7 +5,7 @@
 **Do not open a public issue for a security vulnerability.**
 
 Report it privately through GitHub's advisory form:
-<https://github.com/VietVang-JSC/vv-laravel-checker/security/advisories/new>
+<https://github.com/thiennhant95/Rampart/security/advisories/new>
 
 Include:
 

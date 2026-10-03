@@ -85,8 +85,8 @@ This creates `config/quality-checker.php`.
 When developing the checker itself, clone it next to the Laravel application:
 
 ```bash
-git clone https://github.com/VietVang-JSC/vv-laravel-checker.git
-cd vv-laravel-checker
+git clone https://github.com/thiennhant95/Rampart.git
+cd Rampart
 composer install
 ```
 
@@ -94,7 +94,7 @@ From the Laravel application's directory, register the local checkout and
 install the package from that path:
 
 ```bash
-composer config repositories.quality-checker path ../vv-laravel-checker
+composer config repositories.quality-checker path ../Rampart
 composer require rampart/quality-checker:@dev
 php artisan vendor:publish --tag=quality-checker-config
 php artisan quality:check --tier=security --only=custom,composer_audit
@@ -149,8 +149,8 @@ version conflicts, a legacy toolchain, a read-only mount, a codebase you are
 auditing but not building. It needs nothing from the target beyond PHP.
 
 ```bash
-git clone https://github.com/VietVang-JSC/vv-laravel-checker.git
-cd vv-laravel-checker && composer install
+git clone https://github.com/thiennhant95/Rampart.git
+cd Rampart && composer install
 php bin/quality-check /path/to/other/project --tier=security --fail-on=none
 ```
 

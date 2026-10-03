@@ -4,11 +4,11 @@
     "keywords": ["laravel", "quality", "phpcs", "phpstan", "phpunit", "security", "static-analysis", "ci"],
     "license": "MIT",
     "type": "library",
-    "homepage": "https://github.com/VietVang-JSC/vv-laravel-checker",
+    "homepage": "https://github.com/thiennhant95/Rampart",
     "support": {
-        "issues": "https://github.com/VietVang-JSC/vv-laravel-checker/issues",
-        "source": "https://github.com/VietVang-JSC/vv-laravel-checker",
-        "docs": "https://github.com/VietVang-JSC/vv-laravel-checker#readme"
+        "issues": "https://github.com/thiennhant95/Rampart/issues",
+        "source": "https://github.com/thiennhant95/Rampart",
+        "docs": "https://github.com/thiennhant95/Rampart#readme"
     },
     "bin": [
         "bin/quality-check"

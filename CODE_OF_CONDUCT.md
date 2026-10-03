@@ -42,7 +42,7 @@ the project in public spaces.
 ## Enforcement
 
 Report unacceptable behaviour to the maintainers through a private report at
-<https://github.com/VietVang-JSC/vv-laravel-checker/security/advisories/new>
+<https://github.com/thiennhant95/Rampart/security/advisories/new>
 or by contacting the repository owner directly. Use the advisory form for
 conduct reports too if that is the private channel available to you.
 
