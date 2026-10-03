@@ -6,9 +6,53 @@ declare(strict_types=1);
 // Standalone scan: no composer install in the target project needed.
 // Usage: php bin/quality-check <target-dir> [--format=all] [options]
 
-$autoload = __DIR__ . '/../vendor/autoload.php';
-if (!is_file($autoload)) {
-    fwrite(STDERR, "Run 'composer install' in the quality-checker directory first.\n");
+/**
+ * Locate the Composer autoloader.
+ *
+ * The package runs from two layouts, and the autoloader sits in a different
+ * place in each:
+ *
+ *  - a clone of this repository: `<root>/vendor/autoload.php`
+ *  - installed as a dependency: `<project>/vendor/autoload.php`, because
+ *    Composer hoists dependencies and the package has no vendor directory of
+ *    its own.
+ *
+ * Looking only for `__DIR__/../vendor/autoload.php` broke the second case, so
+ * `vendor/bin/quality-check` — the path `composer require
+ * rampart/quality-checker` puts on a consumer's PATH — exited with "Run
+ * 'composer install' in the quality-checker directory first" for exactly the
+ * install the README documents.
+ *
+ * @return string|null
+ */
+$locateAutoloader = static function (): ?string {
+    $candidates = [];
+    $directory = __DIR__;
+    // Bounded walk: from a dependency install the project's vendor/autoload.php
+    // is three levels up (vendor/rampart/quality-checker/bin), from a nested
+    // monorepo vendor a little further.
+    for ($depth = 0; $depth < 6; $depth++) {
+        $candidates[] = $directory . '/vendor/autoload.php';
+        $candidates[] = $directory . '/autoload.php';
+        $parent = dirname($directory);
+        if ($parent === $directory) {
+            break;
+        }
+        $directory = $parent;
+    }
+
+    foreach ($candidates as $candidate) {
+        if (is_file($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return null;
+};
+
+$autoload = $locateAutoloader();
+if ($autoload === null) {
+    fwrite(STDERR, "Could not locate a Composer autoloader. Run 'composer install' first.\n");
     exit(2);
 }
 require $autoload;

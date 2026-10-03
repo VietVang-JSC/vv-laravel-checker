@@ -13,6 +13,23 @@ The release that makes the tool honest about itself: it reports a real version,
 it can be told to skip a directory, it gates its own analyzers on its own code,
 and its documentation is verified by the build.
 
+### Fixed (the standalone binary was broken for Composer installs)
+- `bin/quality-check` looked only for `__DIR__/../vendor/autoload.php`, which
+  exists in a clone of this repository but not when the package is installed as
+  a dependency — Composer hoists, so there is no
+  `vendor/rampart/quality-checker/vendor/autoload.php`. The result: the
+  `vendor/bin/quality-check` that `composer require rampart/quality-checker`
+  puts on a consumer's PATH exited with *"Run 'composer install' in the
+  quality-checker directory first"*, i.e. the documented install path produced a
+  non-working standalone scanner. The script now walks up from its own directory
+  for an autoloader, preferring the package's own vendor when present.
+- Found by installing the published artifact into a throwaway project and running
+  it — the first check that actually exercises the documented install path. The
+  same run confirms the version fix below: the report header reads `v0.8.0`
+  rather than `v0.0.0`.
+- `StandaloneInstallLayoutTest` builds the dependency layout in a temp directory
+  so this cannot regress, including the case where no autoloader exists at all.
+
 ### Fixed (CI was red on 3 of 5 jobs)
 - The `php81` job removed `orchestra/testbench` to make the dependency graph
   resolve on PHP 8.1, which also removed `laravel/framework` — so `phpstan
