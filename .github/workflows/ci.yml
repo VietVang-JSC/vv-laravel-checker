@@ -34,7 +34,10 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: mbstring, dom, xml
+          # fileinfo is not enabled by default in the Windows PHP builds, and
+          # league/flysystem-local (via laravel/framework) requires ext-fileinfo,
+          # so without it the Windows jobs cannot resolve a dependency set at all.
+          extensions: mbstring, dom, xml, fileinfo
           coverage: pcov
           ini-values: error_reporting=E_ALL, display_errors=On
           tools: composer:v2
