@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Reporters;
 
 use Rampart\QualityChecker\Result\CheckResult;
 use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\RuleIds;
 
 /**
  * Aggregates issues across all checker results into grouped statistics, used by
@@ -67,7 +68,7 @@ final class IssueGrouper
                 continue;
             }
             foreach ($result->issues as $issue) {
-                if ($issue instanceof Issue && str_starts_with($issue->rule, 'OWASP_')) {
+                if ($issue instanceof Issue && RuleIds::isOwasp($issue->rule)) {
                     $out[$issue->rule] = ($out[$issue->rule] ?? 0) + 1;
                 }
             }

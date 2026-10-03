@@ -14,13 +14,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Testbench 9/10 require PHP 8.2+. Testbench 8 on PHP 8.1 resolves to
-        # Laravel 10 versions blocked by Composer's security audit policy.
+        # Testbench 9/10 (the default resolution) require PHP 8.2+. PHP 8.1 is
+        # covered by the dedicated `php81` job below, which drops Testbench.
         php:
           - '8.2'
           - '8.3'
         os:
           - ubuntu-latest
+          # Windows is not optional here: path normalisation, vscode:// links
+          # and the PowerShell branch in Tools/TrivyDownloader are Windows-only
+          # code paths that Linux CI never exercises.
+          - windows-latest
 
     steps:
       - name: Checkout
@@ -61,12 +65,51 @@ jobs:
         run: composer test -- --no-coverage
 
       - name: Coverage (pcov)
-        if: matrix.php == '8.3'
+        if: matrix.php == '8.3' && matrix.os == 'ubuntu-latest'
         run: vendor/bin/phpunit --coverage-clover build/coverage.xml
 
       - name: Upload coverage
-        if: matrix.php == '8.3'
+        if: matrix.php == '8.3' && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-clover
           path: build/coverage.xml
+
+  # composer.json advertises `php: ^8.1`, so 8.1 has to be verified somewhere.
+  # The blocker is orchestra/testbench: v9/v10 need PHP 8.2+, and v8 drags in
+  # Laravel 10 releases that Composer's security-audit policy refuses. Dropping
+  # Testbench leaves a pure library install that resolves on 8.1, which is
+  # enough to lint, analyse and run the whole Unit suite (only the Feature
+  # suite boots a Laravel app through Testbench).
+  php81:
+    name: PHP 8.1 (unit suite, no Testbench)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: mbstring, dom, xml
+          ini-values: error_reporting=E_ALL, display_errors=On
+          tools: composer:v2
+
+      - name: Install dependencies without Testbench
+        run: |
+          composer config audit.block-insecure false
+          composer remove --dev --no-update orchestra/testbench
+          composer update --prefer-dist --no-progress --no-interaction
+
+      - name: Lint (phpcs)
+        run: composer lint
+
+      # phpstan analyses src + tests; tests/Feature references Testbench, so
+      # this job scopes it to src.
+      - name: Analyse (phpstan, src)
+        run: vendor/bin/phpstan analyse src --memory-limit=1G --no-progress
+
+      - name: Test (unit suite)
+        run: vendor/bin/phpunit --testsuite Unit --no-coverage

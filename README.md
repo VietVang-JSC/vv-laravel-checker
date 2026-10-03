@@ -55,7 +55,7 @@ The package philosophy:
 | Requirement | Version |
 |---|---|
 | PHP | `^8.1` |
-| Laravel | `10`, `11`, `12` (`illuminate/console` & `illuminate/support` `^10.0|^11.0|^12.0`) |
+| Laravel | `9`, `10`, `11`, `12` (`illuminate/console` & `illuminate/support` `^9.0|^10.0|^11.0|^12.0`) |
 | Composer | `2.4+` (for `composer audit`) |
 
 Optional tools (skipped with a hint if missing): `squizlabs/php_codesniffer`,
@@ -65,7 +65,7 @@ Optional tools (skipped with a hint if missing): `squizlabs/php_codesniffer`,
 
 ## Installation
 
-Requirements: PHP `^8.1`, Laravel `10|11|12`, and Composer `2.4+`.
+Requirements: PHP `^8.1`, Laravel `9|10|11|12`, and Composer `2.4+`.
 
 ```bash
 composer require rampart/quality-checker
@@ -85,8 +85,8 @@ This creates `config/quality-checker.php`.
 When developing the checker itself, clone it next to the Laravel application:
 
 ```bash
-git clone https://github.com/rampart/laravel-checker.git
-cd laravel-checker
+git clone https://github.com/VietVang-JSC/vv-laravel-checker.git
+cd vv-laravel-checker
 composer install
 ```
 
@@ -94,7 +94,7 @@ From the Laravel application's directory, register the local checkout and
 install the package from that path:
 
 ```bash
-composer config repositories.quality-checker path ../laravel-checker
+composer config repositories.quality-checker path ../vv-laravel-checker
 composer require rampart/quality-checker:@dev
 php artisan vendor:publish --tag=quality-checker-config
 php artisan quality:check --tier=security --only=custom,composer_audit

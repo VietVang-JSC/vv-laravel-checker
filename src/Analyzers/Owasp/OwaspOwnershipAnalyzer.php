@@ -8,13 +8,12 @@ use PhpParser\Node;
 use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
 use Rampart\QualityChecker\Analysis\ScopeIds;
 use Rampart\QualityChecker\Analysis\StructuralFactIndex;
-use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
-use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Semantic\LaravelSemanticIndex;
 use Rampart\QualityChecker\Semantic\MiddlewareRegistry;
 use Rampart\QualityChecker\Semantic\MiddlewareTaxonomy;
 use Rampart\QualityChecker\Semantic\OwnershipDecision;
+use Rampart\QualityChecker\Semantic\OwnershipIssueMapper;
 use Rampart\QualityChecker\Semantic\OwnershipShadow;
 use Rampart\QualityChecker\Semantic\RouteNode;
 
@@ -109,102 +108,13 @@ final class OwaspOwnershipAnalyzer extends AbstractAnalyzer
     }
 
     /**
-     * v0.6.2 production mapping (conservative, asymmetric):
-     * - PROTECTED → null (positive proof suppresses ownership concern;
-     *   never suppresses BAC's own findings — that is the checker's job
-     *   to NOT do).
-     * - UNKNOWN → null (engine limitation is not a developer finding).
-     * - REVIEW → Issue only on a strong chain (request identifier +
-     *   concrete model lookup). Weak chains stay shadow-only unless
-     *   the checker enriches an existing BAC finding with them.
-     * - EXPOSED → always an Issue (public + sensitive write); confidence
-     *   tracks chain strength.
-     *
-     * Messages say "could not be proven", never "IDOR vulnerability".
+     * Production mapping of a shadow decision. The policy itself lives in
+     * OwnershipIssueMapper — it touches no AST, and the checker also applies
+     * it when reconciling shadow decisions against existing BAC findings.
      */
     public function toProductionIssue(OwnershipDecision $decision): ?Issue
     {
-        if (
-            $decision->status === OwnershipDecision::PROTECTED
-            || $decision->status === OwnershipDecision::UNKNOWN
-        ) {
-            return null;
-        }
-        $strong = $this->isStrongChain($decision);
-        if ($decision->status === OwnershipDecision::REVIEW && !$strong) {
-            return null;
-        }
-        $resource = $decision->lookup['detail'] ?? $decision->identifier['detail'] ?? $decision->method . '()';
-        $identifier = $decision->identifier['detail'] ?? 'request input';
-        $operation = $decision->operation['detail'] ?? 'write';
-        if ($decision->status === OwnershipDecision::EXPOSED) {
-            $message = sprintf(
-                'Publicly reachable %s() performs %s on %s identified by %s without proven ownership or access control.',
-                $decision->method,
-                $operation,
-                $resource,
-                $identifier
-            );
-
-            return $this->makeIssue(
-                self::RULE,
-                $message,
-                $decision->file,
-                $decision->line,
-                Severity::Error,
-                $this->provenanceMetadata($decision),
-                $strong ? Confidence::High : Confidence::Medium
-            );
-        }
-
-        $message = sprintf(
-            'Object-level authorization could not be proven: %s() performs %s on %s identified by %s — ownership unverified.',
-            $decision->method,
-            $operation,
-            $resource,
-            $identifier
-        );
-
-        return $this->makeIssue(
-            self::RULE,
-            $message,
-            $decision->file,
-            $decision->line,
-            Severity::Error,
-            $this->provenanceMetadata($decision),
-            Confidence::Medium
-        );
-    }
-
-    /**
-     * A chain strong enough to surface on its own: request identifier
-     * reaching a concrete (non-dynamic) model lookup.
-     */
-    private function isStrongChain(OwnershipDecision $decision): bool
-    {
-        return $decision->identifier !== null
-            && $decision->lookup !== null
-            && $decision->lookup['kind'] !== 'dynamic';
-    }
-
-    /**
-     * Full evidence chain travels into production (v0.6.2 provenance):
-     * flat controller/action keys for checker dedup identity plus the
-     * nested ownership block.
-     *
-     * @return array<string, mixed>
-     */
-    private function provenanceMetadata(OwnershipDecision $decision): array
-    {
-        return [
-            'controller' => $decision->controller,
-            'action' => $decision->method,
-            'method' => $decision->method,
-            'access_control' => [
-                'decision' => $decision->status,
-                'ownership' => $decision->toArray(),
-            ],
-        ];
+        return (new OwnershipIssueMapper())->toProductionIssue($decision, self::RULE);
     }
 
     private function analyzeFile(

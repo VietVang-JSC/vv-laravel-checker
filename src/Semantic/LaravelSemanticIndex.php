@@ -190,7 +190,7 @@ final class LaravelSemanticIndex implements ScanContextAware
             if (strtolower((string) pathinfo($file, PATHINFO_EXTENSION)) !== 'php') {
                 continue;
             }
-            if ($this->isRouteFile($file)) {
+            if (PhpNameResolver::isRouteFile($file)) {
                 $routeFiles[] = $file;
                 continue;
             }
@@ -222,7 +222,7 @@ final class LaravelSemanticIndex implements ScanContextAware
             if ($nodes === null) {
                 continue;
             }
-            $this->walkStmts($nodes, $this->baseStack(), $file, $this->useMap($nodes), $this->namespaceOf($nodes));
+            $this->walkStmts($nodes, $this->baseStack(), $file, PhpNameResolver::useMap($nodes, $this->finder), PhpNameResolver::namespaceOf($nodes, $this->finder));
         }
 
         foreach ($providerFiles as $file) {
@@ -230,8 +230,8 @@ final class LaravelSemanticIndex implements ScanContextAware
             if ($nodes === null) {
                 continue;
             }
-            $uses = $this->useMap($nodes);
-            $namespace = $this->namespaceOf($nodes);
+            $uses = PhpNameResolver::useMap($nodes, $this->finder);
+            $namespace = PhpNameResolver::namespaceOf($nodes, $this->finder);
             $calls = $this->finder->find($nodes, static function (Node $node): bool {
                 return $node instanceof Node\Expr\MethodCall || $node instanceof Node\Expr\StaticCall;
             });
@@ -274,7 +274,7 @@ final class LaravelSemanticIndex implements ScanContextAware
     {
         $method = strtolower($method);
         $fqn = strtolower(ltrim($class, '\\'));
-        $short = strtolower($this->shortClass($class));
+        $short = strtolower(PhpNameResolver::shortClass($class));
 
         $fqnHits = [];
         $shortHits = [];
@@ -287,7 +287,7 @@ final class LaravelSemanticIndex implements ScanContextAware
                 $fqnHits[] = $route;
                 continue;
             }
-            if ($this->shortClass($route->controller) === $short || strtolower($route->controller) === $short) {
+            if (PhpNameResolver::shortClass($route->controller) === $short || strtolower($route->controller) === $short) {
                 $shortHits[] = $route;
             }
         }
@@ -328,18 +328,6 @@ final class LaravelSemanticIndex implements ScanContextAware
         $ast = $this->sharedAst($file);
 
         return $ast === null || $ast === [] ? null : $ast;
-    }
-
-    private function isRouteFile(string $file): bool
-    {
-        $normalized = str_replace('\\', '/', $file);
-        if (str_contains($normalized, '/routes/') || str_contains($normalized, '/Routes/')) {
-            return true;
-        }
-
-        $base = strtolower((string) pathinfo($normalized, PATHINFO_BASENAME));
-
-        return $base === 'web.php' || $base === 'api.php';
     }
 
     /**
@@ -439,7 +427,7 @@ final class LaravelSemanticIndex implements ScanContextAware
         if (!$current instanceof Node\Expr\StaticCall || !$current->class instanceof Node\Name) {
             return;
         }
-        if ($this->shortClass($current->class->toString()) !== 'Route') {
+        if (PhpNameResolver::shortClass($current->class->toString()) !== 'Route') {
             return;
         }
         if (!$current->name instanceof Node\Identifier) {
@@ -472,7 +460,7 @@ final class LaravelSemanticIndex implements ScanContextAware
         if ($terminal === 'controller') {
             $ctrlArg = $current->args[0] ?? null;
             if ($ctrlArg instanceof Node\Arg) {
-                $controller = $this->classItemName($ctrlArg->value, $uses, $namespace) ?? $controller;
+                $controller = PhpNameResolver::classItemName($ctrlArg->value, $uses, $namespace) ?? $controller;
             }
         }
         if (isset($chain['controller'])) {
@@ -725,7 +713,7 @@ final class LaravelSemanticIndex implements ScanContextAware
         }
         $resolved = $controller;
         if ($controllerArg->value instanceof Node\Expr\ClassConstFetch && $controllerArg->value->class instanceof Node\Name) {
-            $resolved = $this->resolveName($controllerArg->value->class->toString(), $uses, $namespace);
+            $resolved = PhpNameResolver::resolveName($controllerArg->value->class->toString(), $uses, $namespace);
         } elseif ($controllerArg->value instanceof Node\Scalar\String_ && str_contains($controllerArg->value->value, '@')) {
             $resolved = $controller;
         } elseif (
@@ -740,7 +728,7 @@ final class LaravelSemanticIndex implements ScanContextAware
                 $controllerArg->getStartLine()
             );
             if ($constant !== null && $constant->value !== '') {
-                $resolved = $this->resolveName($constant->value, $uses, $namespace);
+                $resolved = PhpNameResolver::resolveName($constant->value, $uses, $namespace);
             }
         }
         if ($resolved === null) {
@@ -858,7 +846,7 @@ final class LaravelSemanticIndex implements ScanContextAware
                     return [];
                 }
 
-                return [[$this->resolveName($class, $uses, $namespace), $method]];
+                return [[PhpNameResolver::resolveName($class, $uses, $namespace), $method]];
             }
             if ($controller !== null && $expr->value !== '') {
                 return [[$controller, $expr->value]];
@@ -880,7 +868,7 @@ final class LaravelSemanticIndex implements ScanContextAware
                 if (!$methodItem->value instanceof Node\Scalar\String_) {
                     return [];
                 }
-                $class = $this->classItemName($classItem->value, $uses, $namespace);
+                $class = PhpNameResolver::classItemName($classItem->value, $uses, $namespace);
                 if ($class === null) {
                     return [];
                 }
@@ -902,7 +890,7 @@ final class LaravelSemanticIndex implements ScanContextAware
         }
 
         if ($expr instanceof Node\Expr\ClassConstFetch && $expr->class instanceof Node\Name) {
-            return [[$this->resolveName($expr->class->toString(), $uses, $namespace), '__invoke']];
+            return [[PhpNameResolver::resolveName($expr->class->toString(), $uses, $namespace), '__invoke']];
         }
 
         if ($expr instanceof Node\Expr\Closure) {
@@ -918,22 +906,6 @@ final class LaravelSemanticIndex implements ScanContextAware
         }
 
         return $this->actionTargets(new Node\Scalar\String_($constant->value), $controller, $uses, $namespace, $file, $line);
-    }
-
-    /**
-     * @param array<string, string> $uses
-     */
-    private function classItemName(Node\Expr $expr, array $uses, ?string $namespace): ?string
-    {
-        if ($expr instanceof Node\Expr\ClassConstFetch && $expr->class instanceof Node\Name) {
-            return $this->resolveName($expr->class->toString(), $uses, $namespace);
-        }
-
-        if ($expr instanceof Node\Scalar\String_ && $expr->value !== '') {
-            return $this->resolveName($expr->value, $uses, $namespace);
-        }
-
-        return null;
     }
 
     /**
@@ -988,8 +960,8 @@ final class LaravelSemanticIndex implements ScanContextAware
         if ($nodes === null) {
             return;
         }
-        $innerNodes = $this->nodeList($nodes);
-        $this->walkStmts($innerNodes, $stack, $path, $this->useMap($innerNodes), $this->namespaceOf($innerNodes));
+        $innerNodes = PhpNameResolver::nodeList($nodes);
+        $this->walkStmts($innerNodes, $stack, $path, PhpNameResolver::useMap($innerNodes, $this->finder), PhpNameResolver::namespaceOf($innerNodes, $this->finder));
     }
 
     /**
@@ -1022,7 +994,7 @@ final class LaravelSemanticIndex implements ScanContextAware
             return null;
         }
         // Proven-constant targets may already be absolute (__DIR__-based).
-        if ($this->isAbsolutePath($target) && is_file($target)) {
+        if (PhpNameResolver::isAbsolutePath($target) && is_file($target)) {
             $real = realpath($target);
 
             return $real === false ? null : $real;
@@ -1050,13 +1022,6 @@ final class LaravelSemanticIndex implements ScanContextAware
         }
 
         return null;
-    }
-
-    private function isAbsolutePath(string $path): bool
-    {
-        return str_starts_with($path, '/')
-            || str_starts_with($path, '\\')
-            || (bool) preg_match('/^[A-Za-z]:[\\\\\\/]/', $path);
     }
 
     private function includeTarget(Node\Expr\Include_ $include, string $file): ?string
@@ -1175,10 +1140,10 @@ final class LaravelSemanticIndex implements ScanContextAware
                 continue;
             }
             if ($item->value instanceof Node\Expr\ClassConstFetch && $item->value->class instanceof Node\Name) {
-                return $this->resolveName($item->value->class->toString(), $uses, $namespace);
+                return PhpNameResolver::resolveName($item->value->class->toString(), $uses, $namespace);
             }
             if ($item->value instanceof Node\Scalar\String_ && $item->value->value !== '') {
-                return $this->resolveName($item->value->value, $uses, $namespace);
+                return PhpNameResolver::resolveName($item->value->value, $uses, $namespace);
             }
         }
 
@@ -1199,116 +1164,7 @@ final class LaravelSemanticIndex implements ScanContextAware
             return null;
         }
 
-        return $this->classItemName($arg->value, $uses, $namespace);
-    }
-
-    /**
-     * @param array<string, string> $uses
-     */
-    private function resolveName(string $name, array $uses, ?string $namespace): string
-    {
-        if (str_starts_with($name, '\\')) {
-            return ltrim($name, '\\');
-        }
-
-        $pos = strpos($name, '\\');
-        if ($pos !== false) {
-            $first = strtolower(substr($name, 0, $pos));
-            $rest = substr($name, $pos);
-            if (isset($uses[$first])) {
-                return $uses[$first] . $rest;
-            }
-
-            return $namespace !== null ? $namespace . '\\' . $name : $name;
-        }
-
-        $lower = strtolower($name);
-        if (isset($uses[$lower])) {
-            return $uses[$lower];
-        }
-
-        return $namespace !== null ? $namespace . '\\' . $name : $name;
-    }
-
-    /**
-     * @param list<Node> $nodes
-     * @return array<string, string> lowercase alias => FQCN
-     */
-    private function useMap(array $nodes): array
-    {
-        $map = [];
-        $imports = $this->finder()->find($nodes, static function (Node $node): bool {
-            return $node instanceof Node\Stmt\Use_ || $node instanceof Node\Stmt\GroupUse;
-        });
-
-        foreach ($imports as $import) {
-            if ($import instanceof Node\Stmt\GroupUse) {
-                foreach ($import->uses as $use) {
-                    if (!$use instanceof Node\Stmt\UseUse) {
-                        continue;
-                    }
-                    $alias = $use->alias !== null ? $use->alias->toString() : $use->name->getLast();
-                    $map[strtolower($alias)] = $import->prefix->toString() . '\\' . $use->name->toString();
-                }
-                continue;
-            }
-
-            if (!$import instanceof Node\Stmt\Use_ || $import->type !== Node\Stmt\Use_::TYPE_NORMAL) {
-                continue;
-            }
-
-            foreach ($import->uses as $use) {
-                if (!$use instanceof Node\Stmt\UseUse) {
-                    continue;
-                }
-                $alias = $use->alias !== null ? $use->alias->toString() : $use->name->getLast();
-                $map[strtolower($alias)] = $use->name->toString();
-            }
-        }
-
-        return $map;
-    }
-
-    /**
-     * @param list<Node> $nodes
-     */
-    private function namespaceOf(array $nodes): ?string
-    {
-        $found = $this->finder()->find($nodes, static function (Node $node): bool {
-            return $node instanceof Node\Stmt\Namespace_;
-        });
-
-        foreach ($found as $node) {
-            if ($node instanceof Node\Stmt\Namespace_ && $node->name instanceof Node\Name) {
-                return $node->name->toString();
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @param list<Node> $nodes
-     * @return list<Node>
-     */
-    private function nodeList(array $nodes): array
-    {
-        $out = [];
-        foreach ($nodes as $node) {
-            if ($node instanceof Node) {
-                $out[] = $node;
-            }
-        }
-
-        return $out;
-    }
-
-    private function shortClass(string $class): string
-    {
-        $trimmed = ltrim($class, '\\');
-        $pos = strrpos($trimmed, '\\');
-
-        return $pos === false ? $trimmed : substr($trimmed, $pos + 1);
+        return PhpNameResolver::classItemName($arg->value, $uses, $namespace);
     }
 
     private function isRouteGroupCall(Node $node): bool
@@ -1330,7 +1186,7 @@ final class LaravelSemanticIndex implements ScanContextAware
         return $sawGroup
             && $current instanceof Node\Expr\StaticCall
             && $current->class instanceof Node\Name
-            && $this->shortClass($current->class->toString()) === 'Route';
+            && PhpNameResolver::shortClass($current->class->toString()) === 'Route';
     }
 
     /**

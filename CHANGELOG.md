@@ -7,11 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (JSON report under-counted OWASP findings)
+- `JsonReporter::buildOwasp()` silently skipped any rule missing from its
+  hand-maintained map, so `OWASP_OWNERSHIP_IDOR` (0.6.x) and
+  `OWASP_BLADE_DYNAMIC_INCLUDE` (0.7.0) reached `checkers[].issues` but never
+  `owasp.categories` / `owasp.total` — the OWASP totals under-reported real
+  findings. Now every OWASP rule is counted; the phantom `OWASP_FILE_UPLOAD`
+  entry is gone.
+
+### Added (single rule registry)
+- `src/Result/RuleIds.php`: the 43 rule ids the analyzers can emit plus the
+  OWASP-2021 category per OWASP rule. Analyzers keep their own constants (they
+  are the definition); reporters, `QualityScore`, `SarifReporter` and
+  `TestCoverageAnalyzer` now resolve through the registry instead of repeating
+  the strings in four or five places.
+- `RuleIdsTest` reflects over the analyzer `RULE*` constants and fails if the
+  registry and the analyzers drift in either direction, or if an `OWASP_*` rule
+  ships without a category. This is what stops the bug above from recurring.
+- `JsonOwaspReportTest` pins the OWASP totals, category rollup and
+  per-rule grouping for every registered OWASP rule.
+- `DeadCodeAnalyzerTest`: the analyzer had no test at all, which is how two
+  impossible branches ended up in `phpstan-baseline` instead of being deleted.
+
+### Changed (dead code and unreachable branches)
+- Removed `AbstractAnalyzer::readFile()` / `::parse()` — no callers, and their
+  presence meant `AbstractAnalyzer` had to sit on the parser-ownership
+  allowlist, hiding real violations in every other analyzer.
+- Removed `Analysis/AstPool` and `Analysis/GuardMap` (superseded by
+  `Scanning/ScanContext`; referenced only by their own tests).
+- `DeadCodeAnalyzer`: deleted the dead `$method->name instanceof Identifier`
+  branches and an unused `Profiler` import.
+- `ScanContextArchitectureTest` allowlists tightened now that
+  `AbstractAnalyzer` and `Analysis/AstPool` no longer need exemptions.
+- `phpstan-baseline.neon` reduced by 3 entries (2 dead branches, 1 for a
+  deleted method).
+
+### Changed (CI)
+- New `php81` job so the advertised `php: ^8.1` constraint is actually
+  verified: it drops `orchestra/testbench` (v9/v10 need PHP 8.2+, v8 pulls
+  Laravel 10 releases the audit policy rejects) and runs lint, `phpstan
+  analyse src` and the whole Unit suite.
+- `windows-latest` added to the test matrix. Windows is not optional here:
+  path normalisation, `vscode://` report links and the PowerShell branch in
+  `Tools/TrivyDownloader` are Windows-only code paths Linux CI never runs.
+
+### Changed (god objects split)
+- `Semantic/PhpNameResolver` extracted from `LaravelSemanticIndex` (1361 →
+  1217 lines): `use`-import/namespace resolution, `shortClass`, route-file
+  and absolute-path predicates. Pure and stateless, so it is shared rather
+  than inlined in a route walker.
+- `Semantic/OwnershipIssueMapper` extracted from `OwaspOwnershipAnalyzer`
+  (1267 → 1177 lines): the v0.6.2 decision → Issue production mapping. It
+  touches no AST and the checker applies it during BAC reconciliation, so it
+  never belonged to the analyzer.
+
 ### Added (standalone scan)
 - `bin/quality-check`: scan any directory without installing the package
   into the target (no target vendor/artisan needed). Same engine, formats,
   baseline/delta and exit codes as `php artisan quality:check`; defaults
   to `--only=custom`.
+
+### Validation
+- `901` tests and `2,356` assertions pass; phpcs and phpstan clean.
 
 ## [0.7.0] - 2026-10-01
 
@@ -66,7 +123,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   effectively unchanged (`1268MB` off vs `1270MB` on). A quiet-box rerun is
   post-release verification, not a correctness blocker.
 
-## [Unreleased]
+## [0.2.0 - 0.6.1] - 2026-09-28 -> 2026-09-30
+
+> These releases shipped as commits (`v0.2`, `v0.3.1`-`v0.3.6`, `v0.4.1`-`v0.4.3`,
+> `v0.5.1`-`v0.5.3`, the `PERF-*` scan-context work and `v0.6.1`/`v0.6.1b`) but were
+> never split into per-version sections. The entries below are kept together in
+> release order; only `v0.6.2` onwards have a dedicated section per release.
 
 ### Added (analysis engine foundation)
 - `src/Analysis/AstPool.php`: parse-once-per-run shared AST pool plus
@@ -314,7 +376,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full re-audit pass: variable-origin resolution now applies to every
   traversal sink branch (not just include/require).
 
-## [1.0.0] - 2026-09-24
+## [1.1.0 / 1.0.0] - 2026-09-24 (superseded)
+
+> Tagged `v1.0.0` and `v1.1.0`, then renumbered back onto the `0.x` line from
+> `v0.2` onwards. Kept for history; these are **not** the current version line and
+> the two tags are no longer part of the release sequence.
 
 ### Added
 
@@ -422,4 +488,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Baseline generation and filtering, JSON / Markdown / console reporters, exit codes and `--fail-on` control.
 - Configuration via `config/quality-checker.php`.
 
-[0.1.0]: https://github.com/your-org/quality-checker/releases/tag/0.1.0
+[Unreleased]: https://github.com/VietVang-JSC/vv-laravel-checker/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/VietVang-JSC/vv-laravel-checker/releases/tag/v0.7.0
+[0.6.2]: https://github.com/VietVang-JSC/vv-laravel-checker/releases/tag/v0.6.2
+[0.2.0 - 0.6.1]: https://github.com/VietVang-JSC/vv-laravel-checker/compare/v1.1.0...v0.6.2
+[1.1.0 / 1.0.0]: https://github.com/VietVang-JSC/vv-laravel-checker/releases/tag/v1.1.0
+[0.1.0]: https://github.com/VietVang-JSC/vv-laravel-checker/releases/tag/0.1.0

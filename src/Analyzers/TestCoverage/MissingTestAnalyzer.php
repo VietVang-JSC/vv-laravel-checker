@@ -7,10 +7,14 @@ namespace Rampart\QualityChecker\Analyzers\TestCoverage;
 use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\RuleIds;
 use Rampart\QualityChecker\Result\Severity;
 
 final class MissingTestAnalyzer extends AbstractAnalyzer
 {
+    private const RULE_MODEL = RuleIds::MISSING_MODEL_TEST;
+    private const RULE_SERVICE = RuleIds::MISSING_SERVICE_TEST;
+
     /**
      * @param list<string> $scopes e.g. ['services', 'repositories'] or ['models']
      */
@@ -85,9 +89,9 @@ final class MissingTestAnalyzer extends AbstractAnalyzer
     private function ruleFor(string $scope): string
     {
         return match ($scope) {
-            'models' => 'MISSING_MODEL_TEST',
-            'repositories' => 'MISSING_SERVICE_TEST',
-            default => 'MISSING_SERVICE_TEST',
+            'models' => self::RULE_MODEL,
+            'repositories' => self::RULE_SERVICE,
+            default => self::RULE_SERVICE,
         };
     }
 

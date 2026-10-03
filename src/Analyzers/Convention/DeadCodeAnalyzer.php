@@ -9,7 +9,6 @@ use Rampart\QualityChecker\Analysis\CountingNodeFinder;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
-use Rampart\QualityChecker\Profiling\Profiler;
 use Rampart\QualityChecker\Scanning\ScanContextAware;
 use Rampart\QualityChecker\Scanning\ScanContextTrait;
 
@@ -61,10 +60,9 @@ final class DeadCodeAnalyzer implements ScanContextAware
                     continue;
                 }
 
-                $methodName = $method->name instanceof Node\Identifier ? $method->name->toString() : null;
-                if ($methodName === null) {
-                    continue;
-                }
+                // ClassMethod::$name is always an Identifier (php-parser 5),
+                // so there is no null branch to guard.
+                $methodName = $method->name->toString();
 
                 if ($this->methodIsReferencedInFile($code, $methodName, $method->getStartLine())) {
                     continue;
@@ -100,7 +98,7 @@ final class DeadCodeAnalyzer implements ScanContextAware
             return false;
         }
 
-        $name = $method->name instanceof Node\Identifier ? $method->name->toString() : '';
+        $name = $method->name->toString();
         if ($name === '') {
             return false;
         }

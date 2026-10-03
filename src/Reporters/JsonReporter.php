@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Reporters;
 
 use Rampart\QualityChecker\Result\CheckResult;
 use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\RuleIds;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Remediation\RuleRemediation;
 use Rampart\QualityChecker\Runner\CheckContext;
@@ -77,18 +78,6 @@ final class JsonReporter implements ReporterInterface
 
     private function buildOwasp(array $results): array
     {
-        $mapping = [
-            'OWASP_BROKEN_ACCESS_CONTROL' => 'A01 Broken Access Control',
-            'OWASP_SSRF' => 'A10 SSRF',
-            'OWASP_SSTI' => 'A03 Injection (SSTI)',
-            'OWASP_MISCONFIGURATION' => 'A05 Security Misconfiguration',
-            'OWASP_COMMAND_INJECTION' => 'A03 Injection (Command)',
-            'OWASP_XXE' => 'A05 XXE',
-            'OWASP_PATH_TRAVERSAL' => 'A01 Path Traversal',
-            'OWASP_OPEN_REDIRECT' => 'A07 Open Redirect',
-            'OWASP_FILE_UPLOAD' => 'A08 File Upload',
-        ];
-
         $categories = [];
         foreach ($results as $result) {
             if (!$result instanceof CheckResult) {
@@ -98,10 +87,10 @@ final class JsonReporter implements ReporterInterface
                 if (!$issue instanceof Issue) {
                     continue;
                 }
-                if (!isset($mapping[$issue->rule])) {
+                $category = RuleIds::owaspCategory($issue->rule);
+                if ($category === null) {
                     continue;
                 }
-                $category = $mapping[$issue->rule];
                 $categories[$category] = ($categories[$category] ?? 0) + 1;
             }
         }

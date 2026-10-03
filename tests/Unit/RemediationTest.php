@@ -15,6 +15,7 @@ use Rampart\QualityChecker\Reporters\SarifReporter;
 use Rampart\QualityChecker\Result\CheckResult;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\RuleIds;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Runner\CheckContext;
 
@@ -88,14 +89,7 @@ final class RemediationTest extends TestCase
 
     public function testCatalogCoversAllOwaspRules(): void
     {
-        foreach (
-            [
-            'OWASP_BROKEN_ACCESS_CONTROL', 'OWASP_SSRF', 'OWASP_SSTI',
-            'OWASP_MISCONFIGURATION', 'OWASP_COMMAND_INJECTION', 'OWASP_XXE',
-            'OWASP_OPEN_REDIRECT', 'OWASP_PATH_TRAVERSAL', 'OWASP_BLADE_XSS',
-            'OWASP_BLADE_DYNAMIC_INCLUDE', 'OWASP_OWNERSHIP_IDOR',
-            ] as $rule
-        ) {
+        foreach (RuleIds::owaspRules() as $rule) {
             self::assertNotNull(RuleRemediation::for($rule), $rule);
         }
     }

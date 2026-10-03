@@ -18,7 +18,7 @@ use Rampart\QualityChecker\Scanning\ScanContextTrait;
  * references (no copies, no wrappers, no interpretation).
  *
  * Hard boundary: structural only. "What does this mean in this flow?"
- * stays in AssignmentMap / GuardMap / ScopeResolver; "is this a
+ * stays in AssignmentMap / ScopeResolver; "is this a
  * vulnerability?" stays in the analyzers. A fact is indexed only when
  * >= 2 analyzers need it or one expensive analyzer uses it at volume.
  * Dynamic identifiers are never guessed — only statically-known names

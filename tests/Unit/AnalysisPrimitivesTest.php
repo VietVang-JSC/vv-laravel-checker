@@ -10,7 +10,6 @@ use PhpParser\ParserFactory;
 use PHPUnit\Framework\TestCase;
 use Rampart\QualityChecker\Analysis\AssignmentMap;
 use Rampart\QualityChecker\Analysis\FlowTrace;
-use Rampart\QualityChecker\Analysis\GuardMap;
 use Rampart\QualityChecker\Analysis\ScopeResolver;
 
 final class AnalysisPrimitivesTest extends TestCase
@@ -93,24 +92,6 @@ final class AnalysisPrimitivesTest extends TestCase
         self::assertContains('sink', $names);
         self::assertContains('z', $names);
         self::assertNotContains('x', $names);
-    }
-
-    public function testGuardMapPartitionsByScope(): void
-    {
-        $nodes = $this->parse(
-            "<?php\nclass C {\n public function a(string \$v): void {\n if (in_array(\$v, ['x'])) {}\n }\n public function b(string \$w): void {\n if (in_array(\$w, ['y'])) {}\n }\n}\n"
-        );
-        $found = (new GuardMap())->find($nodes, static function (Node $node): bool {
-            return $node instanceof Node\Expr\FuncCall
-                && $node->name instanceof Node\Name
-                && $node->name->toString() === 'in_array';
-        });
-
-        self::assertCount(2, $found);
-        foreach ($found as $scopeId => $gates) {
-            self::assertNotSame(0, $scopeId);
-            self::assertCount(1, $gates);
-        }
     }
 
     public function testFlowTraceDescribesSteps(): void

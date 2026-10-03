@@ -7,18 +7,6 @@ parameters:
 			path: src/Analyzers/AbstractAnalyzer.php
 
 		-
-			message: '#^Method Rampart\\QualityChecker\\Analyzers\\AbstractAnalyzer\:\:parse\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Analyzers/AbstractAnalyzer.php
-
-		-
-			message: '#^Instanceof between PhpParser\\Node\\Identifier and PhpParser\\Node\\Identifier will always evaluate to true\.$#'
-			identifier: instanceof.alwaysTrue
-			count: 1
-			path: src/Analyzers/Convention/DeadCodeAnalyzer.php
-
-		-
 			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Convention\\DeadCodeAnalyzer\:\:analyze\(\) has parameter \$files with no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1
@@ -33,12 +21,6 @@ parameters:
 		-
 			message: '#^Method Rampart\\QualityChecker\\Analyzers\\Convention\\DeadCodeAnalyzer\:\:analyzeFile\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
-			count: 1
-			path: src/Analyzers/Convention/DeadCodeAnalyzer.php
-
-		-
-			message: '#^Strict comparison using \=\=\= between string and null will always evaluate to false\.$#'
-			identifier: identical.alwaysFalse
 			count: 1
 			path: src/Analyzers/Convention/DeadCodeAnalyzer.php
 

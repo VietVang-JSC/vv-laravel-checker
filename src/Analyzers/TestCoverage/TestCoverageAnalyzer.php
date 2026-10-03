@@ -8,6 +8,7 @@ use PhpParser\Node;
 use Rampart\QualityChecker\Analyzers\AbstractAnalyzer;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\RuleIds;
 use Rampart\QualityChecker\Result\Severity;
 
 /**
@@ -24,12 +25,18 @@ use Rampart\QualityChecker\Result\Severity;
  */
 final class TestCoverageAnalyzer extends AbstractAnalyzer
 {
+    private const RULE_CONTROLLER = RuleIds::MISSING_CONTROLLER_TEST;
+    private const RULE_SERVICE = RuleIds::MISSING_SERVICE_TEST;
+    private const RULE_REPOSITORY = RuleIds::MISSING_REPOSITORY_TEST;
+    private const RULE_MODEL = RuleIds::MISSING_MODEL_TEST;
+    private const RULE_OTHER = RuleIds::MISSING_UNIT_TEST;
+
     private const RULES = [
-        'controller' => 'MISSING_CONTROLLER_TEST',
-        'service' => 'MISSING_SERVICE_TEST',
-        'repository' => 'MISSING_REPOSITORY_TEST',
-        'model' => 'MISSING_MODEL_TEST',
-        'other' => 'MISSING_UNIT_TEST',
+        'controller' => self::RULE_CONTROLLER,
+        'service' => self::RULE_SERVICE,
+        'repository' => self::RULE_REPOSITORY,
+        'model' => self::RULE_MODEL,
+        'other' => self::RULE_OTHER,
     ];
 
     /**

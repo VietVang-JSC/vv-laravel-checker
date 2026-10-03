@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Reporters;
 
 use Rampart\QualityChecker\Result\CheckResult;
 use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\RuleIds;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Remediation\RuleRemediation;
 use Rampart\QualityChecker\Runner\CheckContext;
@@ -229,7 +230,7 @@ final class SarifReporter implements ReporterInterface
     {
         $tags = ['quality-checker', $issue->source, 'severity:' . $issue->severity->value];
 
-        if (str_starts_with($issue->rule, 'OWASP_')) {
+        if (RuleIds::isOwasp($issue->rule)) {
             $tags[] = 'owasp';
             $tags[] = 'security';
         }
@@ -237,7 +238,7 @@ final class SarifReporter implements ReporterInterface
             $tags[] = 'taint';
             $tags[] = 'security';
         }
-        if (in_array($issue->rule, ['SQL_INJECTION', 'UNSAFE_EVAL', 'HARDCODED_SECRET'], true)) {
+        if (in_array($issue->rule, [RuleIds::SQL_INJECTION, RuleIds::UNSAFE_EVAL, RuleIds::HARDCODED_SECRET], true)) {
             $tags[] = 'security';
         }
 

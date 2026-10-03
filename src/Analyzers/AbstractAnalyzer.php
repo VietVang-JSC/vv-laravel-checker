@@ -7,8 +7,6 @@ namespace Rampart\QualityChecker\Analyzers;
 use PhpParser\Node;
 use PhpParser\NodeFinder;
 use Rampart\QualityChecker\Analysis\CountingNodeFinder;
-use PhpParser\ParserFactory;
-use Rampart\QualityChecker\Profiling\Profiler;
 use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
@@ -38,29 +36,6 @@ abstract class AbstractAnalyzer implements ScanContextAware
         return str_contains($normalized, '/tests/')
             || str_contains($normalized, '/test/')
             || str_ends_with($normalized, 'test.php');
-    }
-
-    protected function readFile(string $path): string
-    {
-        if (!is_file($path)) {
-            return '';
-        }
-        Profiler::countRead($path);
-
-        return (string) file_get_contents($path);
-    }
-
-    protected function parse(string $code): ?array
-    {
-        try {
-            $parser = (new ParserFactory())->createForNewestSupportedVersion();
-            $parsed = $parser->parse($code);
-            Profiler::countParse();
-
-            return $parsed;
-        } catch (\Throwable $e) {
-            return null;
-        }
     }
 
     protected function finder(): NodeFinder

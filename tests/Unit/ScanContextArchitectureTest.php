@@ -12,8 +12,6 @@ use PHPUnit\Framework\TestCase;
  * never through its own ParserFactory / parse() / file_get_contents().
  *
  * Allowlist (documented, not migrated):
- * - Analyzers/AbstractAnalyzer.php: sanctioned private fallback so unit
- *   tests can call analyze() without an injected ScanContext.
  * - Analyzers/Security/Taint/TaintEngine.php: separate interprocedural
  *   engine, off by default, with its own injectable parser.
  *
@@ -24,7 +22,6 @@ final class ScanContextArchitectureTest extends TestCase
 {
     /** @var list<string> paths relative to src/Analyzers/ */
     private const ALLOWLIST = [
-        'AbstractAnalyzer.php',
         'Security/Taint/TaintEngine.php',
     ];
 
@@ -66,9 +63,6 @@ final class ScanContextArchitectureTest extends TestCase
      * outside the named allowlist fails CI — including future
      * semantic consumers. Named exceptions only:
      * - Scanning/ScanContext.php: the owner itself.
-     * - Analysis/AstPool.php: parser infrastructure (retained for
-     *   direct consumers + its own tests).
-     * - Analyzers/AbstractAnalyzer.php: private unit-test fallback.
      * - Analyzers/Security/Taint/TaintEngine.php: explicit independent
      *   engine, off by default, injectable parser.
      *
@@ -76,8 +70,6 @@ final class ScanContextArchitectureTest extends TestCase
      */
     private const PARSER_OWNER_ALLOWLIST = [
         'Scanning/ScanContext.php',
-        'Analysis/AstPool.php',
-        'Analyzers/AbstractAnalyzer.php',
         'Analyzers/Security/Taint/TaintEngine.php',
     ];
 
