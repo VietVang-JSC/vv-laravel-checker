@@ -128,10 +128,21 @@ return [
         // Additional safe-output function needles for Blade XSS (e.g. 'my_escape(', 'MyLib::').
         'extra_sanitizers' => [],
 
-        // Skip PHP files larger than this (multi-MB data dumps exhaust the
-        // parser with no signal). 0 or negative disables the limit.
-        'max_file_kb' => 1024,
-    ],
+// Skip PHP files larger than this (multi-MB data dumps exhaust the
+    // parser with no signal). 0 or negative disables the limit.
+    'max_file_kb' => 1024,
+
+    // Paths the custom analyzers never look at. `analyzers.exclude` above
+    // filters checker names, not files, so this is the only way to keep the
+    // analyzers out of a directory. Fixtures are excluded by default: code
+    // under a `fixtures/` directory exists to be vulnerable (test samples,
+    // security demos), and reporting it is noise, not signal. Accepts globs
+    // (`*/fixtures/*`, matched against the whole path) or plain segment
+    // sequences (`tests/fixtures`, matched on `/` boundaries), both
+    // case-insensitive. Matching files are counted in the checker summary, so
+    // nothing is hidden silently. Override freely: `[]` scans everything.
+    'exclude_paths' => ['*/fixtures/*'],
+],
 
     'fail_on' => 'error',
 

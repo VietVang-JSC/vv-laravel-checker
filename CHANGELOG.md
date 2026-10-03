@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (path exclusion for the custom analyzers)
+- `Scanning/PathExcluder` + `analyzers.exclude_paths`: the analyzers had no way
+  to skip a *directory*. `analyzers.exclude` / `--exclude` filter checker names,
+  so a project keeping deliberately vulnerable code under `tests/fixtures` could
+  only baseline the noise or switch the rules off. Accepts globs
+  (`*/fixtures/*`) or plain segment sequences (`tests/fixtures`), both
+  case-insensitive and separator-insensitive, and reports how many files it
+  skipped so scope is never hidden silently.
+- Ships with `['*/fixtures/*']` by default: fixture code exists to be
+  vulnerable, so flagging it is noise rather than signal. Override or set `[]`
+  to scan everything.
+- `--exclude-path` (repeatable) on both entry points, merged with the config
+  value rather than replacing it.
+
+### Added (the package gates its own analyzers)
+- `.github/workflows/dogfood.yml` now runs a self-scan in addition to
+  `composer check`: `bin/quality-check` over `src/`, `config/` and `bin/` with
+  `--fail-on=warning`. Previously only the *wrapped* tools (phpcs/phpstan/
+  phpunit) gated this codebase, so the 43 custom rules — the actual
+  differentiator — were never exercised against it in CI.
+- `StandaloneRunnerTest` now covers the full reporter matrix: all five formats
+  must produce their artifact, the JSON report must carry a resolved version,
+  and `--exclude-path` must keep fixture findings out of the scan.
+
+### Fixed (standalone reports were stamped v0.0.0)
+- `StandaloneRunner` never resolved a package version, so every
+  `bin/quality-check` report header, JSON `package_version` and SARIF
+  `version` said `0.0.0` while the same scan inside a Laravel app showed a real
+  version. Both entry points now go through `Result/PackageVersion`, which reads
+  composer.json, then Composer's runtime `InstalledVersions`, and reports the
+  display form (`v0.7.0`, or `dev-main` for a checkout instead of the old
+  `vdev-main`).
+- Removed the stale `0.1.0` fallback in `QualityCheckCommand::packageVersion()`.
+
+### Fixed (env files collected from vendor)
+- `collectEnvFiles()` resolved `.env` / `.env.example` without the
+  vendor/node_modules guard the PHP and Blade collectors already applied, so a
+  consumer whose app root sits inside `vendor` (any Testbench-based host) had a
+  dependency's `.env.example` analysed as its own config.
+
+### Changed (CI cache key)
+- Both workflows keyed the Composer cache on `composer.lock`, which is
+  gitignored for a library, so the key hashed an empty file set and never
+  invalidated. Keyed on `composer.json` now.
+
+### Changed (docs and package metadata)
+- `composer.json` carries `homepage` and `support` (issues/source/docs) so
+  Packagist and `composer require` resolve to the real repository instead of a
+  bare package name.
+- `docs/comparison-enlightn.md`: dropped a duplicated intro paragraph, the
+  `v1.0.0` references left over from the renumbering onto the `0.x` line, the
+  stale "~27 custom rules" and "26-case corpus" claims, and the leftover
+  "pilot" framing.
+- README: benchmark corpus corrected to the numbers the test suite actually
+  reports (197 cases / 77 TP / 120 TN), removed the duplicated W/X/Y benchmark
+  rows (Y appeared twice with different totals), documented
+  `analyzers.exclude_paths` and `--exclude-path`, and added a section on the
+  package gating itself.
+
+### Validation
+- `918` tests and `2,396` assertions pass; phpcs and phpstan clean. The
+  self-scan gate reports `0` issues across the `116` files of `src/`, `config/`
+  and `bin/`.
+
 ### Fixed (JSON report under-counted OWASP findings)
 - `JsonReporter::buildOwasp()` silently skipped any rule missing from its
   hand-maintained map, so `OWASP_OWNERSHIP_IDOR` (0.6.x) and

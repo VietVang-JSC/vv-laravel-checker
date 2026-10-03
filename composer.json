@@ -4,6 +4,12 @@
     "keywords": ["laravel", "quality", "phpcs", "phpstan", "phpunit", "security", "static-analysis", "ci"],
     "license": "MIT",
     "type": "library",
+    "homepage": "https://github.com/VietVang-JSC/vv-laravel-checker",
+    "support": {
+        "issues": "https://github.com/VietVang-JSC/vv-laravel-checker/issues",
+        "source": "https://github.com/VietVang-JSC/vv-laravel-checker",
+        "docs": "https://github.com/VietVang-JSC/vv-laravel-checker#readme"
+    },
     "bin": [
         "bin/quality-check"
     ],

@@ -9,6 +9,7 @@ use Symfony\Component\Console\Helper\TableSeparator;
 use Symfony\Component\Console\Output\OutputInterface;
 use Rampart\QualityChecker\Result\CheckResult;
 use Rampart\QualityChecker\Result\Issue;
+use Rampart\QualityChecker\Result\PackageVersion;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Remediation\RuleRemediation;
 use Rampart\QualityChecker\Runner\CheckContext;
@@ -33,7 +34,7 @@ final class ConsoleReporter implements ReporterInterface
         }
 
         $this->output->writeln('');
-        $this->output->writeln('<fg=cyan>Laravel Quality Checker</> <options=bold>v' . $ctx->packageVersion . '</>');
+        $this->output->writeln('<fg=cyan>Laravel Quality Checker</> <options=bold>' . PackageVersion::label($ctx->packageVersion) . '</>');
         $this->output->writeln('Generated: ' . (new \DateTimeImmutable())->format('Y-m-d H:i:s'));
         $this->output->writeln(sprintf(
             'Tier: %s | Fail-on: %s | Min-confidence: %s',

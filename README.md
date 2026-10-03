@@ -205,6 +205,7 @@ Missing optional tools are then reported as `skipped` instead of being installed
 | `--only=...` | Only run these checkers (comma-separated): `phpcs`, `phpstan`, `phpunit`, `composer_audit`, `trivy`, `custom`. | all checkers |
 | `--exclude=...` | Skip these checkers (comma-separated). | — |
 | `--path=*` | Override scan paths (repeatable, e.g. `--path=app --path=routes`). | from config |
+| `--exclude-path=*` | Skip files matching these path patterns (repeatable, e.g. `--exclude-path='*/stubs/*'`). Merged with `analyzers.exclude_paths`. | from config |
 | `--fail-on=severity` | Fail threshold: `none`, `info`, `warning`, `error`, `critical`. | `error` |
 | `--tier=...` | Quality gate tier: `security`, `quality`, `all`. | from config (`quality`) |
 | `--min-confidence=...` | Minimum confidence to report: `low`, `medium`, `high`. | from config (`low`) |
@@ -222,6 +223,33 @@ Missing optional tools are then reported as `skipped` instead of being installed
 > Note: `--json` implies the JSON reporter, while `--ci` adds the JSON reporter
 > automatically. `--format=all` maps to `console,json,html,md,sarif`.
 > `sarif` emits `quality-report.sarif` (SARIF 2.1.0) for GitHub code scanning upload.
+
+### Path exclusion (`analyzers.exclude_paths`)
+
+`--exclude` filters *checker names*; `analyzers.exclude_paths` filters *files*, and
+is the only way to keep the custom analyzers out of a directory. The shipped
+default is `['*/fixtures/*']`: code under a `fixtures/` directory exists to be
+vulnerable, so reporting it is noise rather than signal — a project whose test
+suite keeps vulnerable samples there would otherwise have to baseline them or
+disable the rules.
+
+```php
+// config/quality-checker.php
+'analyzers' => [
+    'exclude_paths' => ['*/fixtures/*', 'tests/Fixtures', 'database/seeds/*'],
+],
+```
+
+Two forms are accepted, both case-insensitive and separator-insensitive:
+
+| Form | Example | Matches |
+|---|---|---|
+| glob (`*` or `?`) | `*/fixtures/*` | the whole path, via `fnmatch()` |
+| plain segment sequence | `tests/fixtures` | anywhere in the path, on `/` boundaries only — never `fixturesx` |
+
+Excluded files are counted in the `custom` checker summary (`N file(s) excluded
+by analyzers.exclude_paths`), so a scan never hides scope silently. Use `[]` to
+scan everything.
 
 ---
 
@@ -343,14 +371,14 @@ The **tier** controls what the gate fails on:
 
 ---
 
-## Pilot benchmark (real-world)
+## Real-world benchmark
 
 Custom analyzers only (phpcs/phpstan/phpunit excluded), `tier=security`,
 `fail-on=none`, cold runs without cache. Quality is pinned by a labeled
 corpus (`tests/Unit/AnalyzerMetricsTest.php`): **precision 1.000 / recall 1.000**
-across 192 true/false-positive cases (70 TP + 122 TN), so the reductions below
+across 197 true/false-positive cases (77 TP + 120 TN), so the reductions below
 cannot regress silently.
-| Pilot | Stack | Files | Before | After | Signal left |
+| Target | Stack | Files | Before | After | Signal left |
 |---|---|---|---|---|---|
 | A — e-commerce monolith | Laravel 11 | 3,283 | 1,246 (7 / 466 / 773) | **1,077** (3 / 301 / 773) | 101 blade + public routes + Docs sample |
 | B — internal HRM app | Laravel 12 | 526 | 191 (5 / 55 / 131) | **136** (1 / 6 / 129) | 4 open redirects + coverage |
@@ -361,6 +389,7 @@ cannot regress silently.
 | G — OSS e-commerce package | Laravel | ~200 | — | **2** (0 / 1 / 1) | JSON:API auth-in-core + coverage |
 | H — OSS status-page app | Laravel | ~100 | — | **3** (0 / 0 / 3) | CORS wildcard + coverage |
 | Dogfood — this package | PHP library | ~200 | 37 | **5** (3 / 1 / 1) | all intended (vuln fixtures + test secret) |
+| Dogfood gate — this package `src/` | PHP library | 116 | — | **0** | clean; enforced by `.github/workflows/dogfood.yml` |
 | I — internal POS edge app | Laravel | ~400 | — | **100** (0 / 55 / 45) | 39 blade + 10 unauth API review |
 | J — internal POS cloud app | Laravel | ~500 | — | **182** (1 / 139 / 42) | 104 blade + 22 server-fetch review + 1 true open redirect |
 | K — internal POS backend | Laravel | ~700 | — | **254** (1 / 50 / 203) | coverage debt + 20 BAC (JWT groups resolved) |
@@ -382,13 +411,10 @@ cannot regress silently.
 | AA — internal shop app | Laravel 8 | ~150 | — | **139** (0 / 24 / 115) | password policy + validation debt |
 | AB — internal portal | Laravel 10 | ~450 | — | **265** (6 / 84 / 175) | shared master password + social login fixation |
 | AC — internal warehouse app | Laravel | ~800 | — | **479** (22 / 196 / 261) | property-origin SSRF + leaked API key TP |
-| W — OSS helpdesk app | Laravel | ~500 | — | **81** (4 / 42 / 35) | safe_raw_html + signed tracking links + module SSRF review |
-| X — OSS blog package | Laravel | ~300 | — | **38** (1 / 6 / 31) | Gate-denies-throw + test fixtures + trivial authorize TP |
-| Y — OSS link manager | Laravel | ~230 | — | **92** (0 / 64 / 28) | login auth + theme directory reads + plugin includes |
 
 *(severity split: critical / error / warning)*
 
-Biggest single win: `OWASP_BROKEN_ACCESS_CONTROL` on the e-commerce pilot (A) **453 → 150** —
+Biggest single win: `OWASP_BROKEN_ACCESS_CONTROL` on the e-commerce target (A) **453 → 150** —
 actions protected by route middleware, `Route::controller()` groups and
 cross-file `require` are now resolved; FQCN keys keep same-named Admin/Shop
 controllers apart (see [docs/false-positives.md](docs/false-positives.md)).
@@ -615,6 +641,23 @@ Validate the `composer.json`:
 ```bash
 composer validate --no-check-publish
 ```
+
+### The package gates itself
+
+`.github/workflows/dogfood.yml` runs on every push and pull request:
+
+1. `composer check` — phpcs, phpstan level 6 and the full PHPUnit suite.
+2. **Self-scan** — the package's own analyzers over its own shipped code:
+
+   ```bash
+   php bin/quality-check . --path=src --path=config --path=bin \
+       --only=custom --fail-on=warning --no-cache
+   ```
+
+   `tests/` is out of scope there on purpose: it holds deliberately vulnerable
+   analyzer samples, which are true positives. Everything else must be clean —
+   findings in `src/` are either fixed or carry a written
+   `// quality-checker-ignore-next-line` justification.
 
 ---
 

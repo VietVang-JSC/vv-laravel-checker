@@ -34,18 +34,33 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
+          # composer.lock is gitignored (library convention), so hash composer.json.
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.json') }}
           restore-keys: |
             ${{ runner.os }}-composer-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress --no-interaction
 
-      # Dogfooding: the package gates its own codebase with the exact same
+      # Dogfooding part 1: the package gates its own codebase with the exact same
       # toolchain consumers get (phpcs + phpstan + phpunit) via `composer check`.
-      # A full `php artisan quality:check` run would need a Laravel application;
-      # that scenario is already exercised by the Testbench feature suite
-      # (tests/Feature/QualityCheckCommandTest), so this job documents the intent
-      # and verifies the package against itself on every push.
       - name: Dogfood check (lint + analyse + test)
         run: composer check
+
+      # Dogfooding part 2: run the package's own analyzers over its own shipped
+      # code. `composer check` above only proves the *wrapped* third-party tools
+      # pass; the 43 custom rules are the differentiator and were previously
+      # never exercised against this codebase in CI, so precision claims rested
+      # on synthetic fixtures alone.
+      #
+      # Scope is src/, config/ and bin/ — the code that ships. tests/ is out
+      # because it contains deliberately vulnerable analyzer samples (real
+      # HARDCODED_SECRET hits, not false positives); fixtures/ is excluded by the
+      # shipped analyzers.exclude_paths default.
+      #
+      # --fail-on=warning is stricter than the shipped default (error) on purpose:
+      # a finding in our own code should block a merge, not wait for a release.
+      - name: Self-scan (package analyzes its own src with its own analyzers)
+        run: >
+          php bin/quality-check . --path=src --path=config --path=bin
+          --only=custom --fail-on=warning --no-cache --format=console

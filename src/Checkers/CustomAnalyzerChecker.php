@@ -44,6 +44,7 @@ use Rampart\QualityChecker\Result\Confidence;
 use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Runner\CheckContext;
+use Rampart\QualityChecker\Scanning\PathExcluder;
 use Rampart\QualityChecker\Scanning\ScanContext;
 use Rampart\QualityChecker\Scanning\ScanContextAware;
 use Rampart\QualityChecker\Suppression\InlineSuppressor;
@@ -82,7 +83,7 @@ final class CustomAnalyzerChecker implements CheckerInterface
             Profiler::setEnabled(true);
         }
         Profiler::begin('discovery');
-        [$files, $skippedOversized] = $this->collectFiles($ctx);
+        [$files, $skippedOversized, $skippedExcluded] = $this->collectFiles($ctx);
         $files = array_values(array_unique(array_merge(
             $files,
             $this->collectBladeFiles($ctx),
@@ -168,6 +169,9 @@ final class CustomAnalyzerChecker implements CheckerInterface
         }
         if ($skippedOversized > 0) {
             $summary .= sprintf(' %d oversized file(s) skipped (see max_file_kb).', $skippedOversized);
+        }
+        if ($skippedExcluded > 0) {
+            $summary .= sprintf(' %d file(s) excluded by analyzers.exclude_paths.', $skippedExcluded);
         }
 
         return new CheckResult($this->name(), $status, microtime(true) - $start, $issues, null, $summary);
@@ -385,16 +389,18 @@ final class CustomAnalyzerChecker implements CheckerInterface
      * PHP files under the scan paths. Files larger than max_file_kb are
      * skipped: multi-megabyte data dumps (e.g. a 2.4 MB SMS-number list)
      * exhaust the parser with zero security signal. Explicitly-passed files
-     * are always honored. Returns [files, oversizedSkipped].
+     * are always honored. Returns [files, oversizedSkipped, excludedSkipped].
      *
-     * @return array{list<string>, int}
+     * @return array{list<string>, int, int}
      */
     private function collectFiles(CheckContext $ctx): array
     {
         $files = [];
         $skippedOversized = 0;
+        $skippedExcluded = 0;
         $skipDirs = ['vendor', 'node_modules', 'storage', 'bootstrap/cache', '.git'];
         $maxBytes = $this->maxFileBytes($ctx);
+        $excluder = PathExcluder::fromConfig($ctx->config);
 
         foreach ($ctx->paths as $path) {
             $abs = $ctx->resolvePath($path);
@@ -422,12 +428,16 @@ final class CustomAnalyzerChecker implements CheckerInterface
                 if ($extension !== 'php') {
                     continue;
                 }
+                $pathname = str_replace('\\', '/', $file->getPathname());
+                if (!$excluder->isEmpty() && $excluder->excludes($pathname)) {
+                    $skippedExcluded++;
+                    continue;
+                }
                 if ($maxBytes > 0 && $file->getSize() > $maxBytes) {
                     $skippedOversized++;
                     continue;
                 }
 
-                $pathname = str_replace('\\', '/', $file->getPathname());
                 $skipped = false;
                 foreach ($skipDirs as $skipDir) {
                     if (str_contains($pathname, '/' . $skipDir . '/')) {
@@ -441,7 +451,7 @@ final class CustomAnalyzerChecker implements CheckerInterface
             }
         }
 
-        return [array_values(array_unique($files)), $skippedOversized];
+        return [array_values(array_unique($files)), $skippedOversized, $skippedExcluded];
     }
 
     private function maxFileBytes(CheckContext $ctx): int
@@ -458,14 +468,28 @@ final class CustomAnalyzerChecker implements CheckerInterface
      * Root-level `.env` files, collected separately (like blade views) so only
      * env-aware analyzers consume them.
      *
+     * The vendor/node_modules guard matters here as much as in the other
+     * collectors: `$ctx->resolvePath()` is relative to the app root, and a
+     * Testbench-based consumer (or any project whose base path sits inside
+     * vendor) otherwise gets an unrelated `.env.example` from a dependency
+     * analysed as if it were the app's own config.
+     *
      * @return list<string>
      */
     private function collectEnvFiles(CheckContext $ctx): array
     {
         $files = [];
+        $excluder = PathExcluder::fromConfig($ctx->config);
         foreach (['.env', '.env.example'] as $name) {
             $abs = $ctx->resolvePath($name);
-            if (is_file($abs)) {
+            if (!is_file($abs)) {
+                continue;
+            }
+            $normalized = str_replace('\\', '/', $abs);
+            if (str_contains($normalized, '/vendor/') || str_contains($normalized, '/node_modules/')) {
+                continue;
+            }
+            if (!$excluder->excludes($normalized)) {
                 $files[] = $abs;
             }
         }
@@ -489,6 +513,7 @@ final class CustomAnalyzerChecker implements CheckerInterface
             return $files;
         }
 
+        $excluder = PathExcluder::fromConfig($ctx->config);
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($abs, \FilesystemIterator::SKIP_DOTS)
         );
@@ -507,6 +532,9 @@ final class CustomAnalyzerChecker implements CheckerInterface
                 || str_contains($pathname, '/node_modules/')
                 || str_contains($pathname, '/storage/')
             ) {
+                continue;
+            }
+            if ($excluder->excludes($pathname)) {
                 continue;
             }
             $files[] = $file->getPathname();

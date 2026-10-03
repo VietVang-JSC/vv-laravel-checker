@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Reporters;
 
 use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\PackageVersion;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Remediation\RuleRemediation;
 use Rampart\QualityChecker\Runner\CheckContext;
@@ -793,7 +794,7 @@ final class HtmlReporter implements ReporterInterface
             . '<h1>Laravel Quality Report</h1>' . "\n"
             . '<div class="meta">' . "\n"
             . '<span>Generated: ' . $this->escape((new \DateTimeImmutable())->format('Y-m-d\TH:i:sP')) . '</span>' . "\n"
-            . '<span>Package: v' . $this->escape($ctx->packageVersion) . '</span>' . "\n"
+            . '<span>Package: ' . $this->escape(PackageVersion::label($ctx->packageVersion)) . '</span>' . "\n"
             . '<span>Tier: ' . $this->escape($ctx->tier) . '</span>' . "\n"
             . '<span>Exit code: ' . $this->escape((string) $ctx->exitCode) . '</span>' . "\n"
             . '<span>Output: ' . $this->escape($ctx->outputDir) . '</span>' . "\n"

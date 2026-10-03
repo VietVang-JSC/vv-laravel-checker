@@ -15,6 +15,7 @@ use Rampart\QualityChecker\Reporters\MarkdownReporter;
 use Rampart\QualityChecker\Reporters\ReporterInterface;
 use Rampart\QualityChecker\Reporters\SarifReporter;
 use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\PackageVersion;
 use Rampart\QualityChecker\Runner\CheckContext;
 use Rampart\QualityChecker\Runner\CheckRunner;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -35,6 +36,9 @@ final class StandaloneRunner
 
     /** @var list<string> */
     private array $paths = [];
+
+    /** @var list<string> */
+    private array $excludePaths = [];
 
     private string $target = '';
 
@@ -61,6 +65,7 @@ final class StandaloneRunner
         }
 
         $config = $this->loadConfig($toolRoot);
+        $config = $this->mergeExcludePaths($config);
         $ctx = new CheckContext(
             $target,
             $this->scanPaths($target),
@@ -70,6 +75,7 @@ final class StandaloneRunner
             failOn: $this->options['fail-on'] ?? 'error',
             tier: $this->options['tier'] ?? ($config['tier'] ?? 'quality'),
             minConfidence: $this->options['min-confidence'] ?? 'low',
+            packageVersion: PackageVersion::detect($toolRoot),
         );
         $ctx->only = $this->split($this->options['only'] ?? 'custom');
         $ctx->exclude = $this->split($this->options['exclude'] ?? '');
@@ -92,6 +98,10 @@ final class StandaloneRunner
             }
         }
         if ($ctx->profile) {
+            // The path is the CLI operator's own --output value (or the target
+            // dir plus reports/quality-checker), not attacker input: this is a
+            // local tool run by the person who owns the filesystem.
+            // quality-checker-ignore-next-line OWASP_PATH_TRAVERSAL
             file_put_contents(
                 rtrim($ctx->outputDir, '/\\') . DIRECTORY_SEPARATOR . 'profile.json',
                 json_encode(Profiler::report(), JSON_PRETTY_PRINT)
@@ -126,6 +136,10 @@ final class StandaloneRunner
                 $this->paths[] = $value;
                 continue;
             }
+            if ($key === 'exclude-path') {
+                $this->excludePaths[] = $value;
+                continue;
+            }
             $this->options[$key] = $value;
         }
     }
@@ -150,6 +164,32 @@ final class StandaloneRunner
     private function split(string $value): array
     {
         return array_values(array_filter(array_map('trim', explode(',', $value))));
+    }
+
+    /**
+     * Merge the repeated --exclude-path flags into the loaded config, so both
+     * entry points feed PathExcluder from the same place.
+     *
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function mergeExcludePaths(array $config): array
+    {
+        if ($this->excludePaths === []) {
+            return $config;
+        }
+
+        $analyzers = $config['analyzers'] ?? [];
+        $analyzers = is_array($analyzers) ? $analyzers : [];
+        $existing = $analyzers['exclude_paths'] ?? [];
+        $existing = is_array($existing) ? $existing : [];
+        $analyzers['exclude_paths'] = array_values(array_unique(array_merge(
+            array_map('strval', $existing),
+            $this->excludePaths
+        )));
+        $config['analyzers'] = $analyzers;
+
+        return $config;
     }
 
     /**
@@ -186,6 +226,9 @@ final class StandaloneRunner
         if (!is_file($file)) {
             return [];
         }
+        // $toolRoot is the installed package root (dirname(__DIR__) of the bin
+        // script), never target data.
+        // quality-checker-ignore-next-line OWASP_PATH_TRAVERSAL
         $config = require $file;
 
         return is_array($config) ? $config : [];
@@ -243,6 +286,7 @@ final class StandaloneRunner
         $output->writeln('  --tier=security|quality|all  --only=custom,...  --exclude=...');
         $output->writeln('  --fail-on=none|info|warning|error|critical  --min-confidence=low|medium|high');
         $output->writeln('  --output=<dir>  --path=<sub> (repeatable)  --no-cache  --profile');
+        $output->writeln('  --exclude-path=<glob> (repeatable, e.g. */fixtures/*)  merges with analyzers.exclude_paths');
         $output->writeln('  --baseline-file=<file>  --baseline-generate  --baseline-update  --help');
         $output->writeln('Default --only=custom: static analyzers only, no target vendor needed.');
     }

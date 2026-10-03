@@ -46,6 +46,11 @@ final class QualityCheckCommandTest extends TestCase
         $config['paths'] = ['app'];
         // Do not attempt to composer-require missing tools during tests.
         $config['auto_install_tools'] = false;
+        // These tests point --path at a deliberately vulnerable fixture app, so
+        // the shipped `*/fixtures/*` default would (correctly) hide every
+        // finding. Opting out here is what the override is for; the exclusion
+        // itself is covered by testExcludePathKeepsFixturesOutOfTheScan below.
+        $config['analyzers']['exclude_paths'] = [];
 
         $app['config']->set('quality-checker', $config);
     }
@@ -222,6 +227,59 @@ final class QualityCheckCommandTest extends TestCase
             '--path' => [$this->appDir],
             '--fail-on' => 'none',
         ])->assertExitCode(0);
+    }
+
+    public function testExcludePathKeepsFixturesOutOfTheScan(): void
+    {
+        $this->artisan('quality:check', [
+            '--only' => 'custom',
+            '--path' => [$this->appDir],
+            '--format' => 'json',
+            '--output' => $this->tempDir,
+            '--exclude-path' => ['*' . '/fixtures/*'],
+        ])->assertExitCode(0);
+
+        $payload = json_decode(
+            (string) file_get_contents($this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.json'),
+            true
+        );
+
+        $issues = [];
+        $summary = '';
+        foreach ($payload['checkers'] as $checker) {
+            $issues = array_merge($issues, $checker['issues']);
+            $summary .= (string) $checker['summary'];
+        }
+
+        $this->assertCount(
+            0,
+            $issues,
+            'Excluded fixtures must not produce findings. Remaining: '
+            . implode(', ', array_map(static fn (array $i): string => (string) $i['file'] . ':' . $i['line'], $issues))
+        );
+        $this->assertStringContainsString('excluded by analyzers.exclude_paths', $summary);
+    }
+
+    public function testScanIncludesFixturesWhenNothingIsExcluded(): void
+    {
+        $this->artisan('quality:check', [
+            '--only' => 'custom',
+            '--path' => [$this->appDir],
+            '--format' => 'json',
+            '--output' => $this->tempDir,
+        ])->assertExitCode(1);
+
+        $payload = json_decode(
+            (string) file_get_contents($this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.json'),
+            true
+        );
+
+        $issues = [];
+        foreach ($payload['checkers'] as $checker) {
+            $issues = array_merge($issues, $checker['issues']);
+        }
+
+        $this->assertNotCount(0, $issues, 'Control case: the same scan does report without an exclusion.');
     }
 
     private function removeDirectory(string $dir): void

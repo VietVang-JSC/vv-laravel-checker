@@ -17,6 +17,7 @@ use Rampart\QualityChecker\Reporters\MarkdownReporter;
 use Rampart\QualityChecker\Reporters\ReporterInterface;
 use Rampart\QualityChecker\Reporters\SarifReporter;
 use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\PackageVersion;
 use Rampart\QualityChecker\Runner\CheckContext;
 use Rampart\QualityChecker\Runner\CheckRunner;
 
@@ -28,6 +29,7 @@ final class QualityCheckCommand extends Command
         {--exclude= : Skip these checkers (comma-separated).}
         {--ignore= : Skip these rules (comma-separated, e.g. MISSING_MODEL_TEST).}
         {--path=* : Override scan paths (repeatable).}
+        {--exclude-path=* : Skip files matching these path patterns, e.g. */fixtures/* (repeatable, merged with analyzers.exclude_paths).}
         {--fail-on=error : Fail threshold: none|info|warning|error|critical.}
         {--tier= : Quality gate tier: security|quality|all (default: config tier).}
         {--min-confidence= : Minimum confidence to report: low|medium|high.}
@@ -104,6 +106,24 @@ final class QualityCheckCommand extends Command
         }
         $paths = array_values(array_filter($paths, static fn ($p): bool => is_string($p) && $p !== ''));
 
+        // Path exclusion for the custom analyzers: config default plus
+        // --exclude-path. Merged rather than replaced so a one-off CLI run
+        // cannot accidentally un-exclude the project-wide fixtures.
+        $excludePaths = $config['analyzers']['exclude_paths'] ?? [];
+        if (!is_array($excludePaths)) {
+            $excludePaths = [];
+        }
+        $cliExcludePaths = $this->option('exclude-path');
+        if (is_array($cliExcludePaths)) {
+            $excludePaths = array_merge($excludePaths, $cliExcludePaths);
+        }
+        if ($excludePaths !== []) {
+            $analyzers = $config['analyzers'] ?? [];
+            $analyzers = is_array($analyzers) ? $analyzers : [];
+            $analyzers['exclude_paths'] = array_values(array_unique(array_map('strval', $excludePaths)));
+            $config['analyzers'] = $analyzers;
+        }
+
         $failOn = (string) $this->option('fail-on');
         if ($this->option('ci') && $failOn === 'error') {
             $failOn = 'error';
@@ -135,7 +155,7 @@ final class QualityCheckCommand extends Command
         )));
         $config['quality_gate'] = $gate;
 
-        $packageVersion = $this->packageVersion();
+        $packageVersion = PackageVersion::detect();
 
         $ctx = new CheckContext(
             $basePath,
@@ -366,20 +386,6 @@ final class QualityCheckCommand extends Command
         }
 
         return preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1;
-    }
-
-    private function packageVersion(): string
-    {
-        $file = __DIR__ . '/../../composer.json';
-        if (!is_file($file)) {
-            return '0.1.0';
-        }
-
-        $data = json_decode((string) file_get_contents($file), true);
-
-        return is_array($data) && isset($data['version']) && is_string($data['version'])
-            ? $data['version']
-            : '0.1.0';
     }
 
     /**

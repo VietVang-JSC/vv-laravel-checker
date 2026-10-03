@@ -6,19 +6,16 @@ This note compares `rampart/quality-checker` against
 figures come from the upstream README at the time of writing (the repo has been **archived,
 read-only since 01/2026**).
 
-_This note compares `rampart/quality-checker` against Enlightn. Enlightn
-figures come from its upstream README; that repo is archived since Jan 2026._
-
 ## 1. Overview
 
-| Criterion | quality-checker (v1.0.0) | enlightn/enlightn (OSS) |
+| Criterion | quality-checker (v0.7.x) | enlightn/enlightn (OSS) |
 |---|---|---|
 | Status | Active | Archived 01/2026, read-only |
-| Check count | ~27 custom rules + 5 tool gates (phpcs/phpstan/phpunit/composer-audit/trivy) | 66 checks OSS (131 with commercial Pro) |
+| Check count | 43 custom rules + 5 tool gates (phpcs/phpstan/phpunit/composer-audit/trivy) | 66 checks OSS (131 with commercial Pro) |
 | Check groups | Security (OWASP Top 10) + migration/validation + coverage + convention | Performance (37) + security (49) + reliability (45), including the Pro version |
 | Analysis philosophy | Static, **no Laravel boot** | Boot app + **dynamic analysis** |
-| Laravel support | Pilot up to Laravel 12 | Stops at Laravel 11 |
-| OS support | Windows + Linux/macOS (mainly tested on Windows) | macOS/Linux only, **no Windows support** |
+| Laravel support | Up to Laravel 12 | Stops at Laravel 11 |
+| OS support | Windows + Linux/macOS, both in CI | macOS/Linux only, **no Windows support** |
 
 ## 2. Where Enlightn wins
 
@@ -33,12 +30,13 @@ figures come from its upstream README; that repo is archived since Jan 2026._
 ## 3. Where quality-checker wins
 
 - **Still alive**: Enlightn stopped development at Laravel ≤ 11; this tool is active,
-  with semver tags (`v1.0.0`), CI dogfooding.
+  on the `0.x` line (`v0.7.x`), with CI dogfooding — including a self-scan where
+  the package's own analyzers run over its own `src/`.
 - **Runs anywhere**: no app boot needed — it can scan even broken projects with
-  a bad `.env`/missing DB (one e-commerce pilot); Windows supported.
+  a bad `.env`/missing DB; Windows supported and covered in CI.
 - **Open, self-hosted reports**: SARIF 2.1.0 (native GitHub code scanning) +
   HTML/JSON/Markdown/console, with no dependency on external services.
-- **Measured static precision**: 26-case labeled corpus, precision/recall
+- **Measured static precision**: 197-case labeled corpus, precision/recall
   1.000/1.000 pinned by tests (`tests/Unit/AnalyzerMetricsTest.php`) —
   Enlightn publishes no such metrics.
 - **Its own static depth**: route-middleware awareness for broken access
@@ -55,4 +53,4 @@ figures come from its upstream README; that repo is archived since Jan 2026._
 Not competing on runtime check count with Enlightn (which requires booting the app + a production env,
 complex, and already done well by others). Going deeper on **static precision** — exactly the area
 where Enlightn OSS was weak and gave up: every new rule ships with a TP/FP corpus so
-precision/recall never regress, validated on real pilot repos before merge.
+precision/recall never regress, validated on real repositories before merge.

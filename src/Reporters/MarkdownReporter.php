@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rampart\QualityChecker\Reporters;
 
 use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\PackageVersion;
 use Rampart\QualityChecker\Result\Severity;
 use Rampart\QualityChecker\Remediation\RuleRemediation;
 use Rampart\QualityChecker\Runner\CheckContext;
@@ -14,13 +15,13 @@ final class MarkdownReporter implements ReporterInterface
     public function render(array $results, CheckContext $ctx): void
     {
         $generatedAt = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
-        $version = $ctx->packageVersion ?? '0.0.0';
+        $version = $ctx->packageVersion;
         $summary = $this->buildSummary($results);
 
         $lines = [];
         $lines[] = '# Laravel Quality Report';
         $lines[] = '';
-        $lines[] = 'Generated: ' . $generatedAt . ' | Package: v' . $version;
+        $lines[] = 'Generated: ' . $generatedAt . ' | Package: ' . PackageVersion::label($version);
         $lines[] = '';
         $lines[] = '**Status:** ' . $this->overallStatus($results, $ctx->failOn)
             . ' | **Tier:** ' . $this->esc($ctx->tier)

@@ -64,13 +64,7 @@ final class StandaloneRunnerTest extends TestCase
 
     public function testScansFixtureAndWritesJson(): void
     {
-        $this->dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-standalone-' . uniqid('', true);
-        $this->out = $this->dir . DIRECTORY_SEPARATOR . 'out';
-        @mkdir($this->dir . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Http', 0777, true);
-        file_put_contents(
-            $this->dir . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Http' . DIRECTORY_SEPARATOR . 'UserController.php',
-            "<?php\nnamespace App\\Http;\nclass UserController extends \\Controller {\n    public function destroy(\$id) { \\Order::find(\$id)->delete(); }\n}\n"
-        );
+        $this->makeVulnerableApp();
 
         $output = new BufferedOutput();
         $code = (new StandaloneRunner([
@@ -86,5 +80,76 @@ final class StandaloneRunnerTest extends TestCase
         self::assertFileExists($file);
         $payload = json_decode((string) file_get_contents($file), true);
         self::assertGreaterThan(0, $payload['summary']['total_issues']);
+        self::assertNotSame(
+            '0.0.0',
+            $payload['package_version'],
+            'Standalone reports used to be stamped 0.0.0 because the runner never resolved a version.'
+        );
+    }
+
+    public function testAllFormatsWriteTheirArtifact(): void
+    {
+        $this->makeVulnerableApp();
+
+        $output = new BufferedOutput();
+        $code = (new StandaloneRunner([
+            $this->dir,
+            '--format=all',
+            '--tier=security',
+            '--fail-on=none',
+            '--output=' . $this->out,
+        ]))->run($output, dirname(__DIR__, 2));
+
+        self::assertSame(0, $code);
+        foreach (['json', 'html', 'md', 'sarif'] as $extension) {
+            self::assertFileExists(
+                $this->out . DIRECTORY_SEPARATOR . 'quality-report.' . $extension,
+                'Missing report artifact for format: ' . $extension
+            );
+        }
+    }
+
+    public function testExcludePathKeepsFixtureFindingsOutOfTheScan(): void
+    {
+        $this->makeVulnerableApp('fixtures');
+
+        $output = new BufferedOutput();
+        $code = (new StandaloneRunner([
+            $this->dir,
+            '--format=json',
+            '--tier=security',
+            '--fail-on=none',
+            '--exclude-path=*' . '/fixtures/*',
+            '--output=' . $this->out,
+        ]))->run($output, dirname(__DIR__, 2));
+
+        self::assertSame(0, $code);
+        $payload = json_decode(
+            (string) file_get_contents($this->out . DIRECTORY_SEPARATOR . 'quality-report.json'),
+            true
+        );
+
+        self::assertSame(0, $payload['summary']['total_issues']);
+        self::assertStringContainsString(
+            'excluded by analyzers.exclude_paths',
+            (string) $payload['checkers'][0]['summary']
+        );
+    }
+
+    /**
+     * A controller with a mutating action and no authorization check, placed in
+     * `app/Http` or in `app/Http/<subdir>` when $subdir is given.
+     */
+    private function makeVulnerableApp(string $subdir = ''): void
+    {
+        $this->dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-standalone-' . uniqid('', true);
+        $this->out = $this->dir . DIRECTORY_SEPARATOR . 'out';
+        $controllerDir = $this->dir . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Http'
+            . ($subdir === '' ? '' : DIRECTORY_SEPARATOR . $subdir);
+        @mkdir($controllerDir, 0777, true);
+        file_put_contents(
+            $controllerDir . DIRECTORY_SEPARATOR . 'UserController.php',
+            "<?php\nnamespace App\\Http;\nclass UserController extends \\Controller {\n    public function destroy(\$id) { \\Order::find(\$id)->delete(); }\n}\n"
+        );
     }
 }

@@ -19,6 +19,11 @@ instead of disabling whole rule groups.
    `// quality-checker-ignore-next-line RULE` on the line above) skips exactly
    that finding; use `all` instead of RULE to skip all rules on that line.
    Disable entirely with `analyzers.inline_suppression => false`.
+6. **Fixtures are excluded, not reported** — `analyzers.exclude_paths` ships as
+   `['*/fixtures/*']`. Code under a `fixtures/` directory exists to be
+   vulnerable, so findings there are noise by construction. Use `--exclude-path`
+   (or the config key) to extend the list to your own sample directories; every
+   excluded file is counted in the `custom` checker summary.
 
 ## 2. Confidence & action
 
