@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (both entry points documented as peers)
+- `## Two Ways to Run` in the README: the Artisan command and the standalone
+  binary were previously presented as one primary path and a footnote, so the
+  differences that actually change a decision were invisible — standalone needs
+  no `vendor/` or bootable app in the target, defaults to `--only=custom`,
+  reads the tool's own config instead of the target's, and defaults its scan
+  scope differently.
+- The Options Reference table now has an **Applies to** column. Five options
+  exist only on the Artisan command (`--ignore`, `--fix`, `--json`, `--ci`,
+  `--no-auto-install`) and `--path` means something different in each entry
+  point (replace the configured paths vs. restrict the scan inside the target);
+  none of that was stated before.
+- `DocsEntryPointsTest` asserts all of it from the code rather than from prose:
+  the option list is reflected off the `QualityCheckCommand` signature and read
+  out of the standalone runner that parses it, so an undocumented option — or
+  one documented for the wrong entry point — fails the build.
+
 ### Added (complete rule reference, verified in CI)
 - The README documented 29 of the 43 rules and listed two ids that cannot be
   emitted (`DISABLED_CSRF`, `LARAVEL_PITFALL`). Every OWASP rule except six was

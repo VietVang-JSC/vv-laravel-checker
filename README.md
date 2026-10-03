@@ -118,6 +118,51 @@ composer require rampart/quality-checker
 
 ---
 
+## Two Ways to Run
+
+The same engine, the same analyzers, the same reports and the same exit codes.
+Two entry points, because the situations they serve are genuinely different.
+
+| | **Artisan command** | **Standalone binary** |
+|---|---|---|
+| Command | `php artisan quality:check` | `php bin/quality-check <target-dir>` |
+| Lives in | your app (`vendor/rampart/quality-checker`) | the tool's own checkout, scanning any target |
+| Needs `vendor/` in the target | yes | **no** |
+| Needs a bootable Laravel app | yes | no — static sources only |
+| Config source | published `config/quality-checker.php` | the tool's own config, plus CLI flags |
+| Default scan scope | `paths` from config (`app`, `routes`, `database`, `config`, `tests`) | `app src routes config database tests resources packages` found in the target |
+| Default checkers | all six | **`custom` only** — the wrapped tools need the target's own vendor |
+| Reports go to | `base_path()/reports/quality-checker` | `<target>/reports/quality-checker` |
+| Report version stamp | resolved package version | resolved package version (identical) |
+
+**Use the Artisan command** for your own application: it has the target's
+dependencies, its config file, its `phpunit` suite, and the full option set
+including `--fix`, `--ignore`, `--ci` and `--json`.
+
+```bash
+composer require rampart/quality-checker
+php artisan quality:check
+```
+
+**Use the standalone binary** when the target cannot take the dependency —
+version conflicts, a legacy toolchain, a read-only mount, a codebase you are
+auditing but not building. It needs nothing from the target beyond PHP.
+
+```bash
+git clone https://github.com/VietVang-JSC/vv-laravel-checker.git
+cd vv-laravel-checker && composer install
+php bin/quality-check /path/to/other/project --tier=security --fail-on=none
+```
+
+Both write the same five report formats and both return `0` / `1` / `2` for
+pass / gate-failed / environment-error, so a CI job can switch between them
+without changing how it interprets the result.
+
+Options that exist on only one entry point are marked in the
+[Options Reference](#options-reference).
+
+---
+
 ## Quick Start (5 minutes)
 
 Run the security scan first. It is the safest first run because it does not
@@ -199,26 +244,32 @@ Missing optional tools are then reported as `skipped` instead of being installed
 
 ## Options Reference
 
-| Option | Description | Default |
-|---|---|---|
-| `--format=...` | Comma-separated report formats: `console`, `json`, `html`, `md`, `sarif`, or `all` (runs all five). | `console` |
-| `--only=...` | Only run these checkers (comma-separated): `phpcs`, `phpstan`, `phpunit`, `composer_audit`, `trivy`, `custom`. | all checkers |
-| `--exclude=...` | Skip these checkers (comma-separated). | — |
-| `--path=*` | Override scan paths (repeatable, e.g. `--path=app --path=routes`). | from config |
-| `--exclude-path=*` | Skip files matching these path patterns (repeatable, e.g. `--exclude-path='*/stubs/*'`). Merged with `analyzers.exclude_paths`. | from config |
-| `--fail-on=severity` | Fail threshold: `none`, `info`, `warning`, `error`, `critical`. | `error` |
-| `--tier=...` | Quality gate tier: `security`, `quality`, `all`. | from config (`quality`) |
-| `--min-confidence=...` | Minimum confidence to report: `low`, `medium`, `high`. | from config (`low`) |
-| `--output=...` | Output directory for report files. | `reports/quality-checker` (from config) |
-| `--no-cache` | Ignore cached analyzer/checker results. | off |
-| `--no-auto-install` | Disable auto-installing missing tools (phpcs/phpstan/phpunit/trivy). | off |
-| `-q`, `--quiet` | Symfony Console's built-in quiet flag — prints the summary line only. | off |
-| `--json` | Shortcut for `--format=json`. | off |
-| `--ci` | CI mode: JSON output, `fail-on=error`, no progress. | off |
-| `--fix` | Auto-fix fixable issues (currently `phpcbf` only). | off |
-| `--baseline-generate` | Write the current issues to the baseline file. | off |
-| `--baseline-update` | Rewrite the baseline with all current issues. | off |
-| `--baseline-file=...` | Baseline file path. | `baseline.json` (project root) |
+"Artisan" means `php artisan quality:check`, "Standalone" means
+`php bin/quality-check <target-dir>`.
+
+| Option | Applies to | Description | Default |
+|---|---|---|---|
+| `--format=...` | both | Comma-separated report formats: `console`, `json`, `html`, `md`, `sarif`, or `all` (runs all five). | `console` |
+| `--only=...` | both | Only run these checkers (comma-separated): `phpcs`, `phpstan`, `phpunit`, `composer_audit`, `trivy`, `custom`. | Artisan: all six. Standalone: `custom` |
+| `--exclude=...` | both | Skip these checkers (comma-separated). | — |
+| `--tier=...` | both | Quality gate tier: `security`, `quality`, `all`. | from config (`quality`) |
+| `--min-confidence=...` | both | Minimum confidence to report: `low`, `medium`, `high`. | from config (`low`) |
+| `--fail-on=severity` | both | Fail threshold: `none`, `info`, `warning`, `error`, `critical`. | `error` |
+| `--output=...` | both | Output directory for report files. | `reports/quality-checker` (from config) |
+| `--no-cache` | both | Ignore cached analyzer/checker results. | off |
+| `--path=*` | both, different meaning | Artisan: replaces the configured `paths`. Standalone: restricts the scan to these sub-directories of the target. Repeatable. | from config / auto-detected |
+| `--exclude-path=*` | both | Skip files matching these path patterns (repeatable, e.g. `--exclude-path='*/stubs/*'`). Merged with `analyzers.exclude_paths`. | from config |
+| `--baseline-generate` | both | Write the current issues to the baseline file. | off |
+| `--baseline-update` | both | Rewrite the baseline with all current issues. | off |
+| `--baseline-file=...` | both | Baseline file path. | `baseline.json` at the project / target root |
+| `--profile` | both | Write `profile.json` (timers, parse amplification) next to the reports. Findings unchanged. | off |
+| `--help` | both | Print usage. Standalone prints its own list; Artisan uses Symfony Console's. | — |
+| `--ignore=...` | Artisan | Skip these rules (comma-separated, e.g. `MISSING_MODEL_TEST`), merged with `quality_gate.ignore`. Not in standalone: there is no config file to merge with, so use `analyzers.exclude_paths` or a baseline. | — |
+| `--no-auto-install` | Artisan | Disable auto-installing missing tools (phpcs/phpstan/phpunit/trivy). Standalone never installs anything. | off |
+| `--fix` | Artisan | Auto-fix fixable issues (currently `phpcbf` only). Needs the target's vendor, so it is not offered in standalone. | off |
+| `--json` | Artisan | Shortcut for `--format=json`. In standalone, pass `--format=json`. | off |
+| `--ci` | Artisan | CI mode: JSON output, `fail-on=error`, no progress. In standalone, pass `--format=json --fail-on=error`. | off |
+| `-q`, `--quiet` | Artisan | Symfony Console's built-in quiet flag — prints the summary line only. Standalone takes `-q` through Symfony Console as well. | off |
 
 > Note: `--json` implies the JSON reporter, while `--ci` adds the JSON reporter
 > automatically. `--format=all` maps to `console,json,html,md,sarif`.

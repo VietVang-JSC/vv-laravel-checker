@@ -32,6 +32,7 @@ revisited with the evidence that produced it.
 | Rule ids and OWASP-2021 categories | `src/Result/RuleIds.php` |
 | Which rules exist | The README rule tables, enforced by `tests/Unit/RuleDocsTest.php` |
 | Which rules the analyzers can emit | The analyzers' own `RULE_*` constants, enforced by `tests/Unit/RuleIdsTest.php` |
+| CLI options per entry point | The README Options Reference, enforced by `tests/Unit/DocsEntryPointsTest.php` |
 | Default configuration | `config/quality-checker.php` |
 | Precision/recall on the labelled corpus | `tests/Unit/AnalyzerMetricsTest.php`, printed by the test run |
 
