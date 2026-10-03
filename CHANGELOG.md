@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-03
+
+The release that makes the tool honest about itself: it reports a real version,
+it can be told to skip a directory, it gates its own analyzers on its own code,
+and its documentation is verified by the build.
+
 ### Changed (distribution)
 - The canonical repository is now `thiennhant95/Rampart`, which is the VCS
   source Packagist tracks for `rampart/quality-checker`. `composer.json`
@@ -614,7 +620,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Baseline generation and filtering, JSON / Markdown / console reporters, exit codes and `--fail-on` control.
 - Configuration via `config/quality-checker.php`.
 
-[Unreleased]: https://github.com/thiennhant95/Rampart/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/thiennhant95/Rampart/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/thiennhant95/Rampart/releases/tag/v0.8.0
 [0.7.0]: https://github.com/thiennhant95/Rampart/releases/tag/v0.7.0
 [0.6.2]: https://github.com/thiennhant95/Rampart/releases/tag/v0.6.2
 [0.2.0 - 0.6.1]: https://github.com/thiennhant95/Rampart/compare/v1.1.0...v0.6.2

@@ -10,7 +10,7 @@ stale baseline is how upgrades silently pass.
 
 ---
 
-## Upgrading to 0.8.x from 0.7.x
+## Upgrading to 0.8.0 from 0.7.x
 
 ### `analyzers.exclude_paths` now excludes fixtures by default
 
