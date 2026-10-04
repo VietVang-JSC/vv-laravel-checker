@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-04
+
+The release that makes the package test the thing it ships. It installs its own
+archive and runs it — the only check that can see what a consumer actually gets —
+it shrank that archive from 19 MB to 285 KB, and it fixes two paths that were
+broken for every project shipping its own `composer.phar`.
+
 ### Fixed (a project with its own composer.phar was silently unaudited)
 - `ToolInstaller::findComposer()` and `ComposerAuditChecker::locateComposer()`
   both returned `PHP_BINARY . ' ' . $phar` — one string. `Symfony\Component\Process\Process`
@@ -748,7 +755,8 @@ and its documentation is verified by the build.
 - Baseline generation and filtering, JSON / Markdown / console reporters, exit codes and `--fail-on` control.
 - Configuration via `config/quality-checker.php`.
 
-[Unreleased]: https://github.com/thiennhant95/Rampart/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/thiennhant95/Rampart/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/thiennhant95/Rampart/releases/tag/v0.9.0
 [0.8.0]: https://github.com/thiennhant95/Rampart/releases/tag/v0.8.0
 [0.7.0]: https://github.com/thiennhant95/Rampart/releases/tag/v0.7.0
 [0.6.2]: https://github.com/thiennhant95/Rampart/releases/tag/v0.6.2

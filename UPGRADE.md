@@ -10,6 +10,44 @@ stale baseline is how upgrades silently pass.
 
 ---
 
+## Upgrading to 0.9.0 from 0.8.x
+
+### Auto-installed phpcs is now version-constrained
+
+**This can make findings disappear.** `auto_install_tools` used to install
+`squizlabs/php_codesniffer` with no constraint, so a fresh project got phpcs 4.x.
+Its PSR12 ruleset is re-implemented and additionally reports `Squiz.*` codes that
+3.x does not. Auto-install now asks for `^3.13 || ^4.0`, the range this package is
+verified against, which means a new install gets 3.x and those extra codes stop
+appearing.
+
+If you already have phpcs 4.x installed and want to keep it, nothing changes —
+the constraint only applies to what this package installs for you. To see the codes
+your own phpcs reports:
+
+```bash
+vendor/bin/phpcs --standard=PSR12 -s app | grep Squiz
+```
+
+### A `composer.phar` in the project root is now actually used
+
+**This can make findings appear.** `composer_audit` resolved a project-local
+`composer.phar` by joining the interpreter and the path into a single string,
+which Symfony's `Process` then tried to execute as one binary name. The spawn
+failed and the audit was reported as skipped. It now runs, so a project shipping
+its own phar gets real advisory results instead of a skip. Same fix applies to
+`auto_install_tools`, which was silently failing to install anything.
+
+### Whitespace-only PHPStan notices are no longer findings
+
+`phpstan` writes file-level notices — an unmatched `ignoreErrors` pattern, for
+instance — as entries in a top-level `errors` array. Whitespace-only entries
+became findings with an empty message. They are skipped now. If one of those empty
+findings was in your baseline, re-generate it: see
+[Re-baselining after an upgrade](#re-baselining-after-an-upgrade).
+
+---
+
 ## Upgrading to 0.8.0 from 0.7.x
 
 ### `analyzers.exclude_paths` now excludes fixtures by default
