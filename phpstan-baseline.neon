@@ -751,12 +751,6 @@ parameters:
 			path: src/Checkers/PhpcsChecker.php
 
 		-
-			message: '#^Method Rampart\\QualityChecker\\Checkers\\PhpcsChecker\:\:parseOutput\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Checkers/PhpcsChecker.php
-
-		-
 			message: '#^Method Rampart\\QualityChecker\\Checkers\\PhpstanChecker\:\:config\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (an unversioned phpcs became new findings with no cause)
+- `ToolInstaller` installed `squizlabs/php_codesniffer` with no constraint, so a
+  fresh project got phpcs 4.x, whose PSR12 ruleset also reports `Squiz.*` codes.
+  The JSON contract parses them, so nothing failed — a user just saw new findings
+  with no cause. Tool versions are now constrained to the range this package is
+  verified against (`^3.13 || ^4.0`, `^2.0`, `^10.5 || ^11.0`), so an untested
+  future major becomes a visible conflict instead of a silent behaviour change in
+  someone's build.
+- Those versions were never actually executed: `PhpcsChecker` skips itself unless
+  the *target* project has `vendor/bin/phpcs`, so `parseOutput()` had no test at
+  all. `PhpcsJsonContractTest` drives it through reflection with real output
+  captured from phpcs 3.13 and 4.0 — identical shape, different codes.
+- `PhpcsJsonContractTest` referenced `Issue` without importing it, so PHPStan saw
+  an unknown class in 14 places; and the `@return list<Issue>` added to
+  `PhpcsChecker::parseOutput()` made its phpstan baseline entry unmatched, which
+  fails the build on `reportUnmatchedIgnoredErrors`. Both fixed.
+
 ## [0.8.0] - 2026-10-03
 
 The release that makes the tool honest about itself: it reports a real version,

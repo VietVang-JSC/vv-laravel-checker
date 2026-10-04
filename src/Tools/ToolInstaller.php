@@ -16,11 +16,24 @@ use Rampart\QualityChecker\Runner\CheckContext;
  */
 final class ToolInstaller
 {
-    /** checker name => composer dev package */
+    /**
+     * Checker name => composer package, with the version range this package has
+     * actually been verified against.
+     *
+     * The constraint is deliberate. Installing `squizlabs/php_codesniffer` with
+     * no range means a fresh project gets phpcs 4.x, whose PSR12 ruleset also
+     * reports `Squiz.*` codes — a legitimate change in the tool's output that
+     * the JSON contract below still parses, but that a user would experience as
+     * new findings with no cause. Stating `^3.13 || ^4.0` documents the tested
+     * range and makes an untested future major a visible conflict instead of a
+     * silent behaviour change in someone's build.
+     *
+     * @var array<string, string>
+     */
     private const COMPOSER_TOOLS = [
-        'phpcs' => 'squizlabs/php_codesniffer',
-        'phpstan' => 'phpstan/phpstan',
-        'phpunit' => 'phpunit/phpunit',
+        'phpcs' => 'squizlabs/php_codesniffer:^3.13 || ^4.0',
+        'phpstan' => 'phpstan/phpstan:^2.0',
+        'phpunit' => 'phpunit/phpunit:^10.5 || ^11.0',
     ];
 
     private CheckContext $ctx;
@@ -88,9 +101,9 @@ final class ToolInstaller
     public function hint(string $checkerName): string
     {
         return match ($checkerName) {
-            'phpcs' => 'composer require --dev squizlabs/php_codesniffer',
-            'phpstan' => 'composer require --dev phpstan/phpstan',
-            'phpunit' => 'composer require --dev phpunit/phpunit',
+            'phpcs' => 'composer require --dev "squizlabs/php_codesniffer:^3.13 || ^4.0"',
+            'phpstan' => 'composer require --dev "phpstan/phpstan:^2.0"',
+            'phpunit' => 'composer require --dev "phpunit/phpunit:^10.5 || ^11.0"',
             'trivy' => 'download from https://github.com/aquasecurity/trivy/releases or run this tool online',
             default => 'install the missing tool',
         };
