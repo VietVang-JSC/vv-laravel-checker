@@ -116,16 +116,18 @@ final class ToolInstaller
             return false;
         }
 
-        $command = [
+        $command = array_merge(
             $composer,
-            'require',
-            '--dev',
-            $package,
-            '--no-interaction',
-            '--no-progress',
-            '--no-scripts',
-            '--no-plugins',
-        ];
+            [
+                'require',
+                '--dev',
+                $package,
+                '--no-interaction',
+                '--no-progress',
+                '--no-scripts',
+                '--no-plugins',
+            ]
+        );
 
         $process = new Process($command, $this->ctx->basePath);
         $process->setTimeout(600.0);
@@ -134,18 +136,30 @@ final class ToolInstaller
         return $process->isSuccessful();
     }
 
-    private function findComposer(): ?string
+    /**
+     * The composer command as a *list*, never a joined string.
+     *
+     * `Symfony\Component\Process\Process` executes element 0 as the binary and
+     * passes the rest as arguments. A local `composer.phar` has to be run as
+     * `php composer.phar`, which is two elements; returning
+     * `PHP_BINARY . ' ' . $phar` produced a single element naming a file that
+     * does not exist, so the spawn failed with exit 127 and auto-install
+     * silently reported failure on every project that ships its own phar.
+     *
+     * @return list<string>|null
+     */
+    private function findComposer(): ?array
     {
         // Look for a local composer.phar first, then fall back to PATH `composer`.
         $phar = $this->ctx->basePath . DIRECTORY_SEPARATOR . 'composer.phar';
         if (is_file($phar)) {
-            return PHP_BINARY . ' ' . $phar;
+            return [PHP_BINARY, $phar];
         }
 
         $which = PHP_OS_FAMILY === 'Windows' ? 'where' : 'which';
         $process = new Process([$which, 'composer']);
         $process->run();
 
-        return $process->isSuccessful() ? 'composer' : null;
+        return $process->isSuccessful() ? ['composer'] : null;
     }
 }

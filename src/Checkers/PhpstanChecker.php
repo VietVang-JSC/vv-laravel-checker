@@ -128,7 +128,10 @@ final class PhpstanChecker extends AbstractProcessChecker
         }
 
         foreach (($decoded['errors'] ?? []) as $error) {
-            if (!is_string($error) || $error === '') {
+            // trim() rather than `=== ''`: PHPStan has emitted whitespace-only
+            // entries here, and each one became an issue with an empty message —
+            // noise in the report that reads as a finding nobody can act on.
+            if (!is_string($error) || trim($error) === '') {
                 continue;
             }
 

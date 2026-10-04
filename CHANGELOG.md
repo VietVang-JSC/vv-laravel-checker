@@ -7,22 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added (a test for the thing consumers actually install)
-- `tools/smoke-install.php`, run as `composer smoke` and as its own CI job:
-  builds the real `composer archive`, asserts its contents are the runtime
-  subset, installs it into a throwaway project through an `artifact` repository,
-  and runs the *installed* binary against a planted-bad app. Everything else in
-  the suite runs from a clone, where `vendor/autoload.php` is one directory up
-  and `tests/` and `.github/` are present — neither is true once Composer hoists
-  the dependencies, which is how the broken `vendor/bin/quality-check` in 0.7.x
-  went unnoticed until a consumer hit it.
-- The test asserts the report header carries the installed version end to end
-  (composer.json → Composer → `InstalledVersions` → header). It installs an
-  artifact stamped `9.9.9` for exactly that reason: `0.0.0` is
-  `PackageVersion::FALLBACK`, so a fixture stamped `0.0.0` cannot tell
-  "resolved the real version" from "gave up".
+### Fixed (a project with its own composer.phar was silently unaudited)
+- `ToolInstaller::findComposer()` and `ComposerAuditChecker::locateComposer()`
+  both returned `PHP_BINARY . ' ' . $phar` — one string. `Symfony\Component\Process\Process`
+  executes element 0 as the binary and passes the rest as arguments, so the string
+  named a file called `php /path/composer.phar`, the spawn failed, and the result
+  was a silent `composer binary not found` skip plus an auto-install that reported
+  failure with no cause. Both now return a command *list*.
+- `ComposerPharCommandTest` pins it end to end with a stand-in `composer.phar` that
+  records its argv: with the old code the fixture is never executed at all, so the
+  test cannot pass against it.
 
-### Fixed (an unversioned phpcs became new findings with no cause)
+### Fixed (phpcs, phpstan and phpunit were installed with no version constraint)
 - `ToolInstaller` installed `squizlabs/php_codesniffer` with no constraint, so a
   fresh project got phpcs 4.x, whose PSR12 ruleset also reports `Squiz.*` codes.
   The JSON contract parses them, so nothing failed — a user just saw new findings
@@ -39,6 +35,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PhpcsChecker::parseOutput()` made its phpstan baseline entry unmatched, which
   fails the build on `reportUnmatchedIgnoredErrors`. Both fixed.
 
+### Added (a test for the thing consumers actually install)
+- `tools/smoke-install.php`, run as `composer smoke` and as its own CI job:
+  builds the real `composer archive`, asserts its contents are the runtime
+  subset, installs it into a throwaway project through an `artifact` repository,
+  and runs the *installed* binary against a planted-bad app. Everything else in
+  the suite runs from a clone, where `vendor/autoload.php` is one directory up
+  and `tests/` and `.github/` are present — neither is true once Composer hoists
+  the dependencies, which is how the broken `vendor/bin/quality-check` in 0.7.x
+  went unnoticed until a consumer hit it.
+- The test asserts the report header carries the installed version end to end
+  (composer.json → Composer → `InstalledVersions` → header). It installs an
+  artifact stamped `9.9.9` for exactly that reason: `0.0.0` is
+  `PackageVersion::FALLBACK`, so a fixture stamped `0.0.0` cannot tell
+  "resolved the real version" from "gave up".
+- The smoke test found the `composer.phar` defect above. It also documents two
+  environment traps it hit on the way: Composer's parallel downloader stalls when
+  `proc_open` hands it pipes on Windows (same install, same cache, seconds from a
+  console), and `COMPOSER_PROCESS_TIMEOUT` does not cover a stall after the last
+  byte of output, so the harness enforces its own deadline and kills the process
+  tree. `SMOKE_TIMEOUT=1` exercises that path.
+
+### Added (the cache and the phpstan parser now have tests)
+- The cache-hit branch of `CheckRunner::run()` had never been executed: every
+  other test disables the cache, so a regression that served stale results
+  instead of running the checker — a gate reporting the previous run's findings
+  forever — would not have failed anything. Two tests now cover both directions
+  (a warm cache must not re-run the checker, an expired entry must).
+- `ResultCache::codeVersion()` was only asserted to be stable and hex-shaped, so
+  hashing nothing, or one directory instead of three, would have stayed green —
+  the "a package upgrade can never serve results from older analyzers" guarantee
+  was untested. It takes an optional root now, so the tests can change a file and
+  watch the hash move.
+- `PhpstanJsonContractTest` pins `PhpstanChecker::parseOutput()` against verbatim
+  PHPStan 2.0 output, including the two details that are easy to get wrong: the
+  rule id is `identifier` (`class.notFound`, `argument.type`), and `line` is
+  nullable because file-level diagnostics such as an unmatched `ignoreErrors`
+  pattern arrive with `"line": null`.
+- Writing that test found a defect in it: whitespace-only entries in PHPStan's
+  top-level `errors` array became issues with an empty message. The parser now
+  skips them.
+
 ### Fixed (the distributed archive shipped the development tree)
 - The archive carried `vendor/`, `tests/`, `.github/`, the phpstan baseline, the
   phpcs/phpunit configs and the project documentation — 19 MB of files no runtime
@@ -47,6 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.phpunit.result.cache` reached the archive too. It is gitignored, and
   `composer archive` does not honour `.gitignore`, so it needed an explicit
   `export-ignore` rule.
+- Mojibake repaired in four `MethodSummaryTest` comments, committed as UTF-8 bytes
+  read as Windows-1252.
 
 ## [0.8.0] - 2026-10-03
 

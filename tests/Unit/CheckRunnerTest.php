@@ -235,6 +235,151 @@ final class CheckRunnerTest extends TestCase
         self::assertCount(1, $results);
     }
 
+    /**
+     * The cache-hit branch — the one that decides whether a checker runs at all.
+     *
+     * This is the highest-consequence branch in the runner and it had no test:
+     * every other test in this file passes `noCache: true` or a config with
+     * `cache.enabled => false`, so a regression that served results from cache
+     * instead of running the checker — the failure mode being a gate that reports
+     * last run's findings forever — would not have failed a single test.
+     *
+     * The stub counts its invocations, so "was it re-run?" is asserted directly
+     * rather than inferred from the summary text.
+     */
+    public function testWarmCacheServesTheStoredResultWithoutRunningTheCheckerAgain(): void
+    {
+        $base = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-cache-hit-' . bin2hex(random_bytes(6));
+        $outputDir = $base . DIRECTORY_SEPARATOR . 'reports';
+        mkdir($outputDir, 0777, true);
+
+        try {
+            $ctx = new CheckContext($base, ['app'], [], $outputDir, failOn: 'error');
+
+            $checker = new class implements CheckerInterface {
+                public int $runs = 0;
+                public string $summary = 'first-run';
+
+                public function name(): string
+                {
+                    return 'stub';
+                }
+
+                public function description(): string
+                {
+                    return 'Stub checker';
+                }
+
+                public function isAvailable(CheckContext $ctx): bool
+                {
+                    return true;
+                }
+
+                public function run(CheckContext $ctx): CheckResult
+                {
+                    $this->runs++;
+
+                    return new CheckResult('stub', 'passed', 0.01, [], null, $this->summary);
+                }
+
+                /** @return array<string, mixed> */
+                public function config(): array
+                {
+                    return [];
+                }
+            };
+
+            $runner = new CheckRunner($ctx);
+
+            $first = $runner->run([$checker]);
+            self::assertSame(1, $checker->runs);
+            self::assertSame('first-run', $first[0]->summary);
+
+            // Change what a live run would report, then run again. The cached
+            // result must win, which is the whole point of the cache.
+            $checker->summary = 'second-run';
+            $second = (new CheckRunner($ctx))->run([$checker]);
+
+            self::assertSame(1, $checker->runs, 'the checker must not run again on a cache hit');
+            self::assertSame('first-run', $second[0]->summary, 'the cached result must be served');
+
+            // --no-cache on the same context must bypass it in the other direction.
+            $bypass = new CheckContext($base, ['app'], [], $outputDir, noCache: true, failOn: 'error');
+            $third = (new CheckRunner($bypass))->run([$checker]);
+
+            self::assertSame(2, $checker->runs);
+            self::assertSame('second-run', $third[0]->summary);
+        } finally {
+            $this->removeDir($base);
+        }
+    }
+
+    /**
+     * A cache entry written by one version of the checker code must not be
+     * served after the code changes: the key embeds `ResultCache::codeVersion()`,
+     * so a modified analyzer produces a different key and therefore a miss.
+     */
+    public function testExpiredCacheEntryIsNotServed(): void
+    {
+        $base = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-cache-expiry-' . bin2hex(random_bytes(6));
+        $outputDir = $base . DIRECTORY_SEPARATOR . 'reports';
+        mkdir($outputDir, 0777, true);
+
+        try {
+            $ctx = new CheckContext($base, ['app'], [], $outputDir, failOn: 'error');
+            $checker = new class implements CheckerInterface {
+                public int $runs = 0;
+
+                public function name(): string
+                {
+                    return 'stub';
+                }
+
+                public function description(): string
+                {
+                    return 'Stub checker';
+                }
+
+                public function isAvailable(CheckContext $ctx): bool
+                {
+                    return true;
+                }
+
+                public function run(CheckContext $ctx): CheckResult
+                {
+                    $this->runs++;
+
+                    return new CheckResult('stub', 'passed', 0.01, [], null, 'live');
+                }
+
+                /** @return array<string, mixed> */
+                public function config(): array
+                {
+                    return [];
+                }
+            };
+
+            $runner = new CheckRunner($ctx);
+            $runner->run([$checker]);
+            self::assertSame(1, $checker->runs);
+
+            // Expire every entry behind the runner's back.
+            $cacheDir = $outputDir . DIRECTORY_SEPARATOR . '.cache';
+            foreach ((array) glob($cacheDir . DIRECTORY_SEPARATOR . '*.json') as $file) {
+                $payload = json_decode((string) file_get_contents((string) $file), true);
+                $payload['expires_at'] = time() - 1;
+                file_put_contents((string) $file, (string) json_encode($payload));
+            }
+
+            $results = (new CheckRunner($ctx))->run([$checker]);
+
+            self::assertSame(2, $checker->runs, 'an expired entry must be re-run, not served');
+            self::assertSame('live', $results[0]->summary);
+        } finally {
+            $this->removeDir($base);
+        }
+    }
+
     private function removeDir(string $dir): void
     {
         if (!is_dir($dir)) {

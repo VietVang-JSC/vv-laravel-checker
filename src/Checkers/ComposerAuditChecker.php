@@ -55,7 +55,11 @@ final class ComposerAuditChecker extends AbstractProcessChecker
             );
         }
 
-        [$exitCode, $stdout, $stderr] = $this->runProcess([$composer, 'audit', '--format=json', '--no-interaction'], $ctx->basePath, 120.0);
+        [$exitCode, $stdout, $stderr] = $this->runProcess(
+            array_merge($composer, ['audit', '--format=json', '--no-interaction']),
+            $ctx->basePath,
+            120.0
+        );
 
         $issues = $this->parseOutput($stdout);
         $rawOutput = trim($stdout . "\n" . $stderr);
@@ -141,17 +145,27 @@ final class ComposerAuditChecker extends AbstractProcessChecker
         };
     }
 
-    private function locateComposer(CheckContext $ctx): ?string
+    /**
+     * The composer command as a *list*, never a joined string.
+     *
+     * `Process` runs element 0 as the binary; a local `composer.phar` needs
+     * `php composer.phar`, i.e. two elements. Joining them into one string named
+     * a binary that does not exist, so a project shipping its own phar was
+     * reported as "composer binary not found" and skipped.
+     *
+     * @return list<string>|null
+     */
+    private function locateComposer(CheckContext $ctx): ?array
     {
         foreach ([$ctx->basePath . DIRECTORY_SEPARATOR . 'composer.phar'] as $candidate) {
             if (is_file($candidate)) {
-                return PHP_BINARY . ' ' . $candidate;
+                return [PHP_BINARY, $candidate];
             }
         }
 
         $process = new Process([PHP_OS_FAMILY === 'Windows' ? 'where' : 'which', 'composer']);
         $process->run();
 
-        return $process->isSuccessful() ? 'composer' : null;
+        return $process->isSuccessful() ? ['composer'] : null;
     }
 }

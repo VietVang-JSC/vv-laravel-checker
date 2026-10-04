@@ -82,17 +82,24 @@ final class ResultCache
         );
     }
 
-    /**
-     * Version of the analyzer/checker code, baked into every cache key so a
-     * package upgrade can never serve results computed by older analyzers.
-     */
-    public static function codeVersion(): string
+/**
+ * Version of the analyzer/checker code, baked into every cache key so a
+ * package upgrade can never serve results computed by older analyzers.
+ *
+ * `$root` exists so this contract can be tested: the hash has to react to a
+ * changed analyzer file, and asserting that requires pointing it at a tree the
+ * test owns. Production callers pass nothing and get the memoised default.
+ */
+    public static function codeVersion(?string $root = null): string
     {
-        if (self::$codeVersion !== null) {
+        $packageRoot = dirname(__DIR__, 2);
+        $usesPackageRoot = $root === null || $root === $packageRoot;
+        $root ??= $packageRoot;
+
+        if ($usesPackageRoot && self::$codeVersion !== null) {
             return self::$codeVersion;
         }
 
-        $root = dirname(__DIR__, 2);
         $hashes = [];
         foreach (['src/Analyzers', 'src/Checkers', 'src/Runner'] as $dir) {
             $abs = $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $dir);
@@ -114,9 +121,13 @@ final class ResultCache
         }
         ksort($hashes);
 
-        self::$codeVersion = md5(implode('|', $hashes));
+        $version = md5(implode('|', $hashes));
 
-        return self::$codeVersion;
+        if ($usesPackageRoot) {
+            self::$codeVersion = $version;
+        }
+
+        return $version;
     }
 
     private function pathFor(string $key): string

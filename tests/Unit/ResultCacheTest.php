@@ -102,6 +102,91 @@ final class ResultCacheTest extends TestCase
         self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $v1);
     }
 
+    /**
+ * The cache key must change when the analyzer/checker code changes — that is the
+ * documented guarantee ("a package upgrade can never serve results computed by
+ * older analyzers") and the reason `codeVersion()` exists at all.
+ *
+ * The previous version of this test only checked that the hash was stable and
+ * looked like an md5, which every implementation passes: hashing nothing, hashing
+ * one directory instead of three, or returning `md5('x')` would all have stayed
+ * green. These tests give `codeVersion()` a tree it owns so the contents can
+ * actually change between calls.
+ */
+    public function testCodeVersionChangesWhenAnAnalyzerChanges(): void
+    {
+        $root = $this->fakeTree();
+
+        $before = ResultCache::codeVersion($root);
+        file_put_contents($root . '/src/Analyzers/Sample.php', "<?php // changed\n");
+        $after = ResultCache::codeVersion($root);
+
+        self::assertNotSame($before, $after, 'editing an analyzer must invalidate the cache');
+    }
+
+    public function testCodeVersionChangesWhenARunnerClassChanges(): void
+    {
+        $root = $this->fakeTree();
+
+        $before = ResultCache::codeVersion($root);
+        file_put_contents($root . '/src/Runner/Sample.php', "<?php // changed\n");
+        $after = ResultCache::codeVersion($root);
+
+        self::assertNotSame($before, $after);
+    }
+
+    public function testCodeVersionIgnoresDirectoriesOutsideTheHashedSet(): void
+    {
+        $root = $this->fakeTree();
+
+        $before = ResultCache::codeVersion($root);
+        mkdir($root . '/tests/Unit', 0777, true);
+        file_put_contents($root . '/tests/Unit/Sample.php', "<?php // changed\n");
+        mkdir($root . '/src/Reporters', 0777, true);
+        file_put_contents($root . '/src/Reporters/Sample.php', "<?php // changed\n");
+        $after = ResultCache::codeVersion($root);
+
+        self::assertSame(
+            $before,
+            $after,
+            'only src/Analyzers, src/Checkers and src/Runner may affect the cache key'
+        );
+    }
+
+    public function testCodeVersionIgnoresNonPhpFiles(): void
+    {
+        $root = $this->fakeTree();
+
+        $before = ResultCache::codeVersion($root);
+        file_put_contents($root . '/src/Analyzers/notes.md', 'not code');
+        $after = ResultCache::codeVersion($root);
+
+        self::assertSame($before, $after);
+    }
+
+    public function testCodeVersionOfAnEmptyTreeIsStillHex(): void
+    {
+        $root = $this->outputDir . DIRECTORY_SEPARATOR . 'empty-tree';
+        mkdir($root, 0777, true);
+
+        self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', ResultCache::codeVersion($root));
+    }
+
+    /**
+     * A throwaway package root containing one file in each hashed directory.
+     */
+    private function fakeTree(): string
+    {
+        $root = $this->outputDir . DIRECTORY_SEPARATOR . 'tree-' . bin2hex(random_bytes(4));
+
+        foreach (['src/Analyzers', 'src/Checkers', 'src/Runner'] as $dir) {
+            mkdir($root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $dir), 0777, true);
+            file_put_contents($root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $dir) . '/Sample.php', "<?php // original\n");
+        }
+
+        return $root;
+    }
+
     private function removeDir(string $dir): void
     {
         if (!is_dir($dir)) {
