@@ -29,13 +29,14 @@
     },
     "scripts": {
         "test": "phpunit",
-        "lint": "phpcs --standard=phpcs.xml.dist src tests",
+        "lint": "phpcs --standard=phpcs.xml.dist src tests tools",
         "analyse": "phpstan analyse --memory-limit=1G --no-progress",
         "check": [
             "@lint",
             "@analyse",
             "@test"
-        ]
+        ],
+        "smoke": "php tools/smoke-install.php"
     },
     "autoload": {
         "psr-4": {

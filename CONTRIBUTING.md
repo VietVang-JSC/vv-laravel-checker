@@ -28,12 +28,30 @@ composer check
 
 | Command         | What it runs                                          |
 |-----------------|-------------------------------------------------------|
-| `composer lint` | PHP_CodeSniffer, `PSR12` standard, against `src` and `tests` |
+| `composer lint` | PHP_CodeSniffer, `PSR12` standard, against `src`, `tests` and `tools` |
 | `composer analyse` | PHPStan at `level 6` against `src` and `tests`        |
 | `composer test` | PHPUnit (all unit and feature tests)                  |
 
 You can run each step individually as well. `composer test` (PHPUnit) accepts
 the usual flags, e.g. `composer test -- --filter=SomeTest`.
+
+### The smoke test
+
+`composer check` runs from a clone, where `vendor/autoload.php` is one directory
+up from `bin/` and `tests/` and `.github/` are simply present. Neither is true of
+an installed package, and that gap is how a broken `vendor/bin/quality-check` and
+a 19 MB archive shipped unnoticed.
+
+```bash
+composer smoke
+```
+
+It builds the real `composer archive`, asserts its contents are the runtime
+subset, installs it into a throwaway project from an `artifact` repository, and
+runs the *installed* binary against a planted-bad app. It needs network access
+and takes a minute or two; CI runs it on Ubuntu in a job of its own. It is not
+part of `composer check` because it installs from the network, which a
+pre-commit hook or an offline machine should not do.
 
 ## Adding a new analyzer
 

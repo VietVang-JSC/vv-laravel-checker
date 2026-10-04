@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (a test for the thing consumers actually install)
+- `tools/smoke-install.php`, run as `composer smoke` and as its own CI job:
+  builds the real `composer archive`, asserts its contents are the runtime
+  subset, installs it into a throwaway project through an `artifact` repository,
+  and runs the *installed* binary against a planted-bad app. Everything else in
+  the suite runs from a clone, where `vendor/autoload.php` is one directory up
+  and `tests/` and `.github/` are present — neither is true once Composer hoists
+  the dependencies, which is how the broken `vendor/bin/quality-check` in 0.7.x
+  went unnoticed until a consumer hit it.
+- The test asserts the report header carries the installed version end to end
+  (composer.json → Composer → `InstalledVersions` → header). It installs an
+  artifact stamped `9.9.9` for exactly that reason: `0.0.0` is
+  `PackageVersion::FALLBACK`, so a fixture stamped `0.0.0` cannot tell
+  "resolved the real version" from "gave up".
+
 ### Fixed (an unversioned phpcs became new findings with no cause)
 - `ToolInstaller` installed `squizlabs/php_codesniffer` with no constraint, so a
   fresh project got phpcs 4.x, whose PSR12 ruleset also reports `Squiz.*` codes.
