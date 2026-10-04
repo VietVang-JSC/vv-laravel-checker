@@ -56,7 +56,10 @@ final class ComposerAuditChecker extends AbstractProcessChecker
         }
 
         [$exitCode, $stdout, $stderr] = $this->runProcess(
-            array_merge($composer, ['audit', '--format=json', '--no-interaction']),
+            // Literal array, not array_merge(): Symfony bypasses the shell for an
+            // argument array, and this package's own OWASP_COMMAND_INJECTION
+            // analyzer can only prove that from a literal.
+            [...$composer, 'audit', '--format=json', '--no-interaction'],
             $ctx->basePath,
             120.0
         );

@@ -24,6 +24,11 @@ broken for every project shipping its own `composer.phar`.
 - `ComposerPharCommandTest` pins it end to end with a stand-in `composer.phar` that
   records its argv: with the old code the fixture is never executed at all, so the
   test cannot pass against it.
+- The first version of that fix built the command with `array_merge()`, and the
+  package's own analyzers failed the release build on it: `OWASP_COMMAND_INJECTION`
+  flags a `new Process()` whose command it cannot see as an array literal, because
+  Symfony's shell-free guarantee is only provable for one. The command is now a
+  literal with a spread, which is the form this package documents.
 
 ### Fixed (phpcs, phpstan and phpunit were installed with no version constraint)
 - `ToolInstaller` installed `squizlabs/php_codesniffer` with no constraint, so a

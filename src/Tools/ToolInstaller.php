@@ -116,18 +116,20 @@ final class ToolInstaller
             return false;
         }
 
-        $command = array_merge(
-            $composer,
-            [
-                'require',
-                '--dev',
-                $package,
-                '--no-interaction',
-                '--no-progress',
-                '--no-scripts',
-                '--no-plugins',
-            ]
-        );
+        // A literal array, not array_merge(): Symfony bypasses the shell for an
+        // argument array, and a literal keeps that provable to a reader (and to
+        // this package's own OWASP_COMMAND_INJECTION analyzer, which flags a
+        // `new Process()` whose command it cannot see as an array literal).
+        $command = [
+            ...$composer,
+            'require',
+            '--dev',
+            $package,
+            '--no-interaction',
+            '--no-progress',
+            '--no-scripts',
+            '--no-plugins',
+        ];
 
         $process = new Process($command, $this->ctx->basePath);
         $process->setTimeout(600.0);
