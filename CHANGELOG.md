@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PhpcsChecker::parseOutput()` made its phpstan baseline entry unmatched, which
   fails the build on `reportUnmatchedIgnoredErrors`. Both fixed.
 
+### Fixed (the distributed archive shipped the development tree)
+- The archive carried `vendor/`, `tests/`, `.github/`, the phpstan baseline, the
+  phpcs/phpunit configs and the project documentation — 19 MB of files no runtime
+  path touches, installed into every consumer's project on `composer require`.
+  `.gitattributes` now `export-ignore`s them; the archive is 285 KB.
+- `.phpunit.result.cache` reached the archive too. It is gitignored, and
+  `composer archive` does not honour `.gitignore`, so it needed an explicit
+  `export-ignore` rule.
+
 ## [0.8.0] - 2026-10-03
 
 The release that makes the tool honest about itself: it reports a real version,
