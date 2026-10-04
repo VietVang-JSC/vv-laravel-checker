@@ -15,8 +15,8 @@ use Rampart\QualityChecker\Semantic\MethodSummary;
 use Rampart\QualityChecker\Semantic\MethodSummaryIndex;
 
 /**
- * v0.5.2 bounded interprocedural return summaries: corpus Aâ€“T.
- * Soundness first â€” unresolved beats wrong, always.
+ * v0.5.2 bounded interprocedural return summaries: corpus A—T.
+ * Soundness first — unresolved beats wrong, always.
  */
 final class MethodSummaryTest extends TestCase
 {
@@ -142,7 +142,7 @@ final class MethodSummaryTest extends TestCase
     private function classifySink(string $controllerPath, array $paths, string $body): MassFlow
     {
         // Rewrite controller body per case is complex; instead each case
-        // builds its own project â€” this helper classifies the FIRST
+        // builds its own project — this helper classifies the FIRST
         // create()/fill() sink in the already-written controller.
         $parsed = $this->parse($controllerPath);
         $finder = new NodeFinder();
@@ -286,7 +286,7 @@ final class MethodSummaryTest extends TestCase
 
     public function testRecursiveServiceIsUnknown(): void
     {
-        // F + S: Aâ†’Bâ†’A cycle stops, no hang.
+        // F + S: A→B→A cycle stops, no hang.
         $status = $this->flowStatus(
             [
                 'app/Services/UserService.php' => "<?php\nnamespace App\\Services;\n" .
@@ -354,7 +354,7 @@ final class MethodSummaryTest extends TestCase
         }
         $flow = $this->classifySink($controllerPath, $paths, '');
 
-        // orderService::payload returns validated â€” not userService's raw.
+        // orderService::payload returns validated — not userService's raw.
         self::assertSame(MassFlow::VALIDATED, $flow->status);
     }
 
@@ -747,7 +747,7 @@ final class MethodSummaryTest extends TestCase
 
     public function testInheritanceCycleIsBounded(): void
     {
-        // AB: malformed Aâ†”B cycle terminates.
+        // AB: malformed A→B cycle terminates.
         $paths = $this->project([
             'app/Services/A.php' => "<?php\nnamespace App\\Services;\nclass A extends B {}\n",
             'app/Services/B.php' => "<?php\nnamespace App\\Services;\nclass B extends A {}\n",
@@ -781,7 +781,7 @@ final class MethodSummaryTest extends TestCase
 
     public function testInheritedPassthroughPreservesProvenance(): void
     {
-        // AD: Child call â†’ inherited Base::payload â†’ PARAM(0) â†’ caller
+        // AD: Child call → inherited Base::payload → PARAM(0) → caller
         // arg RAW. This is the v0.5.2+v0.5.3 join proving itself.
         $paths = $this->project([
             'app/Services/Base.php' => "<?php\nnamespace App\\Services;\n" .
