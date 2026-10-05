@@ -503,6 +503,13 @@ Custom analyzers only (phpcs/phpstan/phpunit excluded), `tier=security`,
 corpus (`tests/Unit/AnalyzerMetricsTest.php`): **precision 1.000 / recall 1.000**
 across 197 true/false-positive cases (77 TP + 120 TN), so the reductions below
 cannot regress silently.
+
+The table is a snapshot, not a live measurement — it records one day of output
+by hand and no CI job re-measures it. To measure this tool on **your** projects,
+use `tools/benchmark-projects.php` with a local manifest of paths (see the
+header of that file for the format). It prints per-rule counts, prints each
+rule's share of all findings, and `--diff=baseline.json` shows what moved after
+an upgrade. Your manifest stays local; no project list ships with the package.
 | Target | Stack | Files | Before | After | Signal left |
 |---|---|---|---|---|---|
 | A — e-commerce monolith | Laravel 11 | 3,283 | 1,246 (7 / 466 / 773) | **1,077** (3 / 301 / 773) | 101 blade + public routes + Docs sample |
