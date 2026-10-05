@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-05
+
+### Added (frontend — JS/CSS/Blade stack)
+
+- `JS_SYNTAX_ERROR` `src/Analyzers/Frontend/JsSyntaxAnalyzer.php:14` (Warning/Medium) — unbalanced `{}[]()` / unclosed string/template in `resources/js`, `public/js` (`js,jsx,ts,tsx,vue` `<script>`), ignore `.min.`/`vendor`/`node_modules`. `CssSyntaxAnalyzer.php:14` (`css,scss,sass,less`) — unbalanced `{}` + missing `;` before `}`. `BladeStackAnalyzer.php:14` (`resources/views` `*.blade.php`) — `@push('x')` without `@stack('x')` (orphan Warning), `@stack` without `@push` (empty Info), `@push` without `@endpush` (Error). `config/quality-checker.php:140` `frontend => [js_syntax=>true, css_syntax=>true, blade_stack=>true]` on by default. `RuleIds` 3 new, `RuleRemediation` 3 new, `CustomAnalyzerChecker.php:393` collectors for `resources/public` js/css, `README.md` Frontend table, `8` tests `tests/Unit/FrontendAnalyzerTest.php`.
+
+### Changed (UI pro)
+
+- `MarkdownReporter.php:22` centered header `🛡️` + overview badges `checkers/passed/P0/P1` + `mermaid pie` severity chart; `HtmlReporter.php:15` Inter fallback, `fadeIn` container, header gradient `shadow-sm`, `stat:hover` lift, `bar-fill` `growBar` animation, `issue-group:hover` shadow, `pre.code` `JetBrains Mono`, footer tip `sample-findings.php`, copy `data-copy` (clipboard), keep self-contained (`no @import`/`href="https://"`).
+
+### Fixed
+
+- `PhpunitChecker.php:91` `PHPUNIT_LOW_COVERAGE` `Warning → Error` so `fail-on=error` actually gates coverage `<60%` (`phpunit.coverageThreshold`); `PhpunitCoverageGateTest.php:14` 4 tests pin `59%` fail / `60%` pass.
+
 ## [1.2.0] - 2026-10-05
 
 ### Added (detection 6/7/8 — corpus 400, holdout, recall, external precision)
