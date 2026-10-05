@@ -541,20 +541,65 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
         self::assertSame(Confidence::Medium, $issues[0]->confidence);
     }
 
-    /**
-     * The demotion lives in config, not in the analyzer: the cases above assert
-     * the severities the analyzer produces, which are unchanged. These two pin
-     * the shipped config, because "the default is quiet" is a promise users rely
-     * on and nothing else would notice it quietly changing back.
-     */
-    public function testShippedConfigDemotesBladeToInfo(): void
+/**
+ * The demotion lives in config, not in the analyzer: the cases above assert
+ * the severities the analyzer produces, which are unchanged. This pins the
+ * shipped config, because "the default is quiet" is a promise users rely on and
+ * nothing else would notice it quietly changing back.
+ */
+    public function testShippedConfigDemotesOnlyDynamicInclude(): void
     {
         $config = require dirname(__DIR__, 2) . '/config/quality-checker.php';
-
         $overrides = $config['analyzers']['severity_overrides'];
 
-        self::assertSame('info', $overrides['OWASP_BLADE_XSS']);
-        self::assertSame('info', $overrides['OWASP_BLADE_DYNAMIC_INCLUDE']);
+        self::assertSame(
+            ['OWASP_BLADE_DYNAMIC_INCLUDE' => 'info'],
+            $overrides,
+            'OWASP_BLADE_XSS must stay at the analyzer severity: its error case is reflected XSS.'
+        );
+    }
+
+    /**
+     * The measured reason for the split above. `{!! $model->field !!}` is already
+     * `warning`, so it never tripped a `fail_on => 'error'` gate and demoting it
+     * would have bought nothing. Dynamic view names are `error` unconditionally,
+     * which is what actually made default runs red.
+     */
+    public function testOnlyDynamicIncludeCanFailTheGateByDefault(): void
+    {
+        $config = require dirname(__DIR__, 2) . '/config/quality-checker.php';
+        $overrides = $config['analyzers']['severity_overrides'];
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-blade-ship-' . uniqid('', true);
+        @mkdir($dir, 0777, true);
+
+        try {
+            $plain = $dir . DIRECTORY_SEPARATOR . 'plain.blade.php';
+            $dynamic = $dir . DIRECTORY_SEPARATOR . 'dynamic.blade.php';
+            file_put_contents($plain, "<div>{!! \$post->body !!}</div>\n");
+            file_put_contents($dynamic, "@include(\$view)\n");
+
+            $issues = (new OwaspBladeXssAnalyzer())->analyze([$plain, $dynamic]);
+            $severities = [];
+            foreach ($issues as $issue) {
+                $applied = $overrides[$issue->rule] ?? $issue->severity->value;
+                $severities[$issue->rule] = $applied;
+            }
+
+            self::assertSame(
+                'warning',
+                $severities['OWASP_BLADE_XSS'] ?? null,
+                'A plain model echo must not fail a fail_on=error gate.'
+            );
+            self::assertSame(
+                'info',
+                $severities['OWASP_BLADE_DYNAMIC_INCLUDE'] ?? null,
+                'A dynamic view name must not fail the gate by default.'
+            );
+        } finally {
+            @unlink($dir . DIRECTORY_SEPARATOR . 'plain.blade.php');
+            @unlink($dir . DIRECTORY_SEPARATOR . 'dynamic.blade.php');
+            @rmdir($dir);
+        }
     }
 
     public function testAutoInstallIsOptIn(): void

@@ -137,19 +137,26 @@ return [
 // Additional safe-output function needles for Blade XSS (e.g. 'my_escape(', 'MyLib::').
     'extra_sanitizers' => [],
 
-    // Per-rule severity remapping, applied after analysis. Blade is demoted to
-    // 'info' by default: across the 27-project benchmark the Blade rules
-    // produced ~1,000 of ~7,000 findings, and most are deliberate
-    // `{!! $model->field !!}` renderings. At 'error' a default run came out
-    // red before the user had seen anything, which trains people to ignore the
-    // gate.
+    // Per-rule severity remapping, applied after analysis.
     //
-    // The trade-off: `OWASP_BLADE_XSS` at 'error' fires only for
-    // request-derived output — reflected XSS, which genuinely deserves to fail.
-    // Demoting it means `--tier=security` no longer catches reflected XSS. If
-    // you want that back, put the rules back at 'error' or 'critical' here.
+    // `OWASP_BLADE_DYNAMIC_INCLUDE` is the one Blade rule demoted by default. It
+    // reports every dynamic view name (`@include($view)`, `@extends('a.' . $x)`)
+    // at `error`, because Blade has no data-flow analysis and so cannot tell a
+    // user-steerable template name from a fixed one built at runtime. Across the
+    // 27-project benchmark the Blade findings were dominated by this rule, and
+    // at `error` a default run came out red before the user had seen anything.
+    // Demoting it to `info` keeps the findings visible in the report without
+    // failing a build on something that is usually not exploitable.
+    //
+    // `OWASP_BLADE_XSS` is deliberately NOT demoted. Its `error` severity fires
+    // only for request-derived output — `{!! request('q') !!}` and the
+    // superglobals — which is reflected XSS and is the one Blade finding that
+    // genuinely deserves to fail. Its ordinary `{!! $model->field !!}` hits are
+    // already `warning` and never tripped the gate, so demoting the rule would
+    // have cost reflected-XSS coverage without fixing the noise. If your team
+    // treats every dynamic view name as a finding worth blocking, set this rule
+    // back to 'error' instead of relying on the analyzer's own severity.
     'severity_overrides' => [
-        'OWASP_BLADE_XSS' => 'info',
         'OWASP_BLADE_DYNAMIC_INCLUDE' => 'info',
     ],
 

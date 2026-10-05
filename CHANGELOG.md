@@ -70,24 +70,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fallback for a missing key moved from `true` to `false` for the same reason: a
   programmatically built context — the standalone runner against a project with no
   config file, or a test — must not mutate a repo it was only asked to inspect.
-- **The two Blade rules now default to `info`.** They produced roughly 1,000 of 7,000
-  findings across the 27-project benchmark, and most are deliberate
-  `{!! $model->field !!}` renderings. At `error`, `fail_on => 'error'` meant a default
-  run on an average Laravel app came out red before the user had seen anything, which
-  teaches people to ignore the gate — worse than a missing finding.
-- **This costs real coverage, deliberately.** `OWASP_BLADE_XSS` at `error` fires only for
-  request-derived output — reflected XSS, which does deserve to fail. Demoting it to
-  `info` means `--tier=security` no longer catches reflected XSS.
+- **`OWASP_BLADE_DYNAMIC_INCLUDE` now defaults to `info`.** It reports every dynamic
+  view name — `@include($view)`, `@extends('a.' . $x)` — at `error`, because Blade has
+  no data-flow analysis and cannot tell a user-steerable template name from one built
+  at runtime. It dominated the Blade findings in the 27-project benchmark, and at `error`
+  a default run on an average Laravel app came out red before the user had seen
+  anything, which teaches people to ignore the gate — worse than a missing finding.
+- **`OWASP_BLADE_XSS` keeps its severity.** An earlier revision of this work demoted
+  both Blade rules, on the reasoning that most Blade findings are deliberate
+  `{!! $model->field !!}` renderings. Measured, that reasoning was wrong: those hits are
+  already `warning` and never tripped a `fail_on => 'error'` build, so demoting the rule
+  fixed nothing while silently stopping `--tier=security` catching reflected XSS
+  (`{!! request('q') !!}` and the superglobals). Measured split on the three Blade
+  shapes: 4 warning / 2 error for `OWASP_BLADE_XSS`, and 2 error for
+  `OWASP_BLADE_DYNAMIC_INCLUDE`. The rule that made builds red is the one now demoted.
 - The demotion is config, not analyzer code: `analyzers.severity_overrides`, applied
   after analysis and before the confidence filter so the gate sees the reported
-  severity. The analyzers still emit `error`/`critical`, so the raw signal is unchanged
-  and `'OWASP_BLADE_XSS' => 'error'` restores the gate in one line. An unparseable
-  severity is skipped rather than guessed, because `Severity::fromString()` falls back
-  to `error` and a typo would otherwise silently promote a rule.
-- `TierLogicTest` pins both directions — that reflected XSS is reported at `info` and
-  does *not* fail `tier=security`, and that restoring `error` makes it fail again — so
-  the trade-off is asserted rather than left to be inferred. `OwaspBladeXssAnalyzerTest`
-  pins the shipped config, since "the default is quiet" is a promise users rely on.
+  severity. The analyzers are untouched, and setting the rule back to `'error'` restores
+  the gate. An unparseable severity is skipped rather than guessed, because
+  `Severity::fromString()` falls back to `error` and a typo would otherwise silently
+  promote a rule.
+- `TierLogicTest` pins all three cases against the shipped config: reflected XSS is
+  reported at `error` and fails the security gate, a plain model echo stays `warning` and
+  does not, and a dynamic view name is reported at `info` without failing. Restoring
+  `error` on the last one is asserted too, on the quality tier, since the finding is
+  medium-confidence and the security tier skips it on confidence regardless of severity.
+  `OwaspBladeXssAnalyzerTest` pins the shipped override map exactly.
 
 ## [0.9.0] - 2026-10-04
 

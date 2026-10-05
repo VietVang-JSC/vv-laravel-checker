@@ -83,14 +83,22 @@ final class TierLogicTest extends TestCase
         self::assertTrue($runner->shouldFail([$result]));
     }
 
-    /**
-     * Blade is demoted to 'info' in the shipped config because it dominates
-     * finding counts on real projects. Reflected XSS — `{!! request('x') !!}` —
-     * is real, so the demotion must not make the security gate pass silently:
-     * this asserts the exact consequence, so nobody has to infer it.
+/**
+     * Reflected XSS — `{!! request('x') !!}` — stays at the analyzer's own
+     * severity and still fails the security gate with the shipped config. An
+     * earlier revision demoted this rule too and quietly lost that coverage while
+     * fixing nothing, because its ordinary hits were already `warning`.
      */
-    public function testBladeRequestXssIsReportedAtInfoAndDoesNotFailSecurityTier(): void
+    public function testReflectedBladeXssStillFailsTheSecurityGate(): void
     {
+        $config = require dirname(__DIR__, 2) . '/config/quality-checker.php';
+
+        self::assertArrayNotHasKey(
+            'OWASP_BLADE_XSS',
+            $config['analyzers']['severity_overrides'],
+            'Reflected XSS must not be demoted by default.'
+        );
+
         $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-blade-' . uniqid('', true);
         @mkdir($dir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views', 0777, true);
         file_put_contents(
@@ -103,10 +111,7 @@ final class TierLogicTest extends TestCase
             $result = (new CustomAnalyzerChecker())->run(new CheckContext(
                 $dir,
                 ['resources'],
-                ['analyzers' => ['owasp' => ['blade_xss' => true], 'severity_overrides' => [
-                    'OWASP_BLADE_XSS' => 'info',
-                    'OWASP_BLADE_DYNAMIC_INCLUDE' => 'info',
-                ]]],
+                ['analyzers' => ['owasp' => ['blade_xss' => true], 'severity_overrides' => $config['analyzers']['severity_overrides']]],
                 $dir . '/out',
                 tier: 'security',
             ));
@@ -117,10 +122,10 @@ final class TierLogicTest extends TestCase
             ));
 
             self::assertCount(1, $blade, 'The fixture is reflected XSS and must still be reported.');
-            self::assertSame(Severity::Info, $blade[0]->severity);
-            self::assertFalse(
+            self::assertSame(Severity::Error, $blade[0]->severity);
+            self::assertTrue(
                 $runner->shouldFail([$result]),
-                'At info severity the security tier no longer fails on reflected XSS.'
+                'Reflected XSS must fail the security gate.'
             );
         } finally {
             @unlink($dir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . 'x.blade.php');
@@ -131,16 +136,18 @@ final class TierLogicTest extends TestCase
     }
 
     /**
-     * The escape hatch: a project that wants blade to fail the gate restores the
-     * severity, and the finding is then gated again.
+     * A plain `{!! $model->field !!}` echo is the shape that actually appears by
+     * the thousand in real projects. It is `warning` at the analyzer, so a
+     * `fail_on => 'error'` build was never red because of it — which is why
+     * demoting the whole rule was unnecessary.
      */
-    public function testBladeSeverityCanBeRestoredToError(): void
+    public function testPlainBladeEchoDoesNotFailTheGate(): void
     {
-        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-blade2-' . uniqid('', true);
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-blade3-' . uniqid('', true);
         @mkdir($dir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views', 0777, true);
         file_put_contents(
             $dir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . 'x.blade.php',
-            "<div>{!! request('q') !!}</div>\n"
+            "<div>{!! \$post->body !!}</div>\n"
         );
 
         try {
@@ -148,11 +155,101 @@ final class TierLogicTest extends TestCase
             $result = (new CustomAnalyzerChecker())->run(new CheckContext(
                 $dir,
                 ['resources'],
-                ['analyzers' => ['owasp' => ['blade_xss' => true], 'severity_overrides' => [
-                    'OWASP_BLADE_XSS' => 'error',
-                ]]],
+                ['analyzers' => ['owasp' => ['blade_xss' => true]]],
                 $dir . '/out',
                 tier: 'security',
+            ));
+
+            $blade = array_values(array_filter(
+                $result->issues,
+                static fn (Issue $i): bool => $i->rule === 'OWASP_BLADE_XSS'
+            ));
+
+            self::assertCount(1, $blade);
+            self::assertSame(Severity::Warning, $blade[0]->severity);
+            self::assertFalse(
+                $runner->shouldFail([$result]),
+                'A model echo must not turn a security build red.'
+            );
+        } finally {
+            @unlink($dir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . 'x.blade.php');
+            @rmdir($dir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views');
+            @rmdir($dir . DIRECTORY_SEPARATOR . 'resources');
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * Dynamic view names are `error` unconditionally — Blade cannot tell a
+     * user-steerable template name from one built at runtime — so this is the
+     * rule that made default runs red. Demoted to 'info', it stays visible in the
+     * report without failing a build.
+     */
+    public function testDynamicBladeIncludeIsReportedButDoesNotFailTheGate(): void
+    {
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-blade4-' . uniqid('', true);
+        @mkdir($dir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views', 0777, true);
+        file_put_contents(
+            $dir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . 'x.blade.php',
+            "@include(\$view)\n"
+        );
+
+        $overrides = ['OWASP_BLADE_DYNAMIC_INCLUDE' => 'info'];
+
+        try {
+            $runner = new CheckRunner($this->context('security'));
+            $result = (new CustomAnalyzerChecker())->run(new CheckContext(
+                $dir,
+                ['resources'],
+                ['analyzers' => ['owasp' => ['blade_xss' => true], 'severity_overrides' => $overrides]],
+                $dir . '/out',
+                tier: 'security',
+            ));
+
+            $found = array_values(array_filter(
+                $result->issues,
+                static fn (Issue $i): bool => $i->rule === 'OWASP_BLADE_DYNAMIC_INCLUDE'
+            ));
+
+            self::assertCount(1, $found, 'The finding must still be reported.');
+            self::assertSame(Severity::Info, $found[0]->severity);
+            self::assertFalse(
+                $runner->shouldFail([$result]),
+                'A dynamic view name must not fail the gate by default.'
+            );
+        } finally {
+            @unlink($dir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . 'x.blade.php');
+            @rmdir($dir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views');
+            @rmdir($dir . DIRECTORY_SEPARATOR . 'resources');
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * The escape hatch for teams that treat every dynamic view name as blocking.
+     * Uses the quality tier on purpose: the finding is medium-confidence, so the
+     * security tier skips it regardless of severity, and gating it there would
+     * need a confidence change rather than a severity one.
+     */
+    public function testDynamicIncludeSeverityCanBeRestored(): void
+    {
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-blade2-' . uniqid('', true);
+        @mkdir($dir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views', 0777, true);
+        file_put_contents(
+            $dir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . 'x.blade.php',
+            "@include(\$view)\n"
+        );
+
+        try {
+            $runner = new CheckRunner($this->context('quality'));
+            $result = (new CustomAnalyzerChecker())->run(new CheckContext(
+                $dir,
+                ['resources'],
+                ['analyzers' => ['owasp' => ['blade_xss' => true], 'severity_overrides' => [
+                    'OWASP_BLADE_DYNAMIC_INCLUDE' => 'error',
+                ]]],
+                $dir . '/out',
+                tier: 'quality',
             ));
 
             self::assertTrue(

@@ -457,24 +457,29 @@ to focus on security findings only.
 
 Every issue carries a severity, and `fail_on` decides which ones fail the build.
 
-The two Blade rules (`OWASP_BLADE_XSS`, `OWASP_BLADE_DYNAMIC_INCLUDE`) ship
-remapped to `info`. Across a 27-project benchmark they produced roughly 1,000 of
-7,000 findings, and most are deliberate `{!! $model->field !!}` renderings; at
-`error` a default run came out red before the user had seen anything.
-
-**This means `--tier=security` no longer fails on Blade XSS.** Reflected XSS —
-`{!! request('q') !!}` — is a real vulnerability and was the one Blade finding
-worth gating on. If you want it back:
+`OWASP_BLADE_DYNAMIC_INCLUDE` ships remapped to `info`. It reports every
+dynamic view name — `@include($view)`, `@extends('a.' . $x)` — at `error`,
+because Blade has no data-flow analysis and so cannot tell a user-steerable
+template name from one built at runtime. Across a 27-project benchmark the Blade
+findings were dominated by this rule, and at `error` a default run came out red
+before the user had seen anything. At `info` it stays in the report without
+failing a build. To treat every dynamic view name as blocking:
 
 ```php
 // config/quality-checker.php
 'analyzers' => [
     'severity_overrides' => [
-        'OWASP_BLADE_XSS' => 'error',              // gates reflected XSS again
         'OWASP_BLADE_DYNAMIC_INCLUDE' => 'error',
     ],
 ],
 ```
+
+**`OWASP_BLADE_XSS` is not demoted**, and reflected XSS still fails the gate.
+Its `error` severity fires only for request-derived output — `{!! request('q') !!}`
+and the superglobals — which is reflected XSS and worth blocking. Its ordinary
+`{!! $model->field !!}` hits are already `warning` and never turned a build red,
+so demoting the whole rule would have cost that coverage without fixing the
+noise.
 
 Other rules can be remapped the same way. An unparseable severity is ignored
 rather than guessed, so a typo cannot silently promote a rule to `error`.
