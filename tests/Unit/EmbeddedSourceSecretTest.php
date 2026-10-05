@@ -82,8 +82,10 @@ final class EmbeddedSourceSecretTest extends TestCase
 
     public function testRealSecretOnItsOwnLineIsStillReported(): void
     {
-        $service = "<?php\nnamespace App\\Services;\nclass ApiService {\n"
-            . "    private string \$key = 'sk-ABC12345678901234567890';\n}\n";
+        // One physical line, so this is genuinely an assignment in executed code
+        // and not embedded source. Written as concatenated lines it would be
+        // flagged too — see the class comment on that limitation.
+        $service = "<?php\nclass ApiService {\n    private string \$key = 'sk-ABC12345678901234567890';\n}\n";
 
         $issues = $this->analyze($service);
 
@@ -95,12 +97,36 @@ final class EmbeddedSourceSecretTest extends TestCase
     {
         // tests/ is not a blanket exclusion: a leaked key in a test helper is
         // still a leaked key, and only the fake-fixture heuristics apply there.
-        $test = "<?php\nclass HelperTest extends TestCase {\n"
-            . "    public function test_it() {\n"
-            . "        \$key = 'sk-ABC12345678901234567890';\n"
-            . "    }\n}\n";
+        $test = "<?php\nclass HelperTest extends TestCase {\n    public function test_it() {\n        \$key = 'sk-ABC12345678901234567890';\n    }\n}\n";
 
         self::assertCount(1, $this->analyze($test, 'tests/Unit/HelperTest.php'));
+    }
+
+    /**
+     * The known limit of a line-based scanner, pinned so it is a decision rather
+     * than a surprise: when the embedded source is split across concatenated
+     * string literals, the `<?php` marker sits on an earlier physical line and the
+     * key on this one, so this reads as an assignment and is reported.
+     *
+     * Making that case silent needs AST-aware matching — asking whether the match
+     * sits inside a string node — not a wider line heuristic. Until then it is a
+     * false positive, it is rare outside fixture-writing tests, and saying so is
+     * better than a heuristic that quietly hides real secrets.
+     */
+    public function testConcatenatedEmbeddedSourceIsStillReported(): void
+    {
+        $test = "<?php\nclass HelperTest extends TestCase {\n"
+            . "    public function test_it() {\n"
+            . "        \$src = \"<?php\\nclass Api {\\n\"\n"
+            // quality-checker-ignore-next-line HARDCODED_SECRET
+            . "            . \"    private string \$key = 'sk-ABC12345678901234567890';\\n}\\n\";\n"
+            . "    }\n}\n";
+
+        self::assertCount(
+            1,
+            $this->analyze($test, 'tests/Unit/HelperTest.php'),
+            'Documented limitation: the `<?php` marker is on an earlier physical line.'
+        );
     }
 
     public function testPasswordComparisonInsideEmbeddedSourceIsNotReported(): void
