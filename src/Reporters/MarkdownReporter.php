@@ -21,7 +21,13 @@ final class MarkdownReporter implements ReporterInterface
         $lines = [];
         $lines[] = '# Laravel Quality Report';
         $lines[] = '';
-        $lines[] = 'Generated: ' . $generatedAt . ' | Package: ' . PackageVersion::label($version);
+        $lines[] = '<div align="center">';
+        $lines[] = '';
+        $lines[] = '*🛡️ Comprehensive quality gate for Laravel — security, tests & conventions*';
+        $lines[] = '';
+        $lines[] = '</div>';
+        $lines[] = '';
+        $lines[] = 'Generated: `' . $generatedAt . '` | Package: `' . PackageVersion::label($version) . '` | Tier: `' . $this->esc($ctx->tier) . '` | Fail on: `' . $this->esc($ctx->failOn) . '` | Exit: `' . $ctx->exitCode . '`';
         $lines[] = '';
         $lines[] = '**Status:** ' . $this->overallStatus($results, $ctx->failOn)
             . ' | **Tier:** ' . $this->esc($ctx->tier)
@@ -29,6 +35,8 @@ final class MarkdownReporter implements ReporterInterface
             . ' | **Exit code:** ' . $ctx->exitCode;
         $lines[] = '';
         $lines[] = $this->badgeLine($summary);
+        $lines[] = '';
+        $lines[] = $this->overviewBadges($summary);
         $lines[] = '';
         $lines[] = '## Contents';
         $lines[] = '';
@@ -63,6 +71,8 @@ final class MarkdownReporter implements ReporterInterface
         $lines[] = '| P1 — fix this sprint | ' . $summary['p1'] . ' |';
         $lines[] = '| P2 — engineering improvement | ' . $summary['p2'] . ' |';
         $lines[] = '| P3 — technical debt / backlog | ' . $summary['p3'] . ' |';
+        $lines[] = '';
+        $lines[] = $this->mermaidSeverityChart($summary);
         $lines[] = '';
         $lines[] = '## Risk Overview';
         $lines[] = '';
@@ -457,5 +467,44 @@ final class MarkdownReporter implements ReporterInterface
         $slug = str_replace(' ', '-', $slug);
 
         return (string) preg_replace('/[^a-z0-9_-]+/', '', $slug);
+    }
+
+    private function overviewBadges(array $summary): string
+    {
+        $parts = [];
+        $parts[] = '![Checkers](https://img.shields.io/badge/checkers-' . $summary['checkers'] . '-blue)';
+        $parts[] = '![Passed](https://img.shields.io/badge/passed-' . $summary['passed'] . '-brightgreen)';
+        if ($summary['failed'] > 0) {
+            $parts[] = '![Failed](https://img.shields.io/badge/failed-' . $summary['failed'] . '-red)';
+        }
+        if ($summary['skipped'] > 0) {
+            $parts[] = '![Skipped](https://img.shields.io/badge/skipped-' . $summary['skipped'] . '-lightgrey)';
+        }
+        $parts[] = '![P0](https://img.shields.io/badge/P0-' . $summary['p0'] . '-critical)';
+        $parts[] = '![P1](https://img.shields.io/badge/P1-' . $summary['p1'] . '-orange)';
+
+        return implode(' ', $parts);
+    }
+
+    private function mermaidSeverityChart(array $summary): string
+    {
+        $total = max(1, $summary['total_issues']);
+        if ($total === 1 && $summary['total_issues'] === 0) {
+            return '_No issues — clean._';
+        }
+        $lines = [
+            '```mermaid',
+            'pie showData',
+            '    title Severity distribution',
+        ];
+        foreach (['critical' => 'Critical', 'error' => 'Error', 'warning' => 'Warning', 'info' => 'Info'] as $k => $label) {
+            $cnt = (int) ($summary[$k] ?? 0);
+            if ($cnt > 0) {
+                $lines[] = sprintf('    "%s %d" : %d', $label, $cnt, $cnt);
+            }
+        }
+        $lines[] = '```';
+
+        return implode("\n", $lines);
     }
 }

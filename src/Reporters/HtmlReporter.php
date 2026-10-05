@@ -29,6 +29,9 @@ final class HtmlReporter implements ReporterInterface
         --code-text: #e2e8f0;
         --code-ln: #64748b;
         --code-cur: rgba(220, 38, 38, 0.18);
+        --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.06);
+        --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.07), 0 4px 6px -2px rgba(0,0,0,0.05);
         color-scheme: light;
     }
     html[data-theme="dark"] {
@@ -49,12 +52,14 @@ final class HtmlReporter implements ReporterInterface
     body {
         margin: 0;
         padding: 24px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         color: var(--text);
         background: var(--page);
         line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
     }
-    .container { max-width: 1100px; margin: 0 auto; }
+    .container { max-width: 1100px; margin: 0 auto; animation: fadeIn 0.35s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
     header {
         display: flex;
         align-items: center;
@@ -62,11 +67,13 @@ final class HtmlReporter implements ReporterInterface
         flex-wrap: wrap;
         gap: 12px;
         padding: 20px 24px;
-        background: var(--bg);
+        background: linear-gradient(135deg, var(--bg) 0%, #f8fafc 100%);
         border: 1px solid var(--border);
-        border-radius: 8px;
+        border-radius: 12px;
         margin-bottom: 24px;
+        box-shadow: var(--shadow-sm);
     }
+    html[data-theme="dark"] header { background: linear-gradient(135deg, var(--bg) 0%, #1e293b 100%); }
     h1 { margin: 0; font-size: 22px; }
     .meta { color: var(--muted); font-size: 13px; }
     .meta span { margin-right: 16px; }
@@ -115,14 +122,17 @@ final class HtmlReporter implements ReporterInterface
     .summary-grid { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 8px; }
     .stat {
         flex: 1 1 120px;
-        padding: 14px;
+        padding: 16px;
         border: 1px solid var(--border);
-        border-radius: 8px;
+        border-radius: 10px;
         text-align: center;
-        background: var(--page);
+        background: var(--bg);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        box-shadow: var(--shadow-sm);
     }
-    .stat .value { font-size: 26px; font-weight: 700; }
-    .stat .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .stat .value { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+    .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
     .charts { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 16px; }
     .chart-block { flex: 1 1 320px; min-width: 0; }
     .stacked {
@@ -148,8 +158,9 @@ final class HtmlReporter implements ReporterInterface
     .bar-row { display: grid; grid-template-columns: minmax(120px, 220px) 1fr 48px; gap: 8px; align-items: center; font-size: 12px; }
     .bar-row .bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
     .bar-row .bar-track { background: var(--page); border: 1px solid var(--border); border-radius: 9999px; height: 12px; overflow: hidden; }
-    .bar-row .bar-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 9999px; }
+    .bar-row .bar-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 9999px; animation: growBar 0.7s ease-out; }
     .bar-row .bar-fill.score-fill { background: linear-gradient(90deg, #10b981, #34d399); }
+    @keyframes growBar { from { width: 0; } }
     .bar-row .bar-val small { color: var(--muted); font-weight: 400; }
     .gate { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 12px; border-radius: 9999px; margin-left: 8px; vertical-align: middle; }
     .gate.pass { background: var(--pass); color: #fff; }
@@ -159,7 +170,9 @@ final class HtmlReporter implements ReporterInterface
     .bar-row .bar-val { text-align: right; font-weight: 600; }
     .checker-section { margin-bottom: 32px; }
     .checker-head { margin-bottom: 12px; }
-    .issue-group { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--bg); overflow: hidden; }
+    .issue-group { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; background: var(--bg); overflow: hidden; transition: box-shadow 0.15s ease, border-color 0.15s ease; }
+    .issue-group:hover { border-color: #cbd5e1; box-shadow: var(--shadow-sm); }
+    html[data-theme="dark"] .issue-group:hover { border-color: #334155; }
     .issue-group > summary {
         display: flex;
         align-items: center;
@@ -546,6 +559,19 @@ final class HtmlReporter implements ReporterInterface
             });
         });
 
+        /* Copy file path / code. */
+        document.querySelectorAll('[data-copy]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var text = btn.getAttribute('data-copy') || '';
+                if (!text) return;
+                navigator.clipboard && navigator.clipboard.writeText(text).then(function () {
+                    var old = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    setTimeout(function () { btn.textContent = old; }, 1200);
+                });
+            });
+        });
+
         /* Sortable tables. */
         var sevRank = { critical: 4, error: 3, warning: 2, info: 1 };
         function cellVal(row, idx, type) {
@@ -761,6 +787,7 @@ final class HtmlReporter implements ReporterInterface
             . $this->buildOwaspSection($owasp, $owaspIssues, $ctx)
             . $this->buildCheckerTable($checkers)
             . $this->buildIssueSections($checkers, $ctx)
+            . $this->buildFooter($ctx)
             . '</div></div>' . "\n"
             . '</div>' . "\n"
             . '<script>' . "\n"
@@ -791,7 +818,7 @@ final class HtmlReporter implements ReporterInterface
     {
         return '<header>' . "\n"
             . '<div>' . "\n"
-            . '<h1>Laravel Quality Report</h1>' . "\n"
+            . '<h1>🛡️ Laravel Quality Report</h1>' . "\n"
             . '<div class="meta">' . "\n"
             . '<span>Generated: ' . $this->escape((new \DateTimeImmutable())->format('Y-m-d\TH:i:sP')) . '</span>' . "\n"
             . '<span>Package: ' . $this->escape(PackageVersion::label($ctx->packageVersion)) . '</span>' . "\n"
@@ -802,6 +829,14 @@ final class HtmlReporter implements ReporterInterface
             . '</div>' . "\n"
             . '<span class="badge ' . $this->escape($status) . '">' . $this->escape($status) . '</span>' . "\n"
             . '</header>' . "\n";
+    }
+
+    private function buildFooter(CheckContext $ctx): string
+    {
+        return '<footer style="margin-top:32px;padding:16px 0 8px;border-top:1px solid var(--border);color:var(--muted);font-size:12px;display:flex;gap:12px;flex-wrap:wrap;justify-content:space-between;">' . "\n"
+            . '<span>Generated by <strong>Rampart Quality Checker</strong> ' . $this->escape(PackageVersion::label($ctx->packageVersion)) . ' — Docs: <code>docs/false-positives.md</code></span>' . "\n"
+            . '<span>Tip: <code>--format=json</code> for CI, <code>--tier=security</code> for gate, <code>sample-findings.php</code> for precision.</span>' . "\n"
+            . '</footer>' . "\n";
     }
 
     /**
