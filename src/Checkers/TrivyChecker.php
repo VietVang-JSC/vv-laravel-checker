@@ -129,7 +129,11 @@ final class TrivyChecker implements CheckerInterface
 
             $target = (string) ($result['Target'] ?? '(unknown)');
 
-            foreach (($result['Misconfigurations'] ?? []) as $misconfig) {
+            $misconfigs = $result['Misconfigurations'] ?? [];
+            if (!is_array($misconfigs)) {
+                $misconfigs = [];
+            }
+            foreach ($misconfigs as $misconfig) {
                 if (!is_array($misconfig)) {
                     continue;
                 }
@@ -143,7 +147,11 @@ final class TrivyChecker implements CheckerInterface
                 );
             }
 
-            foreach (($result['Secrets'] ?? []) as $secret) {
+            $secrets = $result['Secrets'] ?? [];
+            if (!is_array($secrets)) {
+                $secrets = [];
+            }
+            foreach ($secrets as $secret) {
                 if (!is_array($secret)) {
                     continue;
                 }
@@ -186,7 +194,7 @@ final class TrivyChecker implements CheckerInterface
         };
     }
 
-    private function binaryExists(string $binary): bool
+    protected function binaryExists(string $binary): bool
     {
         $which = PHP_OS_FAMILY === 'Windows' ? 'where' : 'which';
         $process = new Process([$which, $binary]);
@@ -195,7 +203,7 @@ final class TrivyChecker implements CheckerInterface
         return $process->isSuccessful();
     }
 
-    private function cachedBinary(CheckContext $ctx): ?string
+    protected function cachedBinary(CheckContext $ctx): ?string
     {
         if (class_exists(\Rampart\QualityChecker\Tools\TrivyDownloader::class)) {
             $downloader = new \Rampart\QualityChecker\Tools\TrivyDownloader($ctx);

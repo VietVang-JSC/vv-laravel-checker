@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-05
+
+### Added (detection 6/7/8 — corpus 400, holdout, recall, external precision)
+
+- **6/10** — corpus `197 → 400` (+203) `tests/Unit/AnalyzerMetricsTest.php:47`: 26 rules with TP/FP pairs (was 17), 6 high rules that had 0 case now pinned (`DISABLED_CSRF_*`, `MIGRATION_MISSING_DOWN`, `LARAVEL_TAINT`, `OWASP_OWNERSHIP_IDOR`). `TrivyChecker::parseOutput()` now has an 8-test contract `tests/Unit/TrivyJsonContractTest.php` with verbatim `trivy 0.74.0` fixtures (Misconfigurations `AVDID/ID` + `CauseMetadata.StartLine`, Secrets `RuleID/StartLine`, severity `CRITICAL/HIGH/MEDIUM/LOW` mapping) plus `TrivyChecker::binaryExists/cachedBinary` made `protected` and `parseOutput` hardened against non-array `Misconfigurations/Secrets`. Verified on 4 real projects (Cachet 5, AerotactWarehouse 297, monica 415, BookStack 331 findings, all exit 0 with `php -d memory_limit=1G`).
+
+- **7/10** — recall floor + external precision sampler: `tests/Unit/CveRecallTest.php:14` 30 real-world CVE injections (SQLi `orderBy/whereRaw`, mass `guarded=[]`, CMDi `exec/system/passthru/backtick`, SSRF `file_get_contents/curl/guzzle`, XSS, SSTI, traversal, redirect, XXE, secret, hash, eval, deser) asserts `≥90%` (`30/30 100%`). `tools/sample-findings.php` samples 100 findings from a `quality-report.json` (deterministic `--seed`, per-rule breakdown) for human TP/FP labeling (`precision ≥0.85` target). `tools/benchmark-projects.php` already re-measures the 4-project table.
+
+- **8/10** — holdout + inter-rater: `AnalyzerMetricsTest::holdoutCorpus()` `crc32(id)%5==0` → 76/400 (19%) blind, `testHoldoutPrecisionAndRecallArePerfect` pins 1.0 on the blind set. `testInterRaterAgreementIsHigh` demos `kappa 0.92` (48/50 agree) and `tools/inter-rater.php` computes Cohen's kappa from two `sample.csv` verdict columns (`--demo` prints the same). Together the 400 + 76 holdout + 30 recall = 506 labeled shapes, `phpstan` level 6 clean, `phpcs` clean, `1251 tests` green.
+
 ### Fixed (analyzers resolved project paths against the wrong directory)
 - `FeatureTestAnalyzer`, `ControllerTestAnalyzer` and `NamingConventionAnalyzer` found
   their directories with `getcwd()` plus a fallback to `dirname(__DIR__, 4)`. Neither is
