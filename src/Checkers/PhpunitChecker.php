@@ -103,18 +103,24 @@ final class PhpunitChecker extends AbstractProcessChecker
         @unlink($junitFile);
         @unlink($cloverFile);
 
-        if ($exitCode === 0 && count($issues) === 0 && $tests === 0) {
-            return $this->result(
-                $this->name(),
-                $start,
-                'skipped',
-                [],
-                $rawOutput,
-                'No tests found in the project.'
-            );
-        }
+        // "There is nothing to run" is not a crash, and reporting it as one is the
+        // first thing a new user sees. PHPUnit prints its usage banner and exits
+        // 1 when it has no test directory or configuration to work from, so a
+        // project that has not written its first test yet gets an `error` row
+        // reading "the tool may have failed to run". Distinguish the two on the
+        // banner rather than on the exit code, which is 1 in both cases.
+        if ($tests === 0 && !$this->foundNothingToRun($rawOutput)) {
+            if ($exitCode === 0) {
+                return $this->result(
+                    $this->name(),
+                    $start,
+                    'skipped',
+                    [],
+                    $rawOutput,
+                    'No tests found in the project.'
+                );
+            }
 
-        if ($exitCode !== 0 && count($issues) === 0 && $tests === 0) {
             return $this->result(
                 $this->name(),
                 $start,
@@ -122,6 +128,17 @@ final class PhpunitChecker extends AbstractProcessChecker
                 [],
                 $rawOutput,
                 sprintf('PHPUnit exited with code %d and ran no tests. The tool may have failed to run (e.g. incompatible PHP version).', $exitCode)
+            );
+        }
+
+        if ($tests === 0) {
+            return $this->result(
+                $this->name(),
+                $start,
+                'skipped',
+                [],
+                $rawOutput,
+                'No test suite found in the project — nothing for PHPUnit to run.'
             );
         }
 
@@ -136,6 +153,21 @@ final class PhpunitChecker extends AbstractProcessChecker
         );
 
         return $this->result($this->name(), $start, $status, $issues, $rawOutput, $summary);
+    }
+
+    /**
+ * Whether PHPUnit exited because it had nothing to run rather than because it
+ * broke.
+ *
+ * PHPUnit prints its usage banner when there is no test directory or config to
+ * execute, and "No tests executed!" when a suite is configured but empty. Both
+ * exit non-zero. A genuine crash — a bad PHP version, a broken bootstrap — reads
+ * differently: it names the failure and never prints usage.
+ */
+    private function foundNothingToRun(string $output): bool
+    {
+        return str_contains($output, 'Usage:')
+            || str_contains($output, 'No tests executed');
     }
 
     private function parseJunit(string $file): array

@@ -40,6 +40,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CheckResult` with `skipped` and an install hint, which is what the README documents.
   An exception class no code raises is a claim about behaviour that does not exist.
 
+### Fixed (phpcs linted every Blade template in the project)
+- `PhpcsChecker` passed `$ctx->paths` to phpcs untouched. phpcs has no extension
+  filter, so any scan path containing `resources/views` made it report every template as
+  `Internal.NoCodeFound` and `Internal.LineEndings.Mixed`. The standalone binary scans
+  `resources` by default, so **every Laravel project** got noise on every file under
+  `resources/views`, on its first run. `CustomAnalyzerChecker` already keeps blade out of
+  its own collectors for this reason; phpcs receives the raw paths and could not filter
+  them itself, so the exclusion now lives in `PhpcsChecker::buildCommand()`.
+- The exclusion is appended to the project's own `phpcs.ignore` config rather than
+  replacing it — a team that excluded generated code must not silently start seeing it
+  again because this package added a default. `PhpcsBladeExclusionTest` pins the argv,
+  both directions, and asserts `resources` is still in the scan paths: dropping it there
+  would have silenced `OWASP_BLADE_XSS` instead of fixing this.
+
+### Fixed (a project with no tests was reported as a broken tool)
+- `PhpunitChecker` turned "PHPUnit exited non-zero and ran no tests" into an `error`
+  reading "the tool may have failed to run (e.g. incompatible PHP version)". PHPUnit exits
+  1 when it prints its usage banner because there is no test directory or configuration to
+  execute — which is exactly what a project that has not written its first test looks
+  like. A new user reading that on their first run concludes the tool is broken.
+- "Nothing to run" and "the tool crashed" are now told apart on PHPUnit's output rather
+  than its exit code, which is 1 in both cases: usage banner or "No tests executed" is
+  `skipped`; a named failure that never prints usage is still `error`.
+  `PhpunitNothingToRunTest` covers both directions.
+
 ### Fixed (`--fix` used the wrong phpcbf)
 - `PhpcsFixer::fix()` located phpcbf with `locateBinary()`, which only ever finds the
   copy in this package's own `vendor/`. In a consumer project that means `quality:check

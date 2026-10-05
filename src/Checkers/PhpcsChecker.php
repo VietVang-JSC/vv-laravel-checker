@@ -52,13 +52,7 @@ final class PhpcsChecker extends AbstractProcessChecker
         }
 
         $standard = (string) ($config['standard'] ?? 'PSR12');
-        $paths = $ctx->paths;
-
-        if ($this->hasProjectStandard($ctx)) {
-            $command = [$binary, '--report=json', ...$paths];
-        } else {
-            $command = [$binary, '--standard=' . $standard, '--report=json', ...$paths];
-        }
+        $command = $this->buildCommand($binary, $ctx, $standard, $config);
 
         [$exitCode, $stdout, $stderr] = $this->runProcess($command, $ctx->basePath);
 
@@ -79,6 +73,61 @@ final class PhpcsChecker extends AbstractProcessChecker
         $summary = sprintf('phpcs found %d error(s)/warning(s).', count($issues));
 
         return $this->result($this->name(), $start, $status, $issues, $rawOutput, $summary);
+    }
+
+    /**
+     * Build the phpcs argv.
+ *
+     * Blade templates are excluded here. phpcs has no extension filter, so a
+ * scan path containing `resources/views` makes it report every template as
+ * `Internal.NoCodeFound` and `Internal.LineEndings.Mixed` — noise on every
+ * template of every Laravel app, produced on the first run. The custom checker
+ * keeps blade out of its own collectors for the same reason; this applies the
+ * same exclusion at the linting layer, because phpcs is handed the raw scan
+ * paths and cannot filter them itself.
+ *
+ * The exclusion is appended to the project's own ignores rather than replacing
+ * them: a team that excluded generated code must not silently start seeing it
+ * again because this package added a default.
+ *
+ * @param array<string, mixed> $config
+ * @return list<string>
+ */
+    private function buildCommand(string $binary, CheckContext $ctx, string $standard, array $config): array
+    {
+        $arguments = ['--report=json'];
+
+        foreach (array_merge(['*.blade.php'], $this->configuredIgnores($config)) as $pattern) {
+            $arguments[] = '--ignore=' . $pattern;
+        }
+
+        // A project standard wins over ours, as it did before this was extracted:
+        // phpcs.xml.dist in the target is the authority on what its code looks
+        // like, and passing --standard as well would override it.
+        if (!$this->hasProjectStandard($ctx)) {
+            array_unshift($arguments, '--standard=' . $standard);
+        }
+
+        return [$binary, ...$arguments, ...$ctx->paths];
+    }
+
+    /**
+     * Patterns the project asked phpcs to skip.
+     *
+     * @param array<string, mixed> $config
+     * @return list<string>
+     */
+    private function configuredIgnores(array $config): array
+    {
+        $raw = $config['ignore'] ?? [];
+        if (is_string($raw)) {
+            $raw = array_map('trim', explode(',', $raw));
+        }
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        return array_values(array_filter($raw, 'is_string'));
     }
 
     private function hasProjectStandard(CheckContext $ctx): bool
