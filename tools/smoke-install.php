@@ -195,8 +195,81 @@ register_shutdown_function(static fn () => $cleanup($workspace));
 
 echo PHP_EOL . 'Smoke test: distributed artifact' . PHP_EOL . PHP_EOL;
 
+// ----------------------------------------------------------------- clone ---
+// There are two ways a developer gets this package, and they fail differently.
+// Steps 2-5 cover a dist install, which is what Packagist performs. This covers
+// the other one: `git clone` + `composer install`, then run from source.
+//
+// Cloning matters because it is a different tree. The archive is curated by
+// .gitattributes — it drops tests/, tools/, vendor/ and the dev configs — while
+// a clone carries all of it, plus whatever a developer's working copy has and
+// the archive does not. A file the dist install needs can be absent from a
+// clone, or present in a clone and break a scan of the clone itself.
+//
+// The clone is local and offline, and it is HEAD rather than the working tree,
+// so this asserts the committed state: what a developer who runs `git clone`
+// and `composer install` actually gets.
+echo '1b. Cloning the repository and running from source' . PHP_EOL;
+
+$cloneDir = $workspace . '/clone';
+[$code, $stdout, $stderr] = $run(
+    ['git', 'clone', '--quiet', $root, $cloneDir],
+    $workspace,
+    300
+);
+
+if ($code !== 0 || !is_file($cloneDir . '/composer.json')) {
+    $fail('git clone of the repository failed: ' . trim(substr($stdout . $stderr, -300)));
+} else {
+    $say('cloned the repository');
+
+    [$code, $stdout, $stderr] = $run($composer('install --no-interaction --no-progress'), $cloneDir, 600);
+    if ($code !== 0) {
+        $fail('composer install in the clone failed: ' . trim(substr($stdout . $stderr, -300)));
+    } elseif (!is_file($cloneDir . '/vendor/autoload.php')) {
+        $fail('the clone has no autoloader after composer install');
+    } else {
+        $say('composer install in the clone completed');
+
+        [$code, $stdout, $stderr] = $run(
+            [PHP_BINARY, $cloneDir . '/bin/quality-check', $cloneDir, '--only=custom', '--tier=security', '--fail-on=none', '--no-cache'],
+            $cloneDir,
+            600
+        );
+        $cloneOut = $stdout . $stderr;
+
+        if (!str_contains($cloneOut, 'Laravel Quality Checker')) {
+            $fail('the standalone binary did not run from the clone: ' . trim(substr($cloneOut, -300)));
+        } else {
+            $say('standalone binary runs from the clone');
+            preg_match('/Standalone scan: (\d+) issue/', $cloneOut, $cloneFound);
+            $say('found ' . (int) ($cloneFound[1] ?? 0) . ' issue(s) scanning its own source');
+        }
+
+        // The Artisan command from a clone needs a Laravel app, which this
+        // repository has as a dev dependency (orchestra/testbench). Installing
+        // it here is the same path step 5 exercises on a dist install, so a
+        // clone is verified on both entry points too.
+        if (is_file($cloneDir . '/vendor/bin/testbench')) {
+            [$code, $stdout, $stderr] = $run(
+                [PHP_BINARY, $cloneDir . '/vendor/bin/testbench', 'list'],
+                $cloneDir,
+                300
+            );
+            $lists = $stdout . $stderr;
+            if (!str_contains($lists, 'quality:check')) {
+                $fail('the Artisan command is not registered in a clone — provider discovery failed');
+            } else {
+                $say('artisan command is registered in a clone');
+            }
+        } else {
+            $say('skipped the artisan check: no testbench binary in the clone');
+        }
+    }
+}
+
 // ---------------------------------------------------------------- archive ---
-echo '1. Building the distribution archive' . PHP_EOL;
+echo '2. Building the distribution archive' . PHP_EOL;
 [$code, $stdout, $stderr] = $run($composer('archive --format=zip --dir=' . escapeshellarg($distDir)), $root);
 
 if ($code !== 0) {
@@ -409,6 +482,98 @@ if ($issueCount === 0) {
     $fail('the known-bad controller produced no findings — analyzers did not run');
 } else {
     $say('found ' . $issueCount . ' issue(s) in the planted controller');
+}
+
+// --------------------------------------------------------- artisan entry ---
+// Step 4 covers the standalone binary. The other entry point is the Artisan
+// command a developer actually runs in a Laravel app, and it is the one that
+// breaks differently: it depends on Laravel's package auto-discovery finding
+// `extra.laravel.providers`, on the service provider resolving
+// __DIR__/../config/quality-checker.php from inside vendor/, and on the command
+// surviving Symfony's console. None of that is exercised when this package is
+// the root package, because a root package is not discovered at all.
+//
+// Testbench supplies a real Laravel skeleton and a real `artisan` without
+// pulling in a whole application as a dev dependency, which keeps this honest
+// about what it is: the same dist install, plus a Laravel app around it.
+echo PHP_EOL . '5. Running the Artisan command from the installed package' . PHP_EOL;
+
+[$code, $stdout, $stderr] = $run(
+    $composer('require --dev --no-interaction --no-progress "orchestra/testbench:^8.0|^9.0|^10.0"'),
+    $projectDir,
+    600
+);
+
+if ($code !== 0) {
+    $fail('could not install a Laravel skeleton to test the Artisan command: ' . trim(substr($stdout . $stderr, -300)));
+} else {
+    $say('Laravel skeleton installed alongside the package');
+
+    // Composer writes a platform-neutral PHP proxy alongside the Windows .bat
+// shim. PHP_BINARY can only run the former: passing it a .bat makes php.exe
+// parse the batch script as PHP, which prints the script and exits 0. Prefer
+// the PHP proxy, and fall back to the .bat through cmd.exe if a host produced
+// only that.
+    $testbench = null;
+    $testbenchCmd = null;
+    foreach (['testbench', 'testbench.bat'] as $candidate) {
+        if (!is_file($projectDir . '/vendor/bin/' . $candidate)) {
+            continue;
+        }
+        if ($candidate === 'testbench') {
+            $testbench = $projectDir . '/vendor/bin/' . $candidate;
+            break;
+        }
+        $testbenchCmd = $projectDir . '/vendor/bin/' . $candidate;
+    }
+
+    if ($testbench === null && $testbenchCmd === null) {
+        $fail('no artisan/testbench entry point was installed');
+    } else {
+        $command = $testbench !== null
+        ? [PHP_BINARY, $testbench]
+        // The .bat needs a shell to run at all.
+        : ['cmd', '/c', $testbenchCmd];
+
+        // --only=custom keeps this to the path that does not need the project's
+        // own phpcs/phpstan: what is under test is discovery and registration,
+        // not the analyzers, which step 4 already ran.
+        [$code, $stdout, $stderr] = $run(
+            [...$command, 'quality:check', '--path=' . $projectDir, '--only=custom', '--tier=security', '--fail-on=none', '--no-cache'],
+            $projectDir,
+            600
+        );
+
+        $combined = $stdout . $stderr;
+
+        if (str_contains($combined, 'is not defined') || str_contains($combined, 'Command "quality:check"')) {
+            $fail(
+                'the Artisan command was not registered — Laravel did not discover the provider: '
+                . trim(substr($combined, -300))
+            );
+        } elseif (!str_contains($combined, 'Laravel Quality Checker')) {
+            $fail('the Artisan command produced no report header (exit ' . $code . '): ' . trim(substr($combined, -300)));
+        } else {
+            $say('artisan command discovered and ran');
+
+            preg_match('/Custom analyzers found (\d+) issue/', $combined, $artisanFound);
+            if ((int) ($artisanFound[1] ?? 0) === 0) {
+                $fail('the Artisan run found nothing in the same controller the standalone run flagged');
+            } else {
+                $say('found ' . (int) $artisanFound[1] . ' issue(s) through Artisan');
+            }
+
+            preg_match('/Laravel Quality Checker (\S+)/', $combined, $artisanVersion);
+            if (($artisanVersion[1] ?? '') !== 'v' . $stagedVersion) {
+                $fail(
+                    'artisan report reads version "' . ($artisanVersion[1] ?? '')
+                    . '", expected "v' . $stagedVersion . '"'
+                );
+            } else {
+                $say('artisan resolved the installed version');
+            }
+        }
+    }
 }
 
 // ------------------------------------------------------------------ result ---

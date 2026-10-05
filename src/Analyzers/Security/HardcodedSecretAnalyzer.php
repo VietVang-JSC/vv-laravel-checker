@@ -105,6 +105,9 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
             if ($this->isFieldNameDeclaration($line)) {
                 continue;
             }
+            if ($this->isEmbeddedSource($line)) {
+                continue;
+            }
             $envSecret = $this->envDefaultSecret($line);
             if ($envSecret !== null) {
                 $issues[] = $this->makeIssue(
@@ -169,6 +172,25 @@ final class HardcodedSecretAnalyzer extends AbstractAnalyzer
 
         return $issues;
     }
+    /**
+     * Whether this physical line is source code embedded in a string rather than
+     * source code being executed.
+ *
+ * A test that plants a vulnerable fixture writes the whole file as one string:
+ *
+ *     $this->tempPhp("<?php\nclass Api {\n  private string $k = 'sk-ABC123…';\n}\n");
+ *
+ * Written with escapes, that is a single physical line, so a line-based scanner
+ * sees the key and reports a critical leak — for a string that is never
+ * executed. The same shape appears outside tests: a seeder writing a config
+ * file, a heredoc carrying a template. A line containing a PHP open tag is
+ * embedded source by definition, and a real assignment never contains one.
+ */
+    private function isEmbeddedSource(string $line): bool
+    {
+        return str_contains($line, '<?php') || str_contains($line, '<?=');
+    }
+
     private function isFieldNameDeclaration(string $line): bool
     {
         foreach (self::FIELD_NAME_MARKERS as $marker) {

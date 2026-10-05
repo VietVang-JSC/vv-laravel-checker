@@ -40,7 +40,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CheckResult` with `skipped` and an install hint, which is what the README documents.
   An exception class no code raises is a claim about behaviour that does not exist.
 
-### Fixed (phpcs linted every Blade template in the project)
+### Added (the two ways a developer actually installs this)
+- The smoke harness verified only a dist install, which is what Packagist performs.
+  `git clone` + `composer install` is the other way to get the package and it fails
+  differently: the archive is curated by `.gitattributes` (no `tests/`, `tools/`,
+  `vendor/`, no dev configs) while a clone carries all of it, so a file the dist path
+  needs can be missing from a clone, or present in a clone and break a scan of the
+  clone itself. `tools/smoke-install.php` now clones the repository, installs it, and
+  runs the standalone binary and checks Artisan registration from the clone. It clones
+  HEAD rather than the working tree, so it asserts the committed state — what a
+  developer who runs `git clone` actually gets.
+- The Artisan entry point is now covered too. It depends on Laravel's package
+  auto-discovery finding `extra.laravel.providers`, on the provider resolving
+  `__DIR__/../config/quality-checker.php` from inside `vendor/`, and on the command
+  surviving Symfony's console. None of that runs when the package is the root package,
+  so a green suite could not see it break. The harness installs `orchestra/testbench`
+  into the throwaway project and runs `artisan quality:check` against the installed
+  artifact, asserting the same findings and the same resolved version the standalone
+  run produced.
+
+### Fixed (secrets inside embedded source were reported as critical leaks)
+- `HardcodedSecretAnalyzer` is line-based. A test that plants a vulnerable fixture writes
+  the whole file as one string, and with escaped newlines that is a single physical line:
+  `"<?php\nclass Api {\n private string $key = 'sk-ABC…';\n}\n"`. The scanner read the key and
+  reported a **critical** leak for source that is never executed. The same shape appears
+  outside tests — a seeder writing a config file, a heredoc carrying a template.
+- This repository's own suite tripped it five times, so a freshly cloned tool reported
+  five criticals on its own source on the first run: the worst possible first impression,
+  and the kind that teaches a developer to ignore the output.
+- A line containing a PHP open tag is embedded source by definition, and a real
+  assignment never contains one, so those lines are now skipped.
+  `EmbeddedSourceSecretTest` pins both directions — embedded source in a test helper and
+  in a seeder is silent, a real key on its own line is still critical, and `tests/` is
+  not a blanket exclusion.
+
+### Added (phpcs linted every Blade template in the project)
 - `PhpcsChecker` passed `$ctx->paths` to phpcs untouched. phpcs has no extension
   filter, so any scan path containing `resources/views` made it report every template as
   `Internal.NoCodeFound` and `Internal.LineEndings.Mixed`. The standalone binary scans
