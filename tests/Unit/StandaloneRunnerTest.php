@@ -136,6 +136,64 @@ final class StandaloneRunnerTest extends TestCase
         );
     }
 
+    public function testConfigExcludeIsMergedWithTheFlag(): void
+    {
+        $this->makeVulnerableApp();
+
+        $toolRoot = $this->dir . DIRECTORY_SEPARATOR . 'tool';
+        @mkdir($toolRoot . DIRECTORY_SEPARATOR . 'config', 0777, true);
+        file_put_contents(
+            $toolRoot . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'quality-checker.php',
+            "<?php\n\nreturn ['exclude' => ['custom']];\n"
+        );
+
+        $output = new BufferedOutput();
+        $code = (new StandaloneRunner([
+            $this->dir,
+            '--format=json',
+            '--tier=security',
+            '--fail-on=none',
+            '--output=' . $this->out,
+        ]))->run($output, $toolRoot);
+
+        self::assertSame(0, $code);
+        $payload = json_decode(
+            (string) file_get_contents($this->out . DIRECTORY_SEPARATOR . 'quality-report.json'),
+            true
+        );
+
+        self::assertSame(
+            0,
+            $payload['summary']['total_issues'],
+            'exclude in config was ignored: the custom analyzer still ran.'
+        );
+    }
+
+    public function testInternalErrorIsExitThreeNotUnhandled(): void
+    {
+        $this->makeVulnerableApp();
+
+        $toolRoot = $this->dir . DIRECTORY_SEPARATOR . 'tool';
+        @mkdir($toolRoot . DIRECTORY_SEPARATOR . 'config', 0777, true);
+        // Not valid PHP: `require` fails, so a throwable escapes inside the run
+        // rather than a missing-file graceful return.
+        file_put_contents(
+            $toolRoot . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'quality-checker.php',
+            "<?php\n\nreturn [\n"
+        );
+
+        $output = new BufferedOutput();
+        $code = (new StandaloneRunner([
+            $this->dir,
+            '--tier=security',
+            '--fail-on=none',
+            '--output=' . $this->out,
+        ]))->run($output, $toolRoot);
+
+        self::assertSame(3, $code);
+        self::assertStringContainsString('Internal error', $output->fetch());
+    }
+
     /**
      * A controller with a mutating action and no authorization check, placed in
      * `app/Http` or in `app/Http/<subdir>` when $subdir is given.

@@ -282,6 +282,60 @@ final class QualityCheckCommandTest extends TestCase
         $this->assertNotCount(0, $issues, 'Control case: the same scan does report without an exclusion.');
     }
 
+    /**
+     * `exclude` in config was declared but never read, so a project that listed
+     * a checker there still ran it.
+     */
+    public function testConfigExcludeIsHonouredAndMergedWithTheFlag(): void
+    {
+        $config = $this->app['config']->get('quality-checker', []);
+        $config['exclude'] = ['custom'];
+        $this->app['config']->set('quality-checker', $config);
+
+        $this->artisan('quality:check', [
+            '--path' => [$this->appDir],
+            '--format' => 'json',
+            '--output' => $this->tempDir,
+            '--fail-on' => 'none',
+            '--exclude' => 'phpcs,phpstan',
+        ])->assertExitCode(0);
+
+        $payload = json_decode(
+            (string) file_get_contents($this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.json'),
+            true
+        );
+
+        $names = array_column($payload['checkers'], 'name');
+
+        $this->assertNotContains(
+            'custom',
+            $names,
+            'exclude in config was ignored, so the custom analyzer still ran.'
+        );
+        $this->assertNotContains('phpcs', $names, 'The --exclude flag was overridden by the config key.');
+        $this->assertNotContains('phpstan', $names, 'The --exclude flag was overridden by the config key.');
+    }
+
+    /**
+ * Exit code 3 is documented as a runtime failure inside the package. Without a
+ * catch it surfaced as Symfony's generic error handling, which CI reads as a
+ * quality failure (exit 1) rather than a crash.
+ */
+    public function testInternalErrorIsExitThreeNotAQualityFailure(): void
+    {
+        $config = $this->app['config']->get('quality-checker', []);
+        // A scalar where the analyzer expects a list. The resulting error is
+        // raised during the run, after the context has been built successfully,
+        // which is exactly the window exit code 3 covers.
+        $config['analyzers']['extra_middleware'] = 42;
+        $this->app['config']->set('quality-checker', $config);
+
+        $this->artisan('quality:check', [
+            '--only' => 'custom',
+            '--path' => [$this->appDir],
+        ])->assertExitCode(3);
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {

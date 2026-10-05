@@ -64,8 +64,28 @@ final class StandaloneRunner
             return 2;
         }
 
+        // Exit code 3 is documented as "runtime error inside the package itself".
+        // It has to be caught here rather than left to an uncaught throwable,
+        // which surfaces as exit 255 and a stack trace: a CI job cannot tell that
+        // apart from the tool crashing on the user's code.
+        try {
+            return $this->scan($output, $toolRoot);
+        } catch (\Throwable $e) {
+            $output->writeln(sprintf(
+                '<error>Internal error: %s: %s</error>',
+                $e::class,
+                $e->getMessage()
+            ));
+
+            return 3;
+        }
+    }
+
+    private function scan(OutputInterface $output, string $toolRoot): int
+    {
         $config = $this->loadConfig($toolRoot);
         $config = $this->mergeExcludePaths($config);
+        $target = $this->target;
         $ctx = new CheckContext(
             $target,
             $this->scanPaths($target),
@@ -74,11 +94,18 @@ final class StandaloneRunner
             noAutoInstall: true,
             failOn: $this->options['fail-on'] ?? 'error',
             tier: $this->options['tier'] ?? ($config['tier'] ?? 'quality'),
-            minConfidence: $this->options['min-confidence'] ?? 'low',
+            minConfidence: $this->options['min-confidence'] ?? ($config['min_confidence'] ?? 'low'),
             packageVersion: PackageVersion::detect($toolRoot),
         );
         $ctx->only = $this->split($this->options['only'] ?? 'custom');
-        $ctx->exclude = $this->split($this->options['exclude'] ?? '');
+        // The config key and the flag are the same setting, so they are merged
+        // rather than one replacing the other. Before, the config key was never
+        // read at all and `exclude` in a project's config file was silently a
+        // no-op.
+        $ctx->exclude = array_values(array_unique(array_merge(
+            $this->configuredCheckerNames($config, 'exclude'),
+            $this->split($this->options['exclude'] ?? '')
+        )));
         $ctx->noCache = isset($this->options['no-cache']);
         $ctx->profile = isset($this->options['profile']);
         $ctx->exitCode = 0;
@@ -115,6 +142,27 @@ final class StandaloneRunner
         $output->writeln(sprintf('Standalone scan: %d issue(s) in %s (exit %d).', $total, $ctx->outputDir, $ctx->exitCode));
 
         return $ctx->exitCode;
+    }
+
+    /**
+ * Checker names from a config list, ignoring anything that is not a string.
+ *
+ * @param array<string, mixed> $config
+ * @return list<string>
+ */
+    private function configuredCheckerNames(array $config, string $key): array
+    {
+        $value = $config[$key] ?? [];
+
+        if (is_string($value)) {
+            return $this->split($value);
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        return array_values(array_filter($value, 'is_string'));
     }
 
     /**

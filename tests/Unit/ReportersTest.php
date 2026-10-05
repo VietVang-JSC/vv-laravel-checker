@@ -186,6 +186,72 @@ final class ReportersTest extends TestCase
         self::assertStringContainsString('### `app/Http/Controllers/UserController.php`', $md);
     }
 
+    /**
+ * The shields.io badge is what a README or a PR comment ends up showing, so a
+ * wrong colour is a lie nobody in this repository would see: the markdown test
+ * above asserts seventeen strings from the report and none of them was the badge.
+ * All four status/colour arms are pinned here, because "green badge on a red
+ * build" is the exact failure a test suite cannot be asked to catch later.
+ */
+    public function testMarkdownBadgeReflectsTheWorstSeverity(): void
+    {
+        // sampleResults() has one critical issue -> critical / red.
+        (new MarkdownReporter())->render($this->sampleResults(), $this->context());
+
+        $md = (string) file_get_contents($this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.md');
+
+        self::assertStringContainsString(
+            '![Quality](https://img.shields.io/badge/quality-critical-red) | Issues: 2 | Critical: 1',
+            $md
+        );
+    }
+
+    /**
+     * @param list<Issue> $issues
+     */
+    private function markdownFor(array $issues): string
+    {
+        $reporter = new MarkdownReporter();
+        $reporter->render([new CheckResult('custom', 'failed', 0.1, $issues, null, null)], $this->context());
+
+        return (string) file_get_contents($this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.md');
+    }
+
+    /**
+     * @param list<Issue> $issues
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('badgeStates')]
+    public function testMarkdownBadgeColoursEveryStatus(array $issues, string $status, string $colour): void
+    {
+        self::assertStringContainsString(
+            sprintf('![Quality](https://img.shields.io/badge/quality-%s-%s)', $status, $colour),
+            $this->markdownFor($issues)
+        );
+    }
+
+    /**
+     * @return array<string, array{0: list<Issue>, 1: string, 2: string}>
+     */
+    public static function badgeStates(): array
+    {
+        $make = static fn (Severity $severity): Issue => new Issue(
+            'SQL_INJECTION',
+            'message',
+            'app/Services/OrderService.php',
+            3,
+            $severity,
+            'custom'
+        );
+
+        return [
+            'critical outranks everything' => [[$make(Severity::Critical)], 'critical', 'red'],
+            'error is reported as failed' => [[$make(Severity::Error)], 'failed', 'red'],
+            'warning' => [[$make(Severity::Warning)], 'warning', 'orange'],
+            'info only still passes' => [[$make(Severity::Info)], 'passed', 'brightgreen'],
+            'no issues' => [[], 'passed', 'brightgreen'],
+        ];
+    }
+
     /** ConsoleReporter */
 
     public function testConsoleShowsGateConfigGroupsByFileAndHintsOnFailure(): void

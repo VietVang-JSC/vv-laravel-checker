@@ -1037,9 +1037,3 @@ parameters:
 			identifier: staticMethod.alreadyNarrowedType
 			count: 2
 			path: tests/Unit/EdgeCaseTest.php
-
-		-
-			message: '#^Call to static method PHPUnit\\Framework\\Assert\:\:assertIsBool\(\) with bool will always evaluate to true\.$#'
-			identifier: staticMethod.alreadyNarrowedType
-			count: 1
-			path: tests/Unit/FixerTest.php

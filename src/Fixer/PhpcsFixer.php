@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Rampart\QualityChecker\Fixer;
 
+use Rampart\QualityChecker\Runner\CheckContext;
+
 /**
  * Auto-fix wrapper around `vendor/bin/phpcbf` (PHP_CodeSniffer fixer).
  *
@@ -35,17 +37,21 @@ final class PhpcsFixer
     private const EXIT_NO_ISSUES = 0;
     private const EXIT_FIXABLE_REMAIN = 1;
 
-    /**
-     * Run the fixer over the given paths.
-     *
-     * @param list<string> $paths Files/directories to fix.
-     * @param string $standard PHPCS standard to apply (e.g. PSR12).
-     * @param callable|null $progress Invoked with a progress message string.
-     * @return FixResult
-     */
-    public function fix(array $paths, string $standard, ?callable $progress = null): FixResult
+/**
+ * Run the fixer over the given paths.
+ *
+ * @param list<string> $paths Files/directories to fix.
+ * @param string $standard PHPCS standard to apply (e.g. PSR12).
+ * @param callable|null $progress Invoked with a progress message string.
+ * @param CheckContext|null $ctx Target project. Pass it so the fixer runs the
+ *   target's own phpcbf, which is the binary `isAvailable()` verified and the
+ *   one its phpcs findings came from. Without it the package's bundled binary is
+ *   used, which fixed the right files with a different phpcbf version.
+ * @return FixResult
+ */
+    public function fix(array $paths, string $standard, ?callable $progress = null, ?CheckContext $ctx = null): FixResult
     {
-        $binary = $this->locateBinary();
+        $binary = $ctx !== null ? $this->locateBinaryForContext($ctx) : $this->locateBinary();
         if ($binary === null) {
             return new FixResult(0, ['phpcbf binary not found (vendor/bin/phpcbf).'], '');
         }

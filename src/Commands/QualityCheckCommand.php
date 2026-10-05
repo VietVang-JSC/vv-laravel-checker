@@ -56,6 +56,26 @@ final class QualityCheckCommand extends Command
             return 2;
         }
 
+        // Exit code 3 means the tool itself failed, as opposed to findings (1) or
+        // a bad invocation or setup (2). Without this guard a throwable escapes
+        // handle() and Symfony's console reports it with exit code 1, so a CI
+        // pipeline reads a package crash as a quality failure.
+        try {
+            return $this->runScan($ctx);
+        } catch (\Throwable $e) {
+            $this->error('Internal error: ' . $e::class . ': ' . $e->getMessage());
+
+            return 3;
+        }
+    }
+
+    /**
+     * Named runScan(), not execute(): Illuminate\Console\Command already defines
+     * a protected execute() used to invoke the closure-based handle path, and
+     * declaring it privately here is a fatal access-level error.
+     */
+    private function runScan(CheckContext $ctx): int
+    {
         $runner = new CheckRunner($ctx);
         $checkers = $runner->buildCheckers();
         $results = $runner->run($checkers);
@@ -138,7 +158,7 @@ final class QualityCheckCommand extends Command
         $format = $this->resolveFormat();
 
         $only = $this->splitOption('only');
-        $exclude = $this->splitOption('exclude');
+        $exclude = $this->excludedCheckers($config);
 
         // Rule-level ignore: config quality_gate.ignore plus --ignore=.
         $gate = $config['quality_gate'] ?? [];
@@ -284,7 +304,7 @@ final class QualityCheckCommand extends Command
         }
 
         $this->line('<fg=cyan>Running phpcbf auto-fix...</>');
-        $fixResult = $fixer->fix($ctx->paths, $standard);
+        $fixResult = $fixer->fix($ctx->paths, $standard, null, $ctx);
 
         if (!$fixResult->success()) {
             $this->warn('phpcbf reported errors: ' . implode('; ', $fixResult->errors));
@@ -364,6 +384,42 @@ final class QualityCheckCommand extends Command
     {
         $value = $this->option($name);
         if (!is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('trim', explode(',', $value)), static fn ($v): bool => $v !== ''));
+    }
+
+    /**
+     * Checkers to skip: the config key and --exclude name the same setting, so
+     * they are merged instead of one replacing the other. The config key was
+     * previously never read, which made `exclude` in a project's config file a
+     * silent no-op — a checker stayed in the run and a project could believe it
+     * had opted out of it.
+     *
+     * @param array<string, mixed> $config
+     * @return list<string>
+     */
+    private function excludedCheckers(array $config): array
+    {
+        $configured = $config['exclude'] ?? [];
+        if (is_string($configured)) {
+            $configured = $this->splitStringList($configured);
+        } elseif (!is_array($configured)) {
+            $configured = [];
+        }
+
+        $configured = array_values(array_filter($configured, 'is_string'));
+
+        return array_values(array_unique(array_merge($configured, $this->splitOption('exclude'))));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function splitStringList(string $value): array
+    {
+        if (trim($value) === '') {
             return [];
         }
 

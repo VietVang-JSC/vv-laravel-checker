@@ -141,6 +141,8 @@ final class CustomAnalyzerChecker implements CheckerInterface
 
         $issues = $this->reconcileOwnership($issues);
 
+        $issues = $this->applySeverityOverrides($issues, $ctx);
+
         $suppressed = 0;
         if ($this->inlineSuppressionEnabled($ctx)) {
             $suppressor = new InlineSuppressor();
@@ -148,7 +150,15 @@ final class CustomAnalyzerChecker implements CheckerInterface
             $suppressed = $suppressor->countSuppressed();
         }
 
-        $minConfidence = Confidence::fromString((string) ($ctx->config['min_confidence'] ?? 'low'));
+        // The resolved context value, not config['min_confidence'] read directly: the
+        // CLI flag and the config key are the same setting, and reading only the
+        // config meant `--min-confidence=high` still listed every low-confidence
+        // finding while the report header and the gate both said "high".
+        $minConfidence = Confidence::fromString(
+            $ctx->minConfidence !== ''
+                ? $ctx->minConfidence
+                : (string) ($ctx->config['min_confidence'] ?? 'low')
+        );
         $issues = array_values(array_filter(
             $issues,
             static fn (Issue $issue): bool => $issue->confidence->intValue() >= $minConfidence->intValue()
@@ -265,6 +275,60 @@ final class CustomAnalyzerChecker implements CheckerInterface
     private function ownershipIdentity(string $file, string $controller, string $action): string
     {
         return strtolower($file . '|' . ltrim($controller, '\\') . '@' . $action);
+    }
+
+    /**
+ * Per-rule severity remapping, applied after analysis and before the
+ * confidence filter so the gate sees the reported severity.
+ *
+ * The blade rules default to 'info' because they dominate finding counts on
+ * real projects (~1,000 of 7,000 across the 27-project benchmark) while the
+ * overwhelming majority are `{!! $model->field !!}` renderings that Blade
+ * templates use deliberately. At 'error' they made a default run red before a
+ * user had seen anything.
+ *
+ * This is a config knob and not a change to the analyzer: `OWASP_BLADE_XSS` at
+ * 'error' fires only for request-derived output, which is reflected XSS and
+ * does deserve to fail a gate. Demoting it to 'info' therefore stops
+ * `--tier=security` from catching reflected XSS, so a project that wants that
+ * back sets `'OWASP_BLADE_XSS' => 'error'` (or 'critical') explicitly.
+ *
+ * @param Issue[] $issues
+ * @return Issue[]
+ */
+    private function applySeverityOverrides(array $issues, CheckContext $ctx): array
+    {
+        $overrides = $ctx->config['analyzers']['severity_overrides'] ?? [];
+        if (!is_array($overrides) || $overrides === []) {
+            return $issues;
+        }
+
+        $map = [];
+        foreach ($overrides as $rule => $severity) {
+            if (!is_string($rule) || !is_string($severity)) {
+                continue;
+            }
+            // fromString() falls back to Error on a typo, which would silently
+            // promote a rule; an unparseable value is a config error, so skip
+            // the rule instead of guessing a direction.
+            if (Severity::tryFrom(strtolower($severity)) === null) {
+                continue;
+            }
+            $map[strtoupper($rule)] = Severity::fromString($severity);
+        }
+
+        if ($map === []) {
+            return $issues;
+        }
+
+        foreach ($issues as $issue) {
+            $override = $map[strtoupper($issue->rule)] ?? null;
+            if ($override !== null) {
+                $issue->severity = $override;
+            }
+        }
+
+        return $issues;
     }
 
     private function inlineSuppressionEnabled(CheckContext $ctx): bool
