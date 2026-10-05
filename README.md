@@ -427,6 +427,14 @@ low-confidence hints. The last two are opt-in.
 | `NAMING_CONVENTION` | Info | low | Class/method/constant names that deviate from conventions. |
 | `TODO_FIXME` | Info | low | Leftover `TODO` / `FIXME` / `HACK` markers. |
 
+### Frontend (`analyzers/frontend`, on by default)
+
+| Rule ID | Severity | Confidence | What it detects |
+|---|---|---|---|
+| `JS_SYNTAX_ERROR` | Warning | medium | Unbalanced `{}[]()` or unclosed string/template literal in `resources/js` / `public/js` (`.js`, `.jsx`, `.ts`, `.tsx`, `.vue` `<script>`). |
+| `CSS_SYNTAX_ERROR` | Warning/Info | medium/low | Unbalanced `{}` or missing `;` before `}` in `resources/css` / `public/css` (`.css`, `.scss`, `.sass`, `.less`). |
+| `BLADE_STACK_MISMATCH` | Error/Warning/Info | high/medium/low | `@push('x')` without `@stack('x')` (orphan, Warning), `@stack('x')` without `@push` (empty, Info), or `@push` without `@endpush` (Error) in `resources/views` `*.blade.php`. |
+
 ### Wrapped checkers
 
 These are not rule ids — they are the third-party tools this package drives, and

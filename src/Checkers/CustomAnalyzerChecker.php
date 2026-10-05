@@ -8,6 +8,9 @@ use Rampart\QualityChecker\Analyzers\Convention\DeadCodeAnalyzer;
 use Rampart\QualityChecker\Analyzers\Convention\LaravelPitfallAnalyzer;
 use Rampart\QualityChecker\Analyzers\Convention\NamingConventionAnalyzer;
 use Rampart\QualityChecker\Analyzers\Convention\TodoFixmeAnalyzer;
+use Rampart\QualityChecker\Analyzers\Frontend\BladeStackAnalyzer;
+use Rampart\QualityChecker\Analyzers\Frontend\CssSyntaxAnalyzer;
+use Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer;
 use Rampart\QualityChecker\Analyzers\Deduplicator;
 use Rampart\QualityChecker\Analyzers\Laravel\MigrationAnalyzer;
 use Rampart\QualityChecker\Analyzers\Laravel\RouteValidationAnalyzer;
@@ -87,6 +90,8 @@ final class CustomAnalyzerChecker implements CheckerInterface
         $files = array_values(array_unique(array_merge(
             $files,
             $this->collectBladeFiles($ctx),
+            $this->collectJsFiles($ctx),
+            $this->collectCssFiles($ctx),
             $this->collectEnvFiles($ctx)
         )));
         Profiler::end('discovery');
@@ -389,6 +394,9 @@ final class CustomAnalyzerChecker implements CheckerInterface
             $this->entry($analyzers, 'convention.todo_fixme', new TodoFixmeAnalyzer()),
             $this->entry($analyzers, 'convention.dead_code', new DeadCodeAnalyzer()),
             $this->entry($analyzers, 'convention.laravel_pitfall', new LaravelPitfallAnalyzer()),
+            $this->entry($analyzers, 'frontend.js_syntax', new JsSyntaxAnalyzer()),
+            $this->entry($analyzers, 'frontend.css_syntax', new CssSyntaxAnalyzer()),
+            $this->entry($analyzers, 'frontend.blade_stack', new BladeStackAnalyzer()),
         ];
     }
 
@@ -606,6 +614,86 @@ final class CustomAnalyzerChecker implements CheckerInterface
                 continue;
             }
             $files[] = $file->getPathname();
+        }
+
+        return array_values(array_unique($files));
+    }
+
+    /**
+     * JS/TS files — collected separately so only JS-aware analyzers consume them.
+     *
+     * @return list<string>
+     */
+    private function collectJsFiles(CheckContext $ctx): array
+    {
+        $roots = ['resources', 'public'];
+        $files = [];
+        $excluder = PathExcluder::fromConfig($ctx->config);
+        foreach ($roots as $root) {
+            $abs = $ctx->resolvePath($root);
+            if (!is_dir($abs)) {
+                continue;
+            }
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($abs, \FilesystemIterator::SKIP_DOTS)
+            );
+            foreach ($iterator as $file) {
+                if (!$file instanceof \SplFileInfo || !$file->isFile()) {
+                    continue;
+                }
+                $ext = strtolower($file->getExtension());
+                if (!in_array($ext, ['js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs', 'vue'], true)) {
+                    continue;
+                }
+                $pathname = str_replace('\\', '/', $file->getPathname());
+                if (str_contains($pathname, '/vendor/') || str_contains($pathname, '/node_modules/')) {
+                    continue;
+                }
+                if ($excluder->excludes($pathname)) {
+                    continue;
+                }
+                $files[] = $file->getPathname();
+            }
+        }
+
+        return array_values(array_unique($files));
+    }
+
+    /**
+     * CSS/SCSS files.
+     *
+     * @return list<string>
+     */
+    private function collectCssFiles(CheckContext $ctx): array
+    {
+        $roots = ['resources', 'public'];
+        $files = [];
+        $excluder = PathExcluder::fromConfig($ctx->config);
+        foreach ($roots as $root) {
+            $abs = $ctx->resolvePath($root);
+            if (!is_dir($abs)) {
+                continue;
+            }
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($abs, \FilesystemIterator::SKIP_DOTS)
+            );
+            foreach ($iterator as $file) {
+                if (!$file instanceof \SplFileInfo || !$file->isFile()) {
+                    continue;
+                }
+                $ext = strtolower($file->getExtension());
+                if (!in_array($ext, ['css', 'scss', 'sass', 'less'], true)) {
+                    continue;
+                }
+                $pathname = str_replace('\\', '/', $file->getPathname());
+                if (str_contains($pathname, '/vendor/') || str_contains($pathname, '/node_modules/')) {
+                    continue;
+                }
+                if ($excluder->excludes($pathname)) {
+                    continue;
+                }
+                $files[] = $file->getPathname();
+            }
         }
 
         return array_values(array_unique($files));

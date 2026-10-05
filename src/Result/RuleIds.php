@@ -71,6 +71,11 @@ final class RuleIds
     public const MISSING_FEATURE_COVERAGE = 'MISSING_FEATURE_COVERAGE';
     public const TEST_WITHOUT_ASSERT = 'TEST_WITHOUT_ASSERT';
 
+    // --- Frontend analyzers (JS/CSS/Blade) ---------------------------------
+    public const JS_SYNTAX_ERROR = 'JS_SYNTAX_ERROR';
+    public const CSS_SYNTAX_ERROR = 'CSS_SYNTAX_ERROR';
+    public const BLADE_STACK_MISMATCH = 'BLADE_STACK_MISMATCH';
+
     // --- Convention analyzers (default off) ---------------------------------
     public const DEAD_CODE = 'DEAD_CODE';
     public const NAMING_CONVENTION = 'NAMING_CONVENTION';
@@ -113,6 +118,9 @@ final class RuleIds
             self::MISSING_UNIT_TEST,
             self::MISSING_FEATURE_COVERAGE,
             self::TEST_WITHOUT_ASSERT,
+            self::JS_SYNTAX_ERROR,
+            self::CSS_SYNTAX_ERROR,
+            self::BLADE_STACK_MISMATCH,
             self::DEAD_CODE,
             self::NAMING_CONVENTION,
             self::TODO_FIXME,

@@ -128,6 +128,15 @@ return [
             'laravel_pitfall' => false,
         ],
 
+        // Frontend heuristics — JS/CSS/Blade stack.
+        // js_syntax/css_syntax are Warning/Medium (likely typo, not security gate);
+        // blade_stack orphan push is Warning, empty stack is Info, unclosed block is Error.
+        'frontend' => [
+            'js_syntax' => true,
+            'css_syntax' => true,
+            'blade_stack' => true,
+        ],
+
         // Eloquent model directories for mass-assignment resolution.
         'models_dirs' => ['app/Models'],
 

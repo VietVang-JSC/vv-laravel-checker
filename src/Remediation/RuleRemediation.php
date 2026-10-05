@@ -506,6 +506,51 @@ final class RuleRemediation
                     CODE,
                 'docs' => null,
             ],
+            'JS_SYNTAX_ERROR' => [
+                'why' => 'Unbalanced JS delimiters or unclosed string/template literal — the file will throw at load or behave differently than written.',
+                'fix' => <<<'CODE'
+                    // WRONG: unclosed brace / string
+                    function foo() {
+                      if (true) {
+                        console.log("hi);
+                    }
+
+                    // RIGHT: balanced delimiters, strings closed
+                    function foo() {
+                      if (true) {
+                        console.log("hi");
+                      }
+                    }
+                    CODE,
+                'docs' => null,
+            ],
+            'CSS_SYNTAX_ERROR' => [
+                'why' => 'Unbalanced CSS braces or missing semicolon — the rule after the error is ignored by browsers.',
+                'fix' => <<<'CODE'
+                    /* WRONG */
+                    .a { color: red
+                      .b { color: blue; }
+
+                    /* RIGHT */
+                    .a { color: red; }
+                    .b { color: blue; }
+                    CODE,
+                'docs' => null,
+            ],
+            'BLADE_STACK_MISMATCH' => [
+                'why' => '@push without @stack never renders; @stack without @push is empty; unclosed @push breaks Blade compilation.',
+                'fix' => <<<'CODE'
+                    {{-- layout --}} @stack('scripts')
+
+                    {{-- view --}}
+                    @push('scripts')
+                    <script src="/app.js"></script>
+                    @endpush
+
+                    {{-- check the name matches exactly: scripts vs script --}}
+                    CODE,
+                'docs' => null,
+            ],
         ];
     }
 
