@@ -41,6 +41,27 @@ trait ScanContextTrait
         return $this->shared();
     }
 
+    /**
+     * Root of the project being scanned.
+     *
+     * Prefers the path the checker recorded, so an analyzer resolves
+     * `routes/` and `tests/Feature/` against the target project rather than
+     * against whatever directory the process happens to be in. Falls back to
+     * getcwd() only for the direct-analyze() calls unit tests make, where no
+     * checker ran and there is nothing better to go on.
+     */
+    protected function scanRoot(): ?string
+    {
+        $root = $this->shared()->basePath();
+        if ($root !== null) {
+            return $root;
+        }
+
+        $cwd = getcwd();
+
+        return is_string($cwd) ? $cwd : null;
+    }
+
     private function shared(): ScanContext
     {
         return $this->scanContext ??= new ScanContext();

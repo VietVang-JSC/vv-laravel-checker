@@ -165,13 +165,12 @@ final class FeatureTestAnalyzer implements ScanContextAware
 
     private function appRoot(): ?string
     {
-        foreach ([getcwd(), dirname(__DIR__, 4)] as $candidate) {
-            if (is_string($candidate) && is_dir($candidate . '/app')) {
-                return $candidate;
-            }
+        $root = $this->scanRoot();
+        if ($root === null) {
+            return null;
         }
 
-        return null;
+        return is_dir($root . '/app') || is_dir($root . '/routes') ? $root : null;
     }
 
     private function listPhpFiles(string $dir): array

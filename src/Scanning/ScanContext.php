@@ -44,6 +44,29 @@ final class ScanContext
 
     private ?Parser $parser = null;
 
+    /**
+     * Root of the project being scanned, when the caller knows it.
+     *
+     * Analyzers that need to resolve a path relative to the application root —
+     * `routes/`, `tests/Feature/` — used to call getcwd() and guess. That is
+     * wrong the moment the tool is pointed at another project, which is the
+     * normal case: `php bin/quality-check /path/to/other/app` runs with the
+     * caller's working directory unchanged, so the analyzer inspected the
+     * caller's routes while the findings it produced were attributed to the
+     * target. The checker passes basePath here once per run.
+     */
+    private ?string $basePath = null;
+
+    public function setBasePath(string $basePath): void
+    {
+        $this->basePath = rtrim($basePath, '/\\');
+    }
+
+    public function basePath(): ?string
+    {
+        return $this->basePath;
+    }
+
     private int $sourceRequests = 0;
 
     private int $sourceHits = 0;

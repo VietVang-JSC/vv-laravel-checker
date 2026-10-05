@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (analyzers resolved project paths against the wrong directory)
+- `FeatureTestAnalyzer`, `ControllerTestAnalyzer` and `NamingConventionAnalyzer` found
+  their directories with `getcwd()` plus a fallback to `dirname(__DIR__, 4)`. Neither is
+  the project being scanned. `php bin/quality-check /path/to/other/app` runs with the
+  caller's working directory unchanged, so pointing this tool at another project — the
+  normal case, and the one the standalone binary exists for — made these three read the
+  caller's `routes/`, `app/` and `tests/`, and attribute what they found to the target.
+  Concretely: `MISSING_FEATURE_COVERAGE` was reported against the caller's routes, or
+  silently returned nothing when the caller had no `app/` directory at all.
+- The root is now recorded once per run (`ScanContext::setBasePath()`, set by
+  `CustomAnalyzerChecker` from `CheckContext::$basePath`) and read through
+  `ScanContextTrait::scanRoot()`. `getcwd()` survives only as the fallback for a direct
+  `analyze()` call with no checker behind it, which is what unit tests do.
+
+### Added (analyzers the suite never actually constructed)
+- Ten analyzer classes had no direct test anywhere: `NamingConventionAnalyzer`,
+  `TodoFixmeAnalyzer`, `LaravelPitfallAnalyzer`, `DeadCodeAnalyzer`,
+  `ControllerTestAnalyzer`, `FeatureTestAnalyzer`, `MissingTestAnalyzer`,
+  `TestCoverageAnalyzer`, `TestWithoutAssertAnalyzer`, plus `AbstractProcessChecker`.
+  They were reachable only through checker runs that leave the convention analyzers
+  disabled, so a green suite said nothing about whether any of them worked.
+  `ConventionAndCoverageAnalyzerTest` pins the behavior each one actually produces,
+  including the negative cases: `env()` in `config/` is not a finding, a model with
+  fewer than three methods is not a missing-model-test, and a covered route is silent.
+- The test for the `getcwd()` regression builds a caller project with a route the target
+  does not have and asserts it never appears in the target's report.
+
+### Removed
+- `Exceptions\ToolNotFoundException`, defined since an early revision and never thrown
+  or caught anywhere in `src/`, `tests/` or `tools/`. The missing-tool paths return a
+  `CheckResult` with `skipped` and an install hint, which is what the README documents.
+  An exception class no code raises is a claim about behaviour that does not exist.
+
 ### Fixed (`--fix` used the wrong phpcbf)
 - `PhpcsFixer::fix()` located phpcbf with `locateBinary()`, which only ever finds the
   copy in this package's own `vendor/`. In a consumer project that means `quality:check

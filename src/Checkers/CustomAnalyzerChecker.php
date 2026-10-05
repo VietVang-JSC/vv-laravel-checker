@@ -103,6 +103,10 @@ final class CustomAnalyzerChecker implements CheckerInterface
         // GC resumes in the finally below. VV_NO_GC_PARK=1 skips parking
         // for the PERF-EVAL-2 GC A/B experiment.
         $scan = new ScanContext();
+        // Analyzers that resolve project-relative paths (routes/, tests/) read
+        // the root from here instead of guessing getcwd(). Without it, pointing
+        // this tool at another project inspected the caller's directories.
+        $scan->setBasePath($ctx->basePath);
         $parkGc = getenv('VV_NO_GC_PARK') !== '1';
         if ($parkGc) {
             gc_disable();
