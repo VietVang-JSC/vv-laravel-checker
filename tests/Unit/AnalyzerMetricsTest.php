@@ -1984,6 +1984,506 @@ final class AnalyzerMetricsTest extends TestCase
             ['app/Http/Controllers/Trav8_12.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Http\\Request;\nclass Trav8_12{ public function d(Request \$request){ include \$request->input('f12'); } }\n"],
             'OWASP_PATH_TRAVERSAL',
         ];
+        yield 'js500_tp_00' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_00.js' => "function foo0() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_01' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_01.js' => "function foo1() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_02' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_02.js' => "function foo2() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_03' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_03.js' => "function foo3() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_04' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_04.js' => "function foo4() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_05' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_05.js' => "function foo5() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_06' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_06.js' => "function foo6() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_07' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_07.js' => "function foo7() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_08' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_08.js' => "function foo8() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_09' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_09.js' => "function foo9() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_10' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_10.js' => "function foo10() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_11' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_11.js' => "function foo11() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_12' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_12.js' => "function foo12() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_13' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_13.js' => "function foo13() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_14' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_14.js' => "function foo14() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_15' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_15.js' => "function foo15() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_16' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_16.js' => "function foo16() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_17' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_17.js' => "function foo17() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_18' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_18.js' => "function foo18() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_19' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_19.js' => "function foo19() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_20' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_20.js' => "function foo20() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_21' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_21.js' => "function foo21() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_22' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_22.js' => "function foo22() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_23' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_23.js' => "function foo23() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'js500_tp_24' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer => new \Rampart\QualityChecker\Analyzers\Frontend\JsSyntaxAnalyzer(),
+            ['resources/js/p500_24.js' => "function foo24() { if (true) { console.log('hi'); "]
+            ,'JS_SYNTAX_ERROR',
+        ];
+        yield 'sqli500_tp_00' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_00.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_00 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c0'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_01' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_01.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_01 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c1'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_02' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_02.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_02 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c2'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_03' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_03.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_03 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c3'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_04' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_04.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_04 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c4'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_05' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_05.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_05 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c5'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_06' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_06.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_06 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c6'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_07' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_07.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_07 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c7'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_08' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_08.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_08 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c8'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_09' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_09.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_09 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c9'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_10' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_10.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_10 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c10'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_11' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_11.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_11 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c11'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_12' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_12.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_12 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c12'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_13' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_13.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_13 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c13'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_14' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_14.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_14 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c14'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_15' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_15.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_15 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c15'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_16' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_16.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_16 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c16'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_17' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_17.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_17 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c17'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_18' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_18.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_18 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c18'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_19' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_19.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_19 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c19'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_20' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_20.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_20 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c20'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_21' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_21.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_21 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c21'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_22' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_22.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_22 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c22'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_23' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_23.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_23 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c23'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'sqli500_tp_24' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer(),
+            ['app/Http/Controllers/Sqli500_24.php' => "<?php\nnamespace App\\Http\\Controllers;\nuse Illuminate\\Support\\Facades\\DB;\nclass Sqli500_24 { public function i(\\Illuminate\\Http\\Request \$request){ return DB::table('t')->orderBy(\$request->input('c24'))->get(); } }"]
+            ,'SQL_INJECTION',
+        ];
+        yield 'ssrf500_tp_00' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_00.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_00 { public function f(Request \$request){ return file_get_contents(\$request->input('u0')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_01' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_01.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_01 { public function f(Request \$request){ return file_get_contents(\$request->input('u1')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_02' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_02.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_02 { public function f(Request \$request){ return file_get_contents(\$request->input('u2')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_03' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_03.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_03 { public function f(Request \$request){ return file_get_contents(\$request->input('u3')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_04' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_04.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_04 { public function f(Request \$request){ return file_get_contents(\$request->input('u4')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_05' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_05.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_05 { public function f(Request \$request){ return file_get_contents(\$request->input('u5')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_06' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_06.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_06 { public function f(Request \$request){ return file_get_contents(\$request->input('u6')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_07' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_07.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_07 { public function f(Request \$request){ return file_get_contents(\$request->input('u7')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_08' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_08.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_08 { public function f(Request \$request){ return file_get_contents(\$request->input('u8')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_09' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_09.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_09 { public function f(Request \$request){ return file_get_contents(\$request->input('u9')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_10' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_10.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_10 { public function f(Request \$request){ return file_get_contents(\$request->input('u10')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_11' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_11.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_11 { public function f(Request \$request){ return file_get_contents(\$request->input('u11')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_12' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_12.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_12 { public function f(Request \$request){ return file_get_contents(\$request->input('u12')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_13' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_13.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_13 { public function f(Request \$request){ return file_get_contents(\$request->input('u13')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_14' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_14.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_14 { public function f(Request \$request){ return file_get_contents(\$request->input('u14')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_15' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_15.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_15 { public function f(Request \$request){ return file_get_contents(\$request->input('u15')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_16' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_16.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_16 { public function f(Request \$request){ return file_get_contents(\$request->input('u16')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_17' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_17.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_17 { public function f(Request \$request){ return file_get_contents(\$request->input('u17')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_18' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_18.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_18 { public function f(Request \$request){ return file_get_contents(\$request->input('u18')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_19' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_19.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_19 { public function f(Request \$request){ return file_get_contents(\$request->input('u19')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_20' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_20.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_20 { public function f(Request \$request){ return file_get_contents(\$request->input('u20')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_21' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_21.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_21 { public function f(Request \$request){ return file_get_contents(\$request->input('u21')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_22' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_22.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_22 { public function f(Request \$request){ return file_get_contents(\$request->input('u22')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_23' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_23.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_23 { public function f(Request \$request){ return file_get_contents(\$request->input('u23')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'ssrf500_tp_24' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspSsrfAnalyzer(),
+            ['app/Services/Ssrf500_24.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Ssrf500_24 { public function f(Request \$request){ return file_get_contents(\$request->input('u24')); } }"]
+            ,'OWASP_SSRF',
+        ];
+        yield 'cmdi500_tp_00' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer(),
+            ['app/Services/Cmdi500_00.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Cmdi500_00 { public function f(Request \$request){ exec(\$request->input('c0')); } }"]
+            ,'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'xss500_tp_01' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer(),
+            ['resources/views/x500_01.blade.php' => '<div>{!! $var01 !!}</div>'],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'cmdi500_tp_02' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer(),
+            ['app/Services/Cmdi500_02.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Cmdi500_02 { public function f(Request \$request){ exec(\$request->input('c2')); } }"]
+            ,'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'xss500_tp_03' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer(),
+            ['resources/views/x500_03.blade.php' => '<div>{!! $var03 !!}</div>'],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'cmdi500_tp_04' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer(),
+            ['app/Services/Cmdi500_04.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Cmdi500_04 { public function f(Request \$request){ exec(\$request->input('c4')); } }"]
+            ,'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'xss500_tp_05' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer(),
+            ['resources/views/x500_05.blade.php' => '<div>{!! $var05 !!}</div>'],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'cmdi500_tp_06' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer(),
+            ['app/Services/Cmdi500_06.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Cmdi500_06 { public function f(Request \$request){ exec(\$request->input('c6')); } }"]
+            ,'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'xss500_tp_07' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer(),
+            ['resources/views/x500_07.blade.php' => '<div>{!! $var07 !!}</div>'],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'cmdi500_tp_08' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer(),
+            ['app/Services/Cmdi500_08.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Cmdi500_08 { public function f(Request \$request){ exec(\$request->input('c8')); } }"]
+            ,'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'xss500_tp_09' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer(),
+            ['resources/views/x500_09.blade.php' => '<div>{!! $var09 !!}</div>'],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'cmdi500_tp_10' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer(),
+            ['app/Services/Cmdi500_10.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Cmdi500_10 { public function f(Request \$request){ exec(\$request->input('c10')); } }"]
+            ,'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'xss500_tp_11' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer(),
+            ['resources/views/x500_11.blade.php' => '<div>{!! $var11 !!}</div>'],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'cmdi500_tp_12' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer(),
+            ['app/Services/Cmdi500_12.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Cmdi500_12 { public function f(Request \$request){ exec(\$request->input('c12')); } }"]
+            ,'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'xss500_tp_13' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer(),
+            ['resources/views/x500_13.blade.php' => '<div>{!! $var13 !!}</div>'],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'cmdi500_tp_14' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer(),
+            ['app/Services/Cmdi500_14.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Cmdi500_14 { public function f(Request \$request){ exec(\$request->input('c14')); } }"]
+            ,'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'xss500_tp_15' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer(),
+            ['resources/views/x500_15.blade.php' => '<div>{!! $var15 !!}</div>'],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'cmdi500_tp_16' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer(),
+            ['app/Services/Cmdi500_16.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Cmdi500_16 { public function f(Request \$request){ exec(\$request->input('c16')); } }"]
+            ,'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'xss500_tp_17' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer(),
+            ['resources/views/x500_17.blade.php' => '<div>{!! $var17 !!}</div>'],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'cmdi500_tp_18' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer(),
+            ['app/Services/Cmdi500_18.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Cmdi500_18 { public function f(Request \$request){ exec(\$request->input('c18')); } }"]
+            ,'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'xss500_tp_19' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer(),
+            ['resources/views/x500_19.blade.php' => '<div>{!! $var19 !!}</div>'],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'cmdi500_tp_20' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer(),
+            ['app/Services/Cmdi500_20.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Cmdi500_20 { public function f(Request \$request){ exec(\$request->input('c20')); } }"]
+            ,'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'xss500_tp_21' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer(),
+            ['resources/views/x500_21.blade.php' => '<div>{!! $var21 !!}</div>'],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'cmdi500_tp_22' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer(),
+            ['app/Services/Cmdi500_22.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Cmdi500_22 { public function f(Request \$request){ exec(\$request->input('c22')); } }"]
+            ,'OWASP_COMMAND_INJECTION',
+        ];
+        yield 'xss500_tp_23' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspBladeXssAnalyzer(),
+            ['resources/views/x500_23.blade.php' => '<div>{!! $var23 !!}</div>'],
+            'OWASP_BLADE_XSS',
+        ];
+        yield 'cmdi500_tp_24' => [
+            static fn (): \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer => new \Rampart\QualityChecker\Analyzers\Owasp\OwaspCommandInjectionAnalyzer(),
+            ['app/Services/Cmdi500_24.php' => "<?php\nnamespace App\\Services;\nuse Illuminate\\Http\\Request;\nclass Cmdi500_24 { public function f(Request \$request){ exec(\$request->input('c24')); } }"]
+            ,'OWASP_COMMAND_INJECTION',
+        ];
         yield 'xss_fp_escaped_blade' => [
             static fn (): AbstractAnalyzer => new OwaspBladeXssAnalyzer(),
             ['resources/views/home.blade.php' => "<div>{{ \$title }}</div>\n"],

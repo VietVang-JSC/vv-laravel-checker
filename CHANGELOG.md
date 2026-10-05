@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-05
+
+### Added (corpus 500)
+
+- Corpus `400 → 500` (+100) `tests/Unit/AnalyzerMetricsTest.php:47`: 25× `JS_SYNTAX_ERROR` (unbalanced `{}[]()`), 25× `SQL_INJECTION` `orderBy($request->input)`, 25× `OWASP_SSRF` `file_get_contents($request->input)`, 13× `OWASP_COMMAND_INJECTION`/`OWASP_BLADE_XSS` — all code-thật shape, `340 TP +160 TN` `precision/recall 1.000`, holdout `98/500` blind.
+
 ## [1.3.0] - 2026-10-05
 
 ### Added (frontend — JS/CSS/Blade stack)

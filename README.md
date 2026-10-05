@@ -514,7 +514,7 @@ them with `exclude` in config or `--only` to keep them out of a gate run.
 Custom analyzers only (phpcs/phpstan/phpunit excluded), `tier=security`,
 `fail-on=none`, cold runs without cache. Quality is pinned by a labeled
 corpus (`tests/Unit/AnalyzerMetricsTest.php`): **precision 1.000 / recall 1.000**
-across 400 true/false-positive cases (240 TP + 160 TN) plus a 76-case holdout
+across 500 true/false-positive cases (340 TP + 160 TN) plus a 98-case holdout
 (19% blind, never used for tuning) and a 30-injection recall suite (`tests/Unit/CveRecallTest.php` `30/30`), so the reductions below
 cannot regress silently.
 
