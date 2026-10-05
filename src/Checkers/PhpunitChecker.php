@@ -92,7 +92,7 @@ final class PhpunitChecker extends AbstractProcessChecker
                     sprintf('Line coverage is %.1f%%, below the %d%% threshold.', $coverage, $coverageThreshold),
                     null,
                     null,
-                    Severity::Warning,
+                    Severity::Error,
                     'phpunit',
                     ['coverage' => $coverage, 'threshold' => $coverageThreshold]
                 );

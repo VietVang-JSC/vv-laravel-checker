@@ -469,6 +469,9 @@ final class MarkdownReporter implements ReporterInterface
         return (string) preg_replace('/[^a-z0-9_-]+/', '', $slug);
     }
 
+    /**
+     * @param array<string, int> $summary
+     */
     private function overviewBadges(array $summary): string
     {
         $parts = [];
@@ -486,6 +489,9 @@ final class MarkdownReporter implements ReporterInterface
         return implode(' ', $parts);
     }
 
+    /**
+     * @param array<string, int> $summary
+     */
     private function mermaidSeverityChart(array $summary): string
     {
         $total = max(1, $summary['total_issues']);
