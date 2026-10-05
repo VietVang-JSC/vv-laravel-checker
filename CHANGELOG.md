@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (`--fix` used the wrong phpcbf)
+- `PhpcsFixer::fix()` located phpcbf with `locateBinary()`, which only ever finds the
+  copy in this package's own `vendor/`. In a consumer project that means `quality:check
+  --fix` silently reported on a binary that project did not ask for, or nothing at all
+  when the package was installed standalone. It now takes the `CheckContext` and resolves
+  phpcbf from the target project, falling back to the bundled copy only when no context
+  is supplied. Covered by `FixerTest`: with a context whose project has no phpcbf, the
+  fix reports `filesFixed === 0`, an error naming the missing binary, `success() ===
+  false`, and empty output — it does not claim to have fixed anything.
+
+### Fixed (the report and the gate disagreed about confidence)
+- `CustomAnalyzerChecker` filtered its findings on `config['min_confidence']` while
+  `CheckRunner::shouldFail()` filtered on the resolved `$ctx->minConfidence`. The two are
+  the same setting with two sources of truth, and they were out of step: `--min-confidence=high`
+  printed every low-confidence finding and then declined to fail the build on them. The
+  analyzer now filters on the resolved value, falling back to the config key only when no
+  context value is set. `TierLogicTest` pins the two cases against the same fixture.
+- `StandaloneRunner` resolved confidence from the flag alone, ignoring a project's
+  configured `min_confidence` entirely. It now applies the same CLI-over-config precedence
+  as the Artisan command.
+
+### Fixed (`exclude` in config was a no-op)
+- `config/quality-checker.php` declared `'exclude' => []` and neither entry point read it,
+  so a project that listed a checker there still ran it. Both now merge the config key
+  with `--exclude` rather than letting one replace the other, and the shipped config
+  comment says which setting it is (paths belong in `analyzers.exclude_paths`).
+
+### Fixed (exit code 3 was documented but unreachable)
+- README documented `3` for a runtime error inside the package. Nothing produced it: a
+  throwable escaping `handle()` was reported by Symfony's console as a generic failure,
+  which CI reads as a quality result. Both entry points now catch it, print the class and
+  message, and return `3`. Covered by `QualityCheckCommandTest` and `StandaloneRunnerTest`.
+- README's exit code `2` also claimed to cover a missing tool; that is a `skipped` result
+  with exit `0`, not an error. Corrected to bad invocation or setup.
+
+### Fixed (the tier documentation overstated the feature)
+- Only `security` changes gate behaviour. `quality` and `all` behave identically, and the
+  checkers that carry no quality-gate signal (dependency audit, trivy, the heuristics)
+  report the same in every tier. README claimed `all` "surfaces every heuristic" and that
+  `security` gates on composer_audit alongside the OWASP analyzers; both were wrong. The
+  README table and the shipped config comment now say what ships, and point at `exclude`
+  and `--only` for skipping checkers.
+
+### Added
+- Markdown reporter badge coverage: all four status/colour arms are pinned, because
+  "green badge on a red build" is not a failure a test suite is asked to catch later.
+- `phpunit.xml.dist` sets `failOnRisky`, `beStrictAboutTestsThatDoNotTestAnything`, and
+  `beStrictAboutOutputDuringTests`.
+- `composer smoke` now installs the built artifact rather than a path symlink: it stages a
+  versioned zip from the archive bytes, installs it through an `artifact` repository, and
+  asserts the Composer proxy, the hoisted autoloader, and the package script. A path
+  repository with `symlink => false` produced no `vendor/bin/quality-check*` here, so the
+  old smoke test could not see what a consumer installs.
+
+### Changed (two defaults that made projects red before they had read anything)
+- **`auto_install_tools` is now `false`.** Installing means running `composer require
+  --dev` inside the caller's project, which edits `composer.json` and `vendor/` before a
+  single finding has been seen and has no undo. A tool that reads your repo should not
+  write to it as a side effect of being pointed at it. Opt in with
+  `auto_install_tools => true` or by dropping `--no-auto-install`. The `ToolInstaller`
+  fallback for a missing key moved from `true` to `false` for the same reason: a
+  programmatically built context — the standalone runner against a project with no
+  config file, or a test — must not mutate a repo it was only asked to inspect.
+- **The two Blade rules now default to `info`.** They produced roughly 1,000 of 7,000
+  findings across the 27-project benchmark, and most are deliberate
+  `{!! $model->field !!}` renderings. At `error`, `fail_on => 'error'` meant a default
+  run on an average Laravel app came out red before the user had seen anything, which
+  teaches people to ignore the gate — worse than a missing finding.
+- **This costs real coverage, deliberately.** `OWASP_BLADE_XSS` at `error` fires only for
+  request-derived output — reflected XSS, which does deserve to fail. Demoting it to
+  `info` means `--tier=security` no longer catches reflected XSS.
+- The demotion is config, not analyzer code: `analyzers.severity_overrides`, applied
+  after analysis and before the confidence filter so the gate sees the reported
+  severity. The analyzers still emit `error`/`critical`, so the raw signal is unchanged
+  and `'OWASP_BLADE_XSS' => 'error'` restores the gate in one line. An unparseable
+  severity is skipped rather than guessed, because `Severity::fromString()` falls back
+  to `error` and a typo would otherwise silently promote a rule.
+- `TierLogicTest` pins both directions — that reflected XSS is reported at `info` and
+  does *not* fail `tier=security`, and that restoring `error` makes it fail again — so
+  the trade-off is asserted rather than left to be inferred. `OwaspBladeXssAnalyzerTest`
+  pins the shipped config, since "the default is quiet" is a promise users rely on.
+
 ## [0.9.0] - 2026-10-04
 
 The release that makes the package test the thing it ships. It installs its own

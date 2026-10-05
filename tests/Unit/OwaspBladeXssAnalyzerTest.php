@@ -540,4 +540,30 @@ final class OwaspBladeXssAnalyzerTest extends TestCase
         self::assertSame(Severity::Warning, $issues[0]->severity);
         self::assertSame(Confidence::Medium, $issues[0]->confidence);
     }
+
+    /**
+     * The demotion lives in config, not in the analyzer: the cases above assert
+     * the severities the analyzer produces, which are unchanged. These two pin
+     * the shipped config, because "the default is quiet" is a promise users rely
+     * on and nothing else would notice it quietly changing back.
+     */
+    public function testShippedConfigDemotesBladeToInfo(): void
+    {
+        $config = require dirname(__DIR__, 2) . '/config/quality-checker.php';
+
+        $overrides = $config['analyzers']['severity_overrides'];
+
+        self::assertSame('info', $overrides['OWASP_BLADE_XSS']);
+        self::assertSame('info', $overrides['OWASP_BLADE_DYNAMIC_INCLUDE']);
+    }
+
+    public function testAutoInstallIsOptIn(): void
+    {
+        $config = require dirname(__DIR__, 2) . '/config/quality-checker.php';
+
+        self::assertFalse(
+            $config['auto_install_tools'],
+            'auto_install_tools must default to false: installing edits the repo it runs in.'
+        );
+    }
 }

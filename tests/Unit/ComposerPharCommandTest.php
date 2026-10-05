@@ -89,7 +89,9 @@ final class ComposerPharCommandTest extends TestCase
     {
         $log = $this->writeFakeComposerPhar();
 
-        $installer = new ToolInstaller($this->context());
+        // Opt in explicitly: auto-install is off by default, and this test is
+        // about the argv composer.phar is called with, not about the default.
+        $installer = new ToolInstaller($this->context(['auto_install_tools' => true]));
 
         self::assertTrue($installer->canInstall('phpcs'));
         self::assertTrue(

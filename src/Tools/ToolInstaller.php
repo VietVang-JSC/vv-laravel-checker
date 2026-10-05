@@ -12,7 +12,8 @@ use Rampart\QualityChecker\Runner\CheckContext;
  *
  * Installs composer-based tools (phpcs, phpstan, phpunit) via `composer require --dev`
  * inside the target project, and downloads the Trivy binary via TrivyDownloader.
- * Runs automatically (no user prompt) unless `auto_install_tools` is disabled.
+ * Runs automatically (no user prompt) when `auto_install_tools` is enabled,
+ * which is off by default.
  */
 final class ToolInstaller
 {
@@ -52,7 +53,13 @@ final class ToolInstaller
             return false;
         }
 
-        return (bool) ($this->ctx->config['auto_install_tools'] ?? true);
+        // Default false: installing means `composer require --dev` inside the
+        // target project, which edits composer.json and vendor/ before the user
+        // has seen a finding, with no undo. The shipped config says false too;
+        // this fallback keeps a programmatically built context (tests, the
+        // standalone runner on a project with no config file) from silently
+        // mutating a repo it was only asked to inspect.
+        return (bool) ($this->ctx->config['auto_install_tools'] ?? false);
     }
 
     /**

@@ -3,14 +3,23 @@
 return [
     'paths' => ['app', 'routes', 'database', 'config', 'tests'],
 
+    // Checkers to skip, e.g. ['phpstan', 'composer_audit']. Merged with
+    // --exclude, so neither source overrides the other. Paths to skip go in
+    // analyzers.exclude_paths below, not here.
     'exclude' => [],
 
     // Self-provision missing tools: phpcs/phpstan/phpunit via composer, trivy
-    // via a cached binary download. Disable for air-gapped/read-only projects.
-    'auto_install_tools' => true,
+    // via a cached binary download. Off by default: this runs `composer require
+    // --dev` inside your project, which edits composer.json and vendor/ before
+    // you have seen a single finding, and there is no undo. Turn it on once you
+    // have decided you want it. Disable for air-gapped/read-only projects.
+    'auto_install_tools' => false,
 
-    // Quality gate tier. 'security' only fails on high-confidence security issues;
-    // 'quality' adds phpcs/phpstan/phpunit errors; 'all' surfaces every heuristic.
+    // Gate tier. 'security' fails only on security issues (high confidence);
+// 'quality' and 'all' add the phpcs/phpstan/phpunit errors. Checkers that
+    // produce no quality-gate signal (dependency audit, trivy, the heuristic
+    // analyzers) report the same in all three tiers — use 'exclude' or
+    // --only to skip them.
     'tier' => 'quality',
 
     // Minimum confidence to report. Heuristics below this are hidden.
@@ -125,10 +134,26 @@ return [
         // Additional protective middleware name fragments for access control.
         'extra_middleware' => [],
 
-        // Additional safe-output function needles for Blade XSS (e.g. 'my_escape(', 'MyLib::').
-        'extra_sanitizers' => [],
+// Additional safe-output function needles for Blade XSS (e.g. 'my_escape(', 'MyLib::').
+    'extra_sanitizers' => [],
 
-// Skip PHP files larger than this (multi-MB data dumps exhaust the
+    // Per-rule severity remapping, applied after analysis. Blade is demoted to
+    // 'info' by default: across the 27-project benchmark the Blade rules
+    // produced ~1,000 of ~7,000 findings, and most are deliberate
+    // `{!! $model->field !!}` renderings. At 'error' a default run came out
+    // red before the user had seen anything, which trains people to ignore the
+    // gate.
+    //
+    // The trade-off: `OWASP_BLADE_XSS` at 'error' fires only for
+    // request-derived output — reflected XSS, which genuinely deserves to fail.
+    // Demoting it means `--tier=security` no longer catches reflected XSS. If
+    // you want that back, put the rules back at 'error' or 'critical' here.
+    'severity_overrides' => [
+        'OWASP_BLADE_XSS' => 'info',
+        'OWASP_BLADE_DYNAMIC_INCLUDE' => 'info',
+    ],
+
+    // Skip PHP files larger than this (multi-MB data dumps exhaust the
     // parser with no signal). 0 or negative disables the limit.
     'max_file_kb' => 1024,
 

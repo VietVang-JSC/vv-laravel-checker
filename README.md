@@ -229,16 +229,21 @@ current findings again.
 
 ### Tool installation behavior
 
-Auto-install is enabled by default. If `phpcs`, `phpstan`, or `phpunit` is
-missing, the checker may add the corresponding Composer dev dependency to the
-target project. Trivy is downloaded to the user cache and does not modify the
-project. For read-only or air-gapped environments, use:
+Auto-install is **off** by default. If `phpcs`, `phpstan`, or `phpunit` is
+missing, the checker reports it as `skipped` and prints the command to install
+it manually. This is deliberate: installing means running `composer require
+--dev` inside your project, which edits `composer.json` and `vendor/` before you
+have seen a single finding, with no undo.
 
-```bash
-php artisan quality:check --no-auto-install
+To opt in:
+
+```php
+// config/quality-checker.php
+'auto_install_tools' => true,
 ```
 
-Missing optional tools are then reported as `skipped` instead of being installed.
+or per run, by dropping `--no-auto-install`. Trivy is downloaded to the user
+cache and does not modify the project either way.
 
 ---
 
@@ -310,7 +315,7 @@ scan everything.
 |---|---|
 | `0` | Pass — no issue exceeds the `--fail-on` threshold. |
 | `1` | Issues found that exceed the threshold (default `error` and above). |
-| `2` | Environment error (missing tool, config error). |
+| `2` | Bad invocation or setup (missing target, unreadable config). |
 | `3` | Runtime error inside the package itself. |
 
 ---
@@ -448,13 +453,44 @@ The unified test-coverage detector is enabled by default but emits low-confidenc
 warnings; raise `--min-confidence=high` or use the `security` tier when you want
 to focus on security findings only.
 
+### Severity
+
+Every issue carries a severity, and `fail_on` decides which ones fail the build.
+
+The two Blade rules (`OWASP_BLADE_XSS`, `OWASP_BLADE_DYNAMIC_INCLUDE`) ship
+remapped to `info`. Across a 27-project benchmark they produced roughly 1,000 of
+7,000 findings, and most are deliberate `{!! $model->field !!}` renderings; at
+`error` a default run came out red before the user had seen anything.
+
+**This means `--tier=security` no longer fails on Blade XSS.** Reflected XSS —
+`{!! request('q') !!}` — is a real vulnerability and was the one Blade finding
+worth gating on. If you want it back:
+
+```php
+// config/quality-checker.php
+'analyzers' => [
+    'severity_overrides' => [
+        'OWASP_BLADE_XSS' => 'error',              // gates reflected XSS again
+        'OWASP_BLADE_DYNAMIC_INCLUDE' => 'error',
+    ],
+],
+```
+
+Other rules can be remapped the same way. An unparseable severity is ignored
+rather than guessed, so a typo cannot silently promote a rule to `error`.
+
 The **tier** controls what the gate fails on:
 
 | Tier | Fails on | Use for |
 |---|---|---|
-| `security` | high-confidence security issues only (OWASP/taint/secret/composer_audit) | security CI gate |
+| `security` | high-confidence security issues only (OWASP/taint/secret) | security CI gate |
 | `quality` | medium+ high error/critical (incl. phpcs/phpstan/phpunit) | standard CI gate (default) |
-| `all` | everything surfaced | local dev |
+| `all` | same as `quality` today | local dev |
+
+`quality` and `all` are currently identical; the distinct `all` behaviour is
+planned, not shipped. Checkers that carry no quality-gate signal (dependency
+audit, trivy, the heuristic analyzers) report the same in every tier — exclude
+them with `exclude` in config or `--only` to keep them out of a gate run.
 
 `--min-confidence` filters what is reported; `--tier` filters what the exit code fails on.
 
@@ -516,21 +552,19 @@ serve stale results).
 
 ## Auto-provisioning missing tools
 
-By default the checker **self-provisions** missing tools instead of just skipping
-them:
+Opt in to self-provisioning missing tools with `auto_install_tools => true` or
+by dropping `--no-auto-install`:
 
 - **phpcs / phpstan / phpunit** — installed via `composer require --dev` inside
-  the target project when missing. (Slow on very large projects; disable with
-  `--no-auto-install` or `auto_install_tools => false`.)
+  the target project when missing. This edits your `composer.json` and
+  `vendor/`. It is off by default for that reason. (Slow on very large
+  projects.)
 - **trivy** — downloaded as a cached binary (GitHub releases) into a per-user
   cache directory, never touching the target project. Default version `0.74.0`
   (override with `trivy.version`). Binary is cached, so repeat runs are offline.
 - If auto-install is off or fails, a checker uses a tool already available in the
   target project's `vendor/bin`; otherwise it is reported as `skipped` with an
   install hint.
-
-Config: `auto_install_tools => true` (default). Disable for air-gapped/read-only
-projects.
 
 ---
 
@@ -555,7 +589,9 @@ baseline hides only the exact existing findings; new findings still appear.
 
 ### A tool is missing or the project is read-only
 
-Run the custom analyzers and dependency audit without provisioning tools:
+Run the custom analyzers and dependency audit without touching the project's
+dependencies — the default, so the flag is only needed if you have opted in
+globally:
 
 ```bash
 php artisan quality:check --only=custom,composer_audit --no-auto-install
