@@ -506,7 +506,8 @@ them with `exclude` in config or `--only` to keep them out of a gate run.
 Custom analyzers only (phpcs/phpstan/phpunit excluded), `tier=security`,
 `fail-on=none`, cold runs without cache. Quality is pinned by a labeled
 corpus (`tests/Unit/AnalyzerMetricsTest.php`): **precision 1.000 / recall 1.000**
-across 197 true/false-positive cases (77 TP + 120 TN), so the reductions below
+across 400 true/false-positive cases (240 TP + 160 TN) plus a 76-case holdout
+(19% blind, never used for tuning) and a 30-injection recall suite (`tests/Unit/CveRecallTest.php` `30/30`), so the reductions below
 cannot regress silently.
 
 The table is a snapshot, not a live measurement — it records one day of output
@@ -515,6 +516,18 @@ use `tools/benchmark-projects.php` with a local manifest of paths (see the
 header of that file for the format). It prints per-rule counts, prints each
 rule's share of all findings, and `--diff=baseline.json` shows what moved after
 an upgrade. Your manifest stays local; no project list ships with the package.
+
+### External precision on your code (7/8)
+
+Corpus precision is internal. For your codebase:
+
+```bash
+php -d memory_limit=1G bin/quality-check /path/to/project --only=custom --tier=security --fail-on=none --format=json --output=/tmp/out
+php tools/sample-findings.php /tmp/out/quality-report.json --n=100 --seed=42 --out=sample.csv
+# label sample.csv verdict column TP/FP, then per-rule precision = TP/(TP+FP) — target ≥0.85 for high rules
+php tools/inter-rater.php reviewer1.csv reviewer2.csv  # kappa ≥0.9 for 8/10
+# holdout is automatic: AnalyzerMetricsTest::holdoutCorpus() crc32(id)%5==0
+```
 | Target | Stack | Files | Before | After | Signal left |
 |---|---|---|---|---|---|
 | A — e-commerce monolith | Laravel 11 | 3,283 | 1,246 (7 / 466 / 773) | **1,077** (3 / 301 / 773) | 101 blade + public routes + Docs sample |

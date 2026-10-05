@@ -35,6 +35,10 @@ revisited with the evidence that produced it.
 | CLI options per entry point | The README Options Reference, enforced by `tests/Unit/DocsEntryPointsTest.php` |
 | Default configuration | `config/quality-checker.php` |
 | Precision/recall on the labelled corpus | `tests/Unit/AnalyzerMetricsTest.php`, printed by the test run |
+| Holdout (19% blind) | `AnalyzerMetricsTest::holdoutCorpus()` `crc32(id)%5==0` |
+| CVE recall floor (30 injections) | `tests/Unit/CveRecallTest.php` `30/30` |
+| External precision sampler | `tools/sample-findings.php` → `sample.csv` → human TP/FP |
+| Inter-rater kappa | `tools/inter-rater.php` `kappa ≥0.9` |
 
 The README rule tables and the registry are checked against each other in CI:
 adding a rule without documenting it, or documenting a rule that does not exist,
