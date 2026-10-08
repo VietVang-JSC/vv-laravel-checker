@@ -34,6 +34,9 @@ final class TrivyChecker implements CheckerInterface
         return $this->binaryExists($binary) || $this->cachedBinary($ctx) !== null;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function config(): array
     {
         return ['enabled' => false, 'mode' => 'config', 'binary' => 'trivy', 'version' => null];
@@ -108,6 +111,9 @@ final class TrivyChecker implements CheckerInterface
         return $this->result($start, $status, $issues, $rawOutput, $summary);
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function parseOutput(string $rawOutput): array
     {
         $issues = [];
@@ -169,6 +175,9 @@ final class TrivyChecker implements CheckerInterface
         return $issues;
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     */
     private function makeIssue(string $rule, string $message, string $file, int $line, Severity $severity, array $metadata): Issue
     {
         return new Issue(
@@ -214,6 +223,9 @@ final class TrivyChecker implements CheckerInterface
         return null;
     }
 
+    /**
+     * @param list<Issue> $issues
+     */
     private function result(
         float $start,
         string $status,

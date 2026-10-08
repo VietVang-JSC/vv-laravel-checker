@@ -42,8 +42,8 @@ final class EdgeCaseTest extends TestCase
         $checkers = $runner->buildCheckers();
         $results = $runner->run($checkers);
 
-        self::assertIsArray($results);
         self::assertCount(1, $results);
+        self::assertInstanceOf(CheckResult::class, $results[0]);
         self::assertSame('custom', $results[0]->name);
     }
 
@@ -61,9 +61,9 @@ final class EdgeCaseTest extends TestCase
         $runner = new CheckRunner($ctx);
         $results = $runner->run($runner->buildCheckers());
 
-        self::assertIsArray($results);
         self::assertCount(1, $results);
         self::assertInstanceOf(CheckResult::class, $results[0]);
+        self::assertSame('custom', $results[0]->name);
     }
 
     public function testShouldFailNeverTrueForFailOnNone(): void

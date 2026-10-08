@@ -167,6 +167,9 @@ final class OwaspAccessControlAnalyzer extends AbstractAnalyzer
         return $namespace !== null ? $namespace . '\\' . $type : $type;
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(
         string $file,
         ?LaravelSemanticIndex $index,

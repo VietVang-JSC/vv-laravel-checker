@@ -6,6 +6,7 @@ namespace Rampart\QualityChecker\Checkers;
 
 use Symfony\Component\Process\Process;
 use Rampart\QualityChecker\Result\CheckResult;
+use Rampart\QualityChecker\Result\Issue;
 use Rampart\QualityChecker\Runner\CheckContext;
 
 abstract class AbstractProcessChecker implements CheckerInterface
@@ -63,6 +64,9 @@ abstract class AbstractProcessChecker implements CheckerInterface
         ];
     }
 
+    /**
+     * @param list<Issue> $issues
+     */
     protected function result(
         string $name,
         float $start,

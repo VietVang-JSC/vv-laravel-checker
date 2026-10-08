@@ -17,6 +17,10 @@ final class FeatureTestAnalyzer implements ScanContextAware
 
     private const RULE = 'MISSING_FEATURE_COVERAGE';
 
+    /**
+     * @param list<string> $files absolute paths
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
@@ -52,6 +56,10 @@ final class FeatureTestAnalyzer implements ScanContextAware
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
+    /**
+     * @param array{method: string, uri: string, action: string, file: string, line: int} $route
+     * @param array<string, string> $featureTests test file path => source
+     */
     private function routeIsCovered(array $route, array $featureTests): bool
     {
         foreach ($featureTests as $body) {
@@ -72,6 +80,9 @@ final class FeatureTestAnalyzer implements ScanContextAware
         return false;
     }
 
+    /**
+     * @return list<array{method: string, uri: string, action: string, file: string, line: int}>
+     */
     private function collectRoutes(): array
     {
         $routes = [];
@@ -98,6 +109,9 @@ final class FeatureTestAnalyzer implements ScanContextAware
         return $routes;
     }
 
+    /**
+     * @return list<array{method: string, uri: string, action: string, file: string, line: int}>
+     */
     private function parseRoutesFromSource(string $file, string $code): array
     {
         $routes = [];
@@ -143,6 +157,9 @@ final class FeatureTestAnalyzer implements ScanContextAware
         return substr_count(substr($code, 0, $pos), "\n") + 1;
     }
 
+    /**
+     * @return array<string, string> test file path => source
+     */
     private function collectFeatureTestBodies(): array
     {
         $result = [];
@@ -173,6 +190,9 @@ final class FeatureTestAnalyzer implements ScanContextAware
         return is_dir($root . '/app') || is_dir($root . '/routes') ? $root : null;
     }
 
+    /**
+     * @return list<string>
+     */
     private function listPhpFiles(string $dir): array
     {
         $files = [];

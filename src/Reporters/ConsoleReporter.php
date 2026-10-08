@@ -107,6 +107,9 @@ final class ConsoleReporter implements ReporterInterface
         $this->printRemediation($results);
     }
 
+    /**
+     * @param CheckResult[] $results
+     */
     private function renderSummaryLine(array $results): void
     {
         $summary = $this->buildSummary($results);
@@ -123,6 +126,9 @@ final class ConsoleReporter implements ReporterInterface
         ));
     }
 
+    /**
+     * @param CheckResult[] $results
+     */
     private function printIssues(array $results): void
     {
         foreach ($results as $result) {
@@ -261,6 +267,9 @@ final class ConsoleReporter implements ReporterInterface
         $table->render();
     }
 
+    /**
+     * @param CheckResult[] $results
+     */
     private function printOwaspFindings(array $results): void
     {
         $counts = [];
@@ -326,6 +335,10 @@ final class ConsoleReporter implements ReporterInterface
         return $count;
     }
 
+    /**
+     * @param CheckResult[] $results
+     * @return array{checkers: int, passed: int, failed: int, skipped: int, total_issues: int, critical: int, error: int, warning: int, info: int, p0: int, p1: int, p2: int, p3: int}
+     */
     private function buildSummary(array $results): array
     {
         $summary = [

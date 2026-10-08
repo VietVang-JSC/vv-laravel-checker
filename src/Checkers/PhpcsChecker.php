@@ -21,6 +21,9 @@ final class PhpcsChecker extends AbstractProcessChecker
         return 'PHP_CodeSniffer — coding standard violations.';
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function config(): array
     {
         return [

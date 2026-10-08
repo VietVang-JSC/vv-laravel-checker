@@ -39,6 +39,9 @@ final class UnsafeEvalAnalyzer extends AbstractAnalyzer
         return $issues;
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file): array
     {
         $ast = $this->sharedAst($file);

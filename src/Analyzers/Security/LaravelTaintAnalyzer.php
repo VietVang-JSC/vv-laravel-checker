@@ -27,6 +27,10 @@ final class LaravelTaintAnalyzer implements ScanContextAware
         'raw',
     ];
 
+    /**
+     * @param list<string> $files absolute paths
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
@@ -47,6 +51,9 @@ final class LaravelTaintAnalyzer implements ScanContextAware
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
+    /**
+     * @return list<Issue>
+     */
     public function analyzeFile(string $file): array
     {
         $ast = $this->sharedAst($file);

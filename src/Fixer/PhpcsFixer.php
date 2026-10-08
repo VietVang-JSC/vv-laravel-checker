@@ -34,9 +34,6 @@ use Rampart\QualityChecker\Runner\CheckContext;
  */
 final class PhpcsFixer
 {
-    private const EXIT_NO_ISSUES = 0;
-    private const EXIT_FIXABLE_REMAIN = 1;
-
 /**
  * Run the fixer over the given paths.
  *
@@ -85,6 +82,9 @@ final class PhpcsFixer
         return $this->locateBinaryForContext($ctx) !== null;
     }
 
+    /**
+     * @param list<string> $paths
+     */
     private function buildCommand(string $binary, array $paths, string $standard): string
     {
         $parts = [
@@ -99,6 +99,9 @@ final class PhpcsFixer
         return implode(' ', $parts) . ' 2>&1';
     }
 
+    /**
+     * @return array{0: int, 1: string}
+     */
     private function run(string $cmd): array
     {
         $output = [];
@@ -180,6 +183,9 @@ final class PhpcsFixer
         return $this->firstExisting($candidates);
     }
 
+    /**
+     * @param list<string> $candidates
+     */
     private function firstExisting(array $candidates): ?string
     {
         foreach ($candidates as $candidate) {

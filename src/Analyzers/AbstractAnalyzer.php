@@ -45,6 +45,9 @@ abstract class AbstractAnalyzer implements ScanContextAware
         return new CountingNodeFinder();
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     */
     protected function makeIssue(
         string $rule,
         string $message,

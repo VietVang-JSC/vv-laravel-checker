@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Rampart\QualityChecker\Baseline;
 
+use Rampart\QualityChecker\Result\CheckResult;
+
 /**
  * Filters baselined issues out of checker results.
  *
@@ -43,8 +45,8 @@ final class BaselineFilter
      * plain array results (`['name' => ..., 'issues' => [...], 'status' => ...]`),
      * and returns the results in the same shape it received them.
      *
-     * @param array $results CheckResult[] or list<array<string, mixed>>
-     * @return array
+     * @param array<CheckResult|array<string, mixed>> $results
+     * @return array<CheckResult|array<string, mixed>>
      */
     public function filter(array $results): array
     {
@@ -93,6 +95,9 @@ final class BaselineFilter
         return $this->baselinedCount;
     }
 
+    /**
+     * @return array<mixed>|null
+     */
     private function issueList(mixed $result): ?array
     {
         if (is_array($result)) {
@@ -106,6 +111,9 @@ final class BaselineFilter
         return null;
     }
 
+    /**
+     * @param array<mixed> $issues
+     */
     private function setIssues(mixed &$result, array $issues): void
     {
         if (is_array($result)) {

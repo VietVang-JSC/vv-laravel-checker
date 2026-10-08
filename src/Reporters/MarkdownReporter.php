@@ -220,6 +220,9 @@ final class MarkdownReporter implements ReporterInterface
         file_put_contents($outputDir . DIRECTORY_SEPARATOR . 'quality-report.md', implode("\n", $lines));
     }
 
+    /**
+     * @param array<string, int> $summary
+     */
     private function badgeLine(array $summary): string
     {
         return sprintf(
@@ -231,6 +234,9 @@ final class MarkdownReporter implements ReporterInterface
         );
     }
 
+    /**
+     * @param array<string, int> $summary
+     */
     private function overallStatusForBadge(array $summary): string
     {
         if ($summary['critical'] > 0) {
@@ -246,6 +252,9 @@ final class MarkdownReporter implements ReporterInterface
         return 'passed';
     }
 
+    /**
+     * @param array<string, int> $summary
+     */
     private function badgeColor(array $summary): string
     {
         if ($summary['critical'] > 0 || $summary['error'] > 0) {
@@ -270,6 +279,9 @@ final class MarkdownReporter implements ReporterInterface
         return $count;
     }
 
+    /**
+     * @return array<string, list<array{rule: string, priority: string, severity: string, confidence: string, file: string, line: int|null, message: string}>>
+     */
     private function groupByFile(CheckResult $result): array
     {
         $groups = [];
@@ -343,6 +355,7 @@ final class MarkdownReporter implements ReporterInterface
     }
 
     /**
+     * @param CheckResult[] $results
      * @return array<string, int>
      */
     private function owaspCounts(array $results): array
@@ -364,6 +377,10 @@ final class MarkdownReporter implements ReporterInterface
         return $counts;
     }
 
+    /**
+     * @param CheckResult[] $results
+     * @return array{checkers: int, passed: int, failed: int, skipped: int, total_issues: int, critical: int, error: int, warning: int, info: int, p0: int, p1: int, p2: int, p3: int}
+     */
     private function buildSummary(array $results): array
     {
         $summary = [
@@ -420,6 +437,9 @@ final class MarkdownReporter implements ReporterInterface
         return $summary;
     }
 
+    /**
+     * @param CheckResult[] $results
+     */
     private function overallStatus(array $results, string $failOn): string
     {
         $failed = false;

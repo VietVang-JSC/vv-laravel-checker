@@ -18,6 +18,10 @@ final class TodoFixmeAnalyzer implements ScanContextAware
 
     private const PATTERN = '/(TODO|FIXME|HACK|XXX)/i';
 
+    /**
+     * @param list<string> $files absolute paths
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
@@ -38,6 +42,9 @@ final class TodoFixmeAnalyzer implements ScanContextAware
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file): array
     {
         $code = $this->sharedSource($file);

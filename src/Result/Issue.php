@@ -6,6 +6,9 @@ namespace Rampart\QualityChecker\Result;
 
 final class Issue
 {
+    /**
+     * @param array<string, mixed> $metadata
+     */
     public function __construct(
         public string $rule,
         public string $message,
@@ -18,6 +21,9 @@ final class Issue
     ) {
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function toArray(): array
     {
         return [
@@ -46,13 +52,16 @@ final class Issue
         };
     }
 
+    /**
+     * @param array<string, mixed> $data
+     */
     public static function fromArray(array $data): self
     {
         return new self(
             (string) ($data['rule'] ?? 'UNKNOWN'),
             (string) ($data['message'] ?? ''),
-            isset($data['file']) && $data['file'] !== null ? (string) $data['file'] : null,
-            isset($data['line']) && $data['line'] !== null ? (int) $data['line'] : null,
+            isset($data['file']) ? (string) $data['file'] : null,
+            isset($data['line']) ? (int) $data['line'] : null,
             Severity::fromString((string) ($data['severity'] ?? 'error')),
             (string) ($data['source'] ?? 'custom'),
             is_array($data['metadata'] ?? null) ? $data['metadata'] : [],

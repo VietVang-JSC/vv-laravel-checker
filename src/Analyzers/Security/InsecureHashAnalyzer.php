@@ -210,6 +210,9 @@ final class InsecureHashAnalyzer implements ScanContextAware
         return in_array(strtolower($algo->value->value), self::WEAK_HASH_ALGOS, true);
     }
 
+    /**
+     * @param list<Node> $ast
+     */
     private function isCredentialContext(Node\Expr\FuncCall $call, array $ast): bool
     {
         $args = $call->args;

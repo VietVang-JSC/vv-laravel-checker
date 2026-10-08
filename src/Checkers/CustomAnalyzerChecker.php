@@ -64,6 +64,9 @@ final class CustomAnalyzerChecker implements CheckerInterface
         return 'Custom analyzers: security (OWASP + taint), missing test coverage, conventions.';
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function config(): array
     {
         return [
@@ -401,6 +404,7 @@ final class CustomAnalyzerChecker implements CheckerInterface
     }
 
     /**
+     * @param array<string, mixed> $analyzers
      * @return array{enabled: bool, analyzer: object}
      */
     private function entry(array $analyzers, string $key, object $analyzer): array

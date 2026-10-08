@@ -22,6 +22,9 @@ final class ComposerAuditChecker extends AbstractProcessChecker
         return 'Composer audit — known vulnerabilities in dependencies.';
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function config(): array
     {
         return [
@@ -98,6 +101,9 @@ final class ComposerAuditChecker extends AbstractProcessChecker
         return $lines[0];
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function parseOutput(string $json): array
     {
         $issues = [];

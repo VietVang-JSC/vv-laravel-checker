@@ -60,6 +60,9 @@ final class MigrationAnalyzer extends AbstractAnalyzer
         return str_contains(str_replace('\\', '/', $file), '/database/migrations/');
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file): array
     {
         $ast = $this->sharedAst($file);

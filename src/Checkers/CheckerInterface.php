@@ -17,5 +17,8 @@ interface CheckerInterface
 
     public function run(CheckContext $ctx): CheckResult;
 
+    /**
+     * @return array<string, mixed>
+     */
     public function config(): array;
 }

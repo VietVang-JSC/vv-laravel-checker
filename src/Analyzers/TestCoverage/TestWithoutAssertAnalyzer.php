@@ -19,8 +19,10 @@ final class TestWithoutAssertAnalyzer implements ScanContextAware
 
     private const RULE = 'TEST_WITHOUT_ASSERT';
 
-    private const ASSERT_RE = '/(assert|expects|expectException|->assert|assertTrue|assertFalse|assertEquals|assertSame|assertNotNull)/i';
-
+    /**
+     * @param list<string> $files absolute paths
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
@@ -44,6 +46,9 @@ final class TestWithoutAssertAnalyzer implements ScanContextAware
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file): array
     {
         $ast = $this->sharedAst($file);
@@ -90,7 +95,7 @@ final class TestWithoutAssertAnalyzer implements ScanContextAware
             return false;
         }
 
-        $name = $method->name instanceof Node\Identifier ? $method->name->toString() : '';
+        $name = $method->name->toString();
 
         if (str_starts_with($name, 'test')) {
             return true;
@@ -107,6 +112,9 @@ final class TestWithoutAssertAnalyzer implements ScanContextAware
         return false;
     }
 
+    /**
+     * @param array<Node\Stmt> $body
+     */
     private function hasAssertion(array $body): bool
     {
         $finder = new CountingNodeFinder();

@@ -51,7 +51,7 @@ final class CheckContext
     public array $metadata = [];
 
     /**
-     * @param list<string> $paths
+     * @param array<mixed> $paths Non-string and empty entries are dropped.
      * @param array<string, mixed> $config
      * @param list<string> $only
      * @param list<string> $exclude
@@ -100,6 +100,10 @@ final class CheckContext
         return $this->basePath . DIRECTORY_SEPARATOR . $path;
     }
 
+    /**
+     * @param array<string, mixed> $default
+     * @return array<string, mixed>
+     */
     public function configFor(string $key, array $default = []): array
     {
         $value = $this->config[$key] ?? null;

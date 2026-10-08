@@ -21,6 +21,9 @@ final class PhpstanChecker extends AbstractProcessChecker
         return 'PHPStan — static analysis / type errors.';
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function config(): array
     {
         return [
@@ -97,6 +100,9 @@ final class PhpstanChecker extends AbstractProcessChecker
         return false;
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function parseOutput(string $json): array
     {
         $issues = [];
@@ -119,7 +125,7 @@ final class PhpstanChecker extends AbstractProcessChecker
                     (string) ($message['identifier'] ?? 'PHPSTAN'),
                     (string) ($message['message'] ?? ''),
                     $file,
-                    isset($message['line']) && $message['line'] !== null ? (int) $message['line'] : null,
+                    isset($message['line']) ? (int) $message['line'] : null,
                     Severity::Error,
                     'phpstan',
                     ['ignorable' => (bool) ($message['ignorable'] ?? false)]

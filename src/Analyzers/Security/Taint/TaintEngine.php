@@ -110,10 +110,10 @@ final class TaintEngine
     private Parser $parser;
     private TaintSourceResolver $resolver;
 
-    /** @var array<string, array{functions: array<string,array>, methods: array<string,array>, order: string[]}> */
+    /** @var array<string, array{functions: array<string, Function_>, methods: array<string, ClassMethod>, order: list<string>}> */
     private array $fileIndex = [];
 
-    /** @var array<int, array<string, mixed>> */
+    /** @var list<array{rule: string, message: string, file: string, line: int, severity: string, source: string, metadata: array<string, mixed>}> */
     private array $issues = [];
 
     private int $filesAnalyzed = 0;
@@ -157,7 +157,7 @@ final class TaintEngine
      * Analyze a list of absolute PHP file paths.
      *
      * @param list<string> $files
-     * @return list<array{rule:string,message:string,file:string,line:int,severity:string,source:string,metadata:array}>
+     * @return list<array{rule: string, message: string, file: string, line: int, severity: string, source: string, metadata: array<string, mixed>}>
      */
     public function analyze(array $files): array
     {
@@ -213,8 +213,8 @@ final class TaintEngine
 
     /**
      * @param list<Node> $nodes
-     * @param array<string, FunctionLike> $functions
-     * @param array<string, FunctionLike> $methods
+     * @param array<string, Function_> $functions
+     * @param array<string, ClassMethod> $methods
      * @param list<string> $order
      */
     private function collectCallables(array $nodes, ?string $class, array &$functions, array &$methods, array &$order): void
@@ -253,6 +253,9 @@ final class TaintEngine
         }
     }
 
+    /**
+     * @param array{functions: array<string, Function_>, methods: array<string, ClassMethod>, order: list<string>} $index
+     */
     private function analyzeFile(string $file, array $index): void
     {
         $statementsBudget = self::MAX_STATEMENTS_PER_FILE;
@@ -369,6 +372,9 @@ final class TaintEngine
         }
     }
 
+    /**
+     * @param array<string, bool> $tainted
+     */
     public function handleAssignment(string $file, Assign $assign, array &$tainted): void
     {
         $target = $assign->var;
@@ -388,7 +394,7 @@ final class TaintEngine
             if ($isTaintedValue || $this->isExpressionSource($value, $tainted)) {
                 $tainted[$name] = true;
             }
-        } elseif ($target instanceof ArrayDimFetch && $target->var instanceof Variable) {
+        } elseif ($target->var instanceof Variable) {
             $name = $this->variableName($target->var);
             if ($name !== null && ($isTaintedValue || $this->isExpressionSource($value, $tainted))) {
                 $tainted[$name] = true;
@@ -396,6 +402,9 @@ final class TaintEngine
         }
     }
 
+    /**
+     * @param array<string, bool> $tainted
+     */
     public function handleReturn(string $file, Return_ $ret, array &$tainted): void
     {
         // Return-taint is resolved on demand via callee-body walk in handleCall;
@@ -405,6 +414,9 @@ final class TaintEngine
         }
     }
 
+    /**
+     * @param array<string, bool> $tainted
+     */
     public function handleConcat(string $file, Node $node, array &$tainted): void
     {
         if ($node instanceof Expr\BinaryOp\Concat) {
@@ -414,6 +426,9 @@ final class TaintEngine
         }
     }
 
+    /**
+     * @param array<string, bool> $tainted
+     */
     public function handleInterpolated(string $file, InterpolatedString $node, array &$tainted): void
     {
         foreach ($node->parts as $part) {
@@ -423,6 +438,9 @@ final class TaintEngine
         }
     }
 
+    /**
+     * @param array<string, bool> $tainted
+     */
     public function handleCall(string $file, Node $call, array &$tainted, ?Node $caller): void
     {
         $callInfo = $this->resolveCall($call);
@@ -444,6 +462,9 @@ final class TaintEngine
         $this->propagateArgs($file, $call, $callName, $args, $tainted);
     }
 
+    /**
+     * @return array{0: string, 1: array<Node\Arg|Node\VariadicPlaceholder|Node\ArgPlaceholder>, 2: bool, 3: string|null}|null
+     */
     private function resolveCall(Node $call): ?array
     {
         $fqn = null;
@@ -529,6 +550,9 @@ final class TaintEngine
         return $map[$method] ?? 'request.other';
     }
 
+    /**
+     * @param array<Node\Arg|Node\VariadicPlaceholder|Node\ArgPlaceholder> $args
+     */
     private function isSourceCall(string $callName, array $args): bool
     {
         foreach ($this->entryPoints as $ep) {
@@ -594,6 +618,10 @@ final class TaintEngine
         return $callName;
     }
 
+    /**
+     * @param array<Node\Arg|Node\VariadicPlaceholder|Node\ArgPlaceholder> $args
+     * @param array<string, bool> $tainted
+     */
     private function reportSink(string $file, Node $call, string $callName, array $args, array $tainted): void
     {
         foreach ($args as $arg) {
@@ -617,11 +645,6 @@ final class TaintEngine
                 return;
             }
         }
-    }
-
-    private function isStringInterpolatedTainted(String_ $str, array $tainted): bool
-    {
-        return (bool) $str->getAttribute('qc_tainted_interp');
     }
 
     private function emit(string $file, Node $call, string $callName): void
@@ -679,6 +702,10 @@ final class TaintEngine
         };
     }
 
+    /**
+     * @param array<Node\Arg|Node\VariadicPlaceholder|Node\ArgPlaceholder> $args
+     * @param array<string, bool> $tainted
+     */
     private function propagateArgs(string $file, Node $call, string $callName, array $args, array &$tainted): void
     {
         $callee = $this->resolveCallee($callName);
@@ -702,7 +729,7 @@ final class TaintEngine
         $this->analyzeCalleeBody($file, $callee, $tainted);
     }
 
-    private function resolveCallee(string $callName): ?FunctionLike
+    private function resolveCallee(string $callName): ?Function_
     {
         if (str_contains($callName, '::') || str_contains($callName, '->') || $callName === 'input') {
             return null;
@@ -715,11 +742,18 @@ final class TaintEngine
         return null;
     }
 
+    /**
+     * @param array<string, bool> $tainted
+     */
     private function analyzeCalleeBody(string $file, FunctionLike $callee, array &$tainted): void
     {
         $this->walkCallable($file, $callee, $tainted);
     }
 
+    /**
+     * @param Node|null $expr
+     * @param array<string, bool> $tainted
+     */
     private function isExpressionTainted($expr, array $tainted): bool
     {
         if ($expr === null) {
@@ -764,6 +798,10 @@ final class TaintEngine
         return false;
     }
 
+    /**
+     * @param Node $expr
+     * @param array<string, bool> $tainted
+     */
     private function isExpressionSource($expr, array $tainted): bool
     {
         if ($expr instanceof Variable) {
@@ -793,6 +831,9 @@ final class TaintEngine
         return false;
     }
 
+    /**
+     * @param array<string, bool> $tainted
+     */
     private function markAssignmentSource(Node $call, array &$tainted): void
     {
         // The expression's value becomes tainted; handled via isExpressionSource in assignment.

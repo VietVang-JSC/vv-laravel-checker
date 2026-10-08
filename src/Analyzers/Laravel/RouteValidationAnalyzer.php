@@ -60,6 +60,9 @@ final class RouteValidationAnalyzer extends AbstractAnalyzer
         return $issues;
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file, FormRequestIndex $index): array
     {
         $ast = $this->sharedAst($file);

@@ -19,6 +19,10 @@ final class ControllerTestAnalyzer implements ScanContextAware
 
     private const RULE = 'MISSING_CONTROLLER_TEST';
 
+    /**
+     * @param list<string> $files absolute paths
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
@@ -44,6 +48,10 @@ final class ControllerTestAnalyzer implements ScanContextAware
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
+    /**
+     * @param array<string, string> $featureTests test file path => source
+     * @return list<Issue>
+     */
     private function analyzeControllerFile(string $file, array $featureTests): array
     {
         $ast = $this->sharedAst($file);
@@ -68,10 +76,7 @@ final class ControllerTestAnalyzer implements ScanContextAware
                 if (!$method->isPublic() || $method->isMagic()) {
                     continue;
                 }
-                $methodName = $method->name instanceof Node\Identifier ? $method->name->toString() : null;
-                if ($methodName === null) {
-                    continue;
-                }
+                $methodName = $method->name->toString();
 
                 if (!$this->methodIsTested($methodName, $testFiles)) {
                     $issues[] = new Issue(
@@ -95,6 +100,9 @@ final class ControllerTestAnalyzer implements ScanContextAware
         return $issues;
     }
 
+    /**
+     * @param array<string, string> $testFiles test file path => source
+     */
     private function methodIsTested(string $methodName, array $testFiles): bool
     {
         foreach ($testFiles as $body) {
@@ -106,6 +114,10 @@ final class ControllerTestAnalyzer implements ScanContextAware
         return false;
     }
 
+    /**
+     * @param array<string, string> $featureTests test file path => source
+     * @return array<string, string> matching test file path => source
+     */
     private function findControllerTestFiles(string $controllerFile, array $featureTests): array
     {
         $base = pathinfo($controllerFile, PATHINFO_FILENAME);
@@ -140,6 +152,9 @@ final class ControllerTestAnalyzer implements ScanContextAware
         return str_contains($normalized, '/Controllers/') && str_ends_with($normalized, 'Controller.php');
     }
 
+    /**
+     * @return array<string, string> test file path => source
+     */
     private function collectFeatureTestBodies(): array
     {
         $result = [];
@@ -170,6 +185,9 @@ final class ControllerTestAnalyzer implements ScanContextAware
         return is_dir($root . '/app') || is_dir($root . '/routes') ? $root : null;
     }
 
+    /**
+     * @return list<string>
+     */
     private function listPhpFiles(string $dir): array
     {
         $files = [];

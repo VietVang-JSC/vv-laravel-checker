@@ -18,6 +18,10 @@ final class UnsafeDeserializationAnalyzer implements ScanContextAware
 
     private const RULE = 'UNSAFE_UNSERIALIZE';
 
+    /**
+     * @param list<string> $files absolute paths
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
@@ -38,6 +42,9 @@ final class UnsafeDeserializationAnalyzer implements ScanContextAware
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
+    /**
+     * @return list<Issue>
+     */
     public function analyzeFile(string $file): array
     {
         $ast = $this->sharedAst($file);
@@ -146,7 +153,7 @@ final class UnsafeDeserializationAnalyzer implements ScanContextAware
                 continue;
             }
             $value = $item->value;
-            if ($value instanceof Node\Expr\ConstFetch && $value->name instanceof Node\Name) {
+            if ($value instanceof Node\Expr\ConstFetch) {
                 return strtolower($value->name->toString()) === 'false';
             }
 

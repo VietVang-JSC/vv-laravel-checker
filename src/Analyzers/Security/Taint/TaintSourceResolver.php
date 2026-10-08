@@ -59,6 +59,7 @@ final class TaintSourceResolver
         'Elixir' => 'Illuminate\Support\Facades\Elixir',
     ];
 
+    /** @var array<string, string> Short name => FQN. */
     private array $facades;
 
     /**

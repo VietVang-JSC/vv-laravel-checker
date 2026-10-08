@@ -19,12 +19,6 @@ final class OwaspMisconfigurationAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'OWASP_MISCONFIGURATION';
 
-    // Only scan real config files, not tests/seeders/demo data (too noisy).
-    private const CONFIG_FILES = [
-        'app.php', 'cors.php', 'database.php', 'mail.php', 'queue.php',
-        'session.php', 'auth.php', 'services.php', '.env', '.env.example',
-    ];
-
     private const PLACEHOLDER_MARKERS = [
         'changeme', 'your-password', 'your_secret', 'replace_me', 'changeme123',
     ];
@@ -71,6 +65,9 @@ final class OwaspMisconfigurationAnalyzer extends AbstractAnalyzer
         return in_array($basename, ['.env', '.env.example'], true);
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file): array
     {
         $code = $this->sharedSource($file);

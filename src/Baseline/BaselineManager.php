@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Rampart\QualityChecker\Baseline;
 
+use Rampart\QualityChecker\Result\CheckResult;
+
 /**
  * Baseline support for known/accepted issues.
  *
@@ -21,8 +23,6 @@ namespace Rampart\QualityChecker\Baseline;
  */
 final class BaselineManager
 {
-    private const DEFAULT_FILENAME = 'baseline.json';
-
     /** @var array<string, string> */
     private array $signatures = [];
 
@@ -83,6 +83,8 @@ final class BaselineManager
 
     /**
      * Returns true when the given issue's signature is present in the baseline.
+     *
+     * @param array<string, mixed> $issue
      */
     public function isBaselined(array $issue): bool
     {
@@ -94,7 +96,7 @@ final class BaselineManager
     /**
      * Deduplicate a list of issues into an array of unique signatures.
      *
-     * @param list<array<string, mixed>> $results Issue[] (may include nested `issues`).
+     * @param array<CheckResult|array<string, mixed>> $results Issue[] (may include nested `issues`).
      * @return array<string, string> signature => signature
      */
     public function generateBaseline(array $results): array
@@ -123,7 +125,7 @@ final class BaselineManager
     /**
      * Write the given issues as a new baseline, overwriting the file.
      *
-     * @param array $results Issue[] or CheckResult[] (as accepted by generateBaseline).
+     * @param array<CheckResult|array<string, mixed>> $results Issue[] or CheckResult[] (as accepted by generateBaseline).
      */
     public function update(array $results, string $baselineFile): void
     {
@@ -148,6 +150,8 @@ final class BaselineManager
 
     /**
      * Build the canonical signature for an issue, or null when insufficient data.
+     *
+     * @param array<string, mixed> $issue
      */
     public function signature(array $issue): ?string
     {

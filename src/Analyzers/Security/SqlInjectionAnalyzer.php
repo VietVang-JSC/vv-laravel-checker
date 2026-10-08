@@ -51,6 +51,9 @@ final class SqlInjectionAnalyzer extends AbstractAnalyzer
         return $issues;
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file): array
     {
         $ast = $this->sharedAst($file);
@@ -64,6 +67,9 @@ final class SqlInjectionAnalyzer extends AbstractAnalyzer
         });
 
         foreach ($calls as $call) {
+            if (!$call instanceof Node\Expr\StaticCall && !$call instanceof Node\Expr\MethodCall) {
+                continue;
+            }
             $method = $call->name instanceof Node\Identifier ? $call->name->toString() : null;
             if ($method === null) {
                 continue;

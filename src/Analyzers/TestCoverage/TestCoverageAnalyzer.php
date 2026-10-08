@@ -142,7 +142,7 @@ final class TestCoverageAnalyzer extends AbstractAnalyzer
     private function classKindFromExtends(Node\Stmt\Class_ $class): ?string
     {
         $extends = $class->extends;
-        if ($extends !== null && $extends instanceof Node\Name) {
+        if ($extends !== null) {
             $name = $extends->toString();
             if (str_ends_with($name, 'Model')) {
                 return 'model';
@@ -169,6 +169,7 @@ final class TestCoverageAnalyzer extends AbstractAnalyzer
     }
 
     /**
+     * @param list<Node> $ast
      * @return array{0: string, 1: string}
      */
     private function classIdentity(array $ast, Node\Stmt\Class_ $class): array

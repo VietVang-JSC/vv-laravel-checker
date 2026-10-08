@@ -84,6 +84,10 @@ final class MassAssignmentAnalyzer implements ScanContextAware
         'firstOrNew',
     ];
 
+    /**
+     * @param list<string> $files absolute paths
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
@@ -110,6 +114,10 @@ final class MassAssignmentAnalyzer implements ScanContextAware
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
+    /**
+     * @param array<string, string> $modelClassFiles class name => file path
+     * @return list<Issue>
+     */
     public function analyzeFile(string $file, array $modelClassFiles = [], ?ModelMetadataIndex $metaIndex = null): array
     {
         $ast = $this->sharedAst($file);
@@ -129,6 +137,11 @@ final class MassAssignmentAnalyzer implements ScanContextAware
         return $this->findIssues($file, $ast, $modelClassFiles, $metaIndex);
     }
 
+    /**
+     * @param list<Node> $ast
+     * @param array<string, string> $modelClassFiles class name => file path
+     * @return list<Issue>
+     */
     private function findIssues(
         string $file,
         array $ast,
@@ -175,7 +188,6 @@ final class MassAssignmentAnalyzer implements ScanContextAware
                 if (
                     $state instanceof Node\Arg
                     && $state->value instanceof Node\Expr\ConstFetch
-                    && $state->value->name instanceof Node\Name
                     && strtolower($state->value->name->toString()) === 'false'
                 ) {
                     continue;
@@ -827,11 +839,17 @@ final class MassAssignmentAnalyzer implements ScanContextAware
             || str_starts_with($normalized, 'tests/');
     }
 
+    /**
+     * @param array<string, string> $modelClassFiles
+     */
     private function modelExists(string $model, array $modelClassFiles): bool
     {
         return isset($modelClassFiles[$model]);
     }
 
+    /**
+     * @param array<string, string> $modelClassFiles
+     */
     private function modelDefinesMassAssignmentGuard(string $model, array $modelClassFiles): bool
     {
         if (!isset($modelClassFiles[$model])) {
@@ -908,7 +926,7 @@ final class MassAssignmentAnalyzer implements ScanContextAware
     }
 
     /**
-     * @return array{string, string|null} [FQCN, short name]
+     * @return array{string|null, string|null} [FQCN, short name]; both null when unresolvable
      */
     private function resolveClassName(string $path): array
     {

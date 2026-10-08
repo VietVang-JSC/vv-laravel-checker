@@ -18,6 +18,10 @@ final class DeadCodeAnalyzer implements ScanContextAware
 
     private const RULE = 'DEAD_CODE';
 
+    /**
+     * @param list<string> $files absolute paths
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
@@ -39,6 +43,9 @@ final class DeadCodeAnalyzer implements ScanContextAware
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file): array
     {
         $code = $this->sharedSource($file);

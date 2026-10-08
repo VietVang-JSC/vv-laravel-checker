@@ -21,6 +21,9 @@ final class PhpunitChecker extends AbstractProcessChecker
         return 'PHPUnit — test failures / errors.';
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function config(): array
     {
         return [
@@ -170,6 +173,9 @@ final class PhpunitChecker extends AbstractProcessChecker
             || str_contains($output, 'No tests executed');
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function parseJunit(string $file): array
     {
         $issues = [];

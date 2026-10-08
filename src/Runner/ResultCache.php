@@ -15,6 +15,9 @@ final class ResultCache
         $this->cacheDir = rtrim($ctx->outputDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '.cache';
     }
 
+    /**
+     * @return array<string, mixed>|null
+     */
     public function get(string $key): ?array
     {
         $path = $this->pathFor($key);
@@ -40,6 +43,9 @@ final class ResultCache
         return is_array($payload) ? $payload : null;
     }
 
+    /**
+     * @param array<string, mixed> $data
+     */
     public function put(string $key, array $data, int $ttl): void
     {
         if (!is_dir($this->cacheDir) && !@mkdir($this->cacheDir, 0777, true) && !is_dir($this->cacheDir)) {
@@ -74,6 +80,10 @@ final class ResultCache
         }
     }
 
+    /**
+     * @param list<string> $paths
+     * @param array<string, mixed> $configHash
+     */
     public function key(string $checkerName, array $paths, array $configHash): string
     {
         return md5(

@@ -27,11 +27,6 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'OWASP_SSTI';
 
-    private const STATIC_SINKS = [
-        'Blade::render',
-        'Illuminate\\Support\\Facades\\Blade::render',
-    ];
-
     private const METHOD_SINKS = [
         'render', 'renderComponent', 'make', 'compileString', 'composer', 'creator',
     ];
@@ -53,6 +48,9 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
         return $issues;
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file): array
     {
         $ast = $this->sharedAst($file);
@@ -612,15 +610,7 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
             return false;
         }
 
-        if ($func instanceof Node\Stmt\ClassMethod) {
-            $method = $func->name->toString();
-        } else {
-            $funcName = $func->name;
-            if (!$funcName instanceof Node\Identifier) {
-                return false;
-            }
-            $method = $funcName->toString();
-        }
+        $method = $func->name->toString();
 
         $callSites = $this->finder()->find($nodes, static function (Node $node) use ($method): bool {
             if ($node instanceof Node\Expr\MethodCall && $node->name instanceof Node\Identifier) {

@@ -23,6 +23,10 @@ final class LaravelPitfallAnalyzer implements ScanContextAware
 
     private const DEBUG_FUNCTIONS = ['dd', 'dump', 'var_dump', 'print_r'];
 
+    /**
+     * @param list<string> $files absolute paths
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
@@ -43,6 +47,9 @@ final class LaravelPitfallAnalyzer implements ScanContextAware
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file): array
     {
         $ast = $this->sharedAst($file);

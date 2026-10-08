@@ -23,10 +23,6 @@ final class OwaspXxeAnalyzer extends AbstractAnalyzer
 {
     private const RULE = 'OWASP_XXE';
 
-    private const FUNC_SINKS = [
-        'simplexml_load_string', 'simplexml_load_file', 'DOMDocument::loadXML', 'DOMDocument::load',
-    ];
-
     private const NEW_SINKS = [
         'SimpleXMLElement', 'XMLReader',
     ];
@@ -49,6 +45,9 @@ final class OwaspXxeAnalyzer extends AbstractAnalyzer
         return $issues;
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file): array
     {
         $ast = $this->sharedAst($file);
@@ -163,6 +162,9 @@ final class OwaspXxeAnalyzer extends AbstractAnalyzer
         return false;
     }
 
+    /**
+     * @param list<Node> $ast
+     */
     private function hasGuard(array $ast): bool
     {
         $nodes = $this->finder()->find($ast, function (Node $node): bool {
@@ -179,7 +181,6 @@ final class OwaspXxeAnalyzer extends AbstractAnalyzer
             // entities, which is exactly what enables XXE.
             if (
                 $node instanceof Node\Expr\ConstFetch
-                && $node->name instanceof Node\Name
                 && $node->name->toString() === 'LIBXML_NONET'
             ) {
                 return true;

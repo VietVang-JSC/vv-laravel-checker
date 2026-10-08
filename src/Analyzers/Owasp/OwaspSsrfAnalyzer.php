@@ -90,6 +90,9 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
         return $issues;
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file): array
     {
         $ast = $this->sharedAst($file);
@@ -218,6 +221,15 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
 
     private function firstUrlArg(Node $node, string $sink): ?Node\Expr
     {
+        if (
+            !$node instanceof Node\Expr\FuncCall
+            && !$node instanceof Node\Expr\MethodCall
+            && !$node instanceof Node\Expr\NullsafeMethodCall
+            && !$node instanceof Node\Expr\StaticCall
+        ) {
+            return null;
+        }
+
         $args = $node->args;
 
         // Named arguments win: $client->get(url: $u).
@@ -253,7 +265,6 @@ final class OwaspSsrfAnalyzer extends AbstractAnalyzer
             if (
                 !$option instanceof Node\Arg
                 || !$option->value instanceof Node\Expr\ConstFetch
-                || !$option->value->name instanceof Node\Name
                 || $option->value->name->toString() !== 'CURLOPT_URL'
             ) {
                 return null;

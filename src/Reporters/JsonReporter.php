@@ -44,6 +44,10 @@ final class JsonReporter implements ReporterInterface
         );
     }
 
+    /**
+     * @param CheckResult[] $results
+     * @return list<array<string, mixed>>
+     */
     private function buildCheckers(array $results): array
     {
         $checkers = [];
@@ -76,6 +80,10 @@ final class JsonReporter implements ReporterInterface
         return $checkers;
     }
 
+    /**
+     * @param CheckResult[] $results
+     * @return array{categories: array<string, int>, total: int}
+     */
     private function buildOwasp(array $results): array
     {
         $categories = [];
@@ -148,6 +156,10 @@ final class JsonReporter implements ReporterInterface
         return round($total, 3);
     }
 
+    /**
+     * @param CheckResult[] $results
+     * @return array{checkers: int, passed: int, failed: int, skipped: int, total_issues: int, critical: int, error: int, warning: int, info: int, p0: int, p1: int, p2: int, p3: int}
+     */
     private function buildSummary(array $results): array
     {
         $summary = [

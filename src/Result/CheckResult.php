@@ -19,6 +19,9 @@ final class CheckResult
     ) {
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function toArray(): array
     {
         return [
@@ -31,6 +34,9 @@ final class CheckResult
         ];
     }
 
+    /**
+     * @param array<string, mixed> $data
+     */
     public static function fromArray(array $data): self
     {
         $issues = [];
@@ -45,8 +51,8 @@ final class CheckResult
             (string) ($data['status'] ?? 'skipped'),
             (float) ($data['duration'] ?? 0.0),
             $issues,
-            isset($data['raw_output']) && $data['raw_output'] !== null ? (string) $data['raw_output'] : null,
-            isset($data['summary']) && $data['summary'] !== null ? (string) $data['summary'] : null,
+            isset($data['raw_output']) ? (string) $data['raw_output'] : null,
+            isset($data['summary']) ? (string) $data['summary'] : null,
         );
     }
 }

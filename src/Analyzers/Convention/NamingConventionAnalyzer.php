@@ -21,6 +21,10 @@ final class NamingConventionAnalyzer implements ScanContextAware
 
     private const BOOL_PREFIXES = ['is', 'has', 'can', 'should'];
 
+    /**
+     * @param list<string> $files absolute paths
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
@@ -41,6 +45,9 @@ final class NamingConventionAnalyzer implements ScanContextAware
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
+    /**
+     * @return list<Issue>
+     */
     private function analyzeFile(string $file): array
     {
         $ast = $this->sharedAst($file);

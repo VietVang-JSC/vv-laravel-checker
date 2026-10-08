@@ -19,6 +19,10 @@ final class DisabledCsrfAnalyzer implements ScanContextAware
     private const RULE_AUTHORIZE_TRUE = 'DISABLED_CSRF_AUTHORIZE_TRUE';
     private const RULE_EXCEPTION_STAR = 'DISABLED_CSRF_EXCEPTION_STAR';
 
+    /**
+     * @param list<string> $files absolute paths
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
@@ -39,6 +43,9 @@ final class DisabledCsrfAnalyzer implements ScanContextAware
         return strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) === 'php';
     }
 
+    /**
+     * @return list<Issue>
+     */
     public function analyzeFile(string $file): array
     {
         $ast = $this->sharedAst($file);
@@ -141,8 +148,7 @@ final class DisabledCsrfAnalyzer implements ScanContextAware
 
         foreach ($returns as $return) {
             if ($return->expr instanceof Node\Expr\ConstFetch) {
-                $name = $return->expr->name instanceof Node\Name ? strtolower($return->expr->name->toString()) : '';
-                if ($name === 'true') {
+                if (strtolower($return->expr->name->toString()) === 'true') {
                     return true;
                 }
             }
