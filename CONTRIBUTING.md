@@ -158,9 +158,10 @@ git pushall --tags                               # if CI is green on both remote
 ```
 
 Packagist crawls the `rampart` remote, so a tag must exist **there** — a tag
-pushed only to `origin` produces a release nobody can install. Publish only the
-`0.x` tags: `v1.0.0` / `v1.1.0` are a dead line (see [UPGRADE.md](UPGRADE.md)) and
-are deliberately absent from the distribution remote.
+pushed only to `origin` produces a release nobody can install. Publish the `0.x`
+tags and `v1.2.0` onwards: `v1.0.0` / `v1.1.0` are superseded (see
+[UPGRADE.md](UPGRADE.md)) and are deliberately absent from the distribution
+remote.
 
 After tagging, confirm what Composer will actually resolve — the website's
 `.json` endpoint serves a stale cache, use the p2 endpoint instead:

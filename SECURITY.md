@@ -75,11 +75,12 @@ The following are **not** vulnerabilities:
 
 ## Supported versions
 
-This package is on the `0.x` line. Security fixes land on the latest minor
-release only.
+This package is on the `1.x` line (`v1.2.0` onwards). Security fixes land on
+the latest minor release only.
 
 | Version | Supported |
 |---|---|
-| `0.7.x` | Yes |
-| `0.6.x` | Security fixes on request, until `0.7.x` is superseded |
-| `< 0.6` | No |
+| `1.4.x` | Yes |
+| `1.2.x`, `1.3.x` | Security fixes on request, until `1.4.x` is superseded |
+| `0.x` | No |
+| `1.0.0`, `1.1.0` | No — superseded tags, see [UPGRADE.md](UPGRADE.md) |

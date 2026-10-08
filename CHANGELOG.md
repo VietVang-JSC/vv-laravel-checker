@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (corpus 500)
 
-- Corpus `400 → 500` (+100) `tests/Unit/AnalyzerMetricsTest.php:47`: 25× `JS_SYNTAX_ERROR` (unbalanced `{}[]()`), 25× `SQL_INJECTION` `orderBy($request->input)`, 25× `OWASP_SSRF` `file_get_contents($request->input)`, 13× `OWASP_COMMAND_INJECTION`/`OWASP_BLADE_XSS` — all code-thật shape, `340 TP +160 TN` `precision/recall 1.000`, holdout `98/500` blind.
+- Corpus `400 → 500` (+100) `tests/Unit/AnalyzerMetricsTest.php:47`: 25× `JS_SYNTAX_ERROR` (unbalanced `{}[]()`), 25× `SQL_INJECTION` `orderBy($request->input)`, 25× `OWASP_SSRF` `file_get_contents($request->input)`, 13× `OWASP_COMMAND_INJECTION`/`OWASP_BLADE_XSS` — all real-code shapes, `340 TP +160 TN` `precision/recall 1.000`, holdout `98/500` blind.
 
 ## [1.3.0] - 2026-10-05
 
@@ -877,8 +877,9 @@ and its documentation is verified by the build.
 ## [1.1.0 / 1.0.0] - 2026-09-24 (superseded)
 
 > Tagged `v1.0.0` and `v1.1.0`, then renumbered back onto the `0.x` line from
-> `v0.2` onwards. Kept for history; these are **not** the current version line and
-> the two tags are no longer part of the release sequence.
+> `v0.2` onwards; the `1.x` line resumed at `v1.2.0` after `v0.9.0`. Kept for
+> history; these two tags are **not** part of the release sequence and their API
+> is not the `1.2.0+` API.
 
 ### Added
 

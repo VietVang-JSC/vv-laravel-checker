@@ -1,14 +1,55 @@
 # Upgrade guide
 
-Breaking changes per release, newest first. This package is on the `0.x` line,
-so anything that changes behaviour is called out here rather than hidden in the
-[CHANGELOG](CHANGELOG.md).
+Breaking changes per release, newest first. The current line is `1.x`
+(`v1.2.0` onwards, after `v0.9.0`); anything that changes behaviour is called
+out here rather than hidden in the [CHANGELOG](CHANGELOG.md).
 
 Run the version you are coming from, read the entries between it and your target,
 then re-baseline (below) — every behavioural change here moves findings, so a
 stale baseline is how upgrades silently pass.
 
 ---
+
+## Upgrading to 1.4.0 from 1.3.x
+
+No breaking changes. The labelled corpus grew from 400 to 500 shapes; no rule,
+severity or default changed.
+
+## Upgrading to 1.3.0 from 1.2.x
+
+### `PHPUNIT_LOW_COVERAGE` is now `error`
+
+**This can make builds fail.** The finding `phpunit` emits when line coverage is
+below `phpunit.coverageThreshold` (default `60`) was `warning`, so the shipped
+`fail-on=error` never gated on it. It is now `error`, which is what the config
+key promised. Either raise coverage, lower `coverageThreshold`, or add
+`PHPUNIT_LOW_COVERAGE` to `quality_gate.ignore`.
+
+### Frontend analyzers are on by default
+
+**This can make findings appear.** `JS_SYNTAX_ERROR`, `CSS_SYNTAX_ERROR` and
+`BLADE_STACK_MISMATCH` scan `resources/` and `public/` and ship enabled
+(`analyzers.frontend`). The first two are `warning`; `BLADE_STACK_MISMATCH` is
+`error` only for an unclosed `@push`. Set the keys to `false` to opt out.
+
+## Upgrading to 1.2.0 from 0.9.x
+
+### Version line
+
+`1.2.0` follows `0.9.0` directly. The number resumes the `1.x` line that
+`v1.0.0` / `v1.1.0` briefly occupied in September 2026 (see
+[Renumbering](#renumbering-the-100--110-tags) below); the API in `1.2.0` is the
+`0.9.0` API, not the one those two tags shipped. If you had `^0.9`, move to
+`^1.2`.
+
+### Analyzers now resolve paths against the scanned project
+
+**This can make findings move.** `FeatureTestAnalyzer`, `ControllerTestAnalyzer`
+and `NamingConventionAnalyzer` used the caller's working directory to find
+`routes/`, `app/` and `tests/`. When the standalone binary scanned another
+project, they read the caller's directories and attributed the result to the
+target. They now use the scanned project's root, so `MISSING_FEATURE_COVERAGE`
+and `NAMING_CONVENTION` findings may appear or disappear on the first run.
 
 ## Upgrading to 0.9.0 from 0.8.x
 
@@ -143,14 +184,16 @@ your own config. It no longer is. If you deliberately ship a `.env` inside a
 
 ## Renumbering: the `1.0.0` / `1.1.0` tags
 
-Two releases were tagged `v1.0.0` and `v1.1.0` before the package was
-renumbered onto the `0.x` line starting at `v0.2`. Those tags exist but are not
-part of the release sequence.
+Two releases were tagged `v1.0.0` and `v1.1.0` in September 2026, then the
+package was renumbered onto the `0.x` line starting at `v0.2` and developed
+there up to `v0.9.0`. The `1.x` line resumed at `v1.2.0` (October 2026).
 
-**If you pinned `^1.0` or `^1.1`, you are on a dead line.** Move to the latest
-`0.x`; the API is not compatible with `1.x`, and the changelog entry that
-describes the renumbering is kept in
-[CHANGELOG.md](CHANGELOG.md#026--061---2026-09-28----2026-09-30).
+**`v1.0.0` and `v1.1.0` are not part of the release sequence.** Their API is
+not the `1.2.0+` API. If you pinned `^1.0` or `^1.1` back then, Composer will
+now resolve `1.2.0` or later, which is the intended target — re-baseline and
+read the `1.2.0` entry above. The changelog entry that describes the
+renumbering is kept in
+[CHANGELOG.md](CHANGELOG.md#110--100---2026-09-24-superseded).
 
 ---
 

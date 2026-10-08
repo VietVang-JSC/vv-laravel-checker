@@ -30,7 +30,7 @@ read-only since 01/2026**).
 ## 3. Where quality-checker wins
 
 - **Still alive**: Enlightn stopped development at Laravel ≤ 11; this tool is active,
-  on the `0.x` line (`v0.7.x`), with CI dogfooding — including a self-scan where
+  on the `1.x` line (`v1.4.0`), with CI dogfooding — including a self-scan where
   the package's own analyzers run over its own `src/`.
 - **Runs anywhere**: no app boot needed — it can scan even broken projects with
   a bad `.env`/missing DB; Windows supported and covered in CI.

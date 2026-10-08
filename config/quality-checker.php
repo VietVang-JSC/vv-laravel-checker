@@ -16,7 +16,7 @@ return [
     'auto_install_tools' => false,
 
     // Gate tier. 'security' fails only on security issues (high confidence);
-// 'quality' and 'all' add the phpcs/phpstan/phpunit errors. Checkers that
+    // 'quality' and 'all' add the phpcs/phpstan/phpunit errors. Checkers that
     // produce no quality-gate signal (dependency audit, trivy, the heuristic
     // analyzers) report the same in all three tiers — use 'exclude' or
     // --only to skip them.
@@ -143,47 +143,47 @@ return [
         // Additional protective middleware name fragments for access control.
         'extra_middleware' => [],
 
-// Additional safe-output function needles for Blade XSS (e.g. 'my_escape(', 'MyLib::').
-    'extra_sanitizers' => [],
+        // Additional safe-output function needles for Blade XSS (e.g. 'my_escape(', 'MyLib::').
+        'extra_sanitizers' => [],
 
-    // Per-rule severity remapping, applied after analysis.
-    //
-    // `OWASP_BLADE_DYNAMIC_INCLUDE` is the one Blade rule demoted by default. It
-    // reports every dynamic view name (`@include($view)`, `@extends('a.' . $x)`)
-    // at `error`, because Blade has no data-flow analysis and so cannot tell a
-    // user-steerable template name from a fixed one built at runtime. Across the
-    // 27-project benchmark the Blade findings were dominated by this rule, and
-    // at `error` a default run came out red before the user had seen anything.
-    // Demoting it to `info` keeps the findings visible in the report without
-    // failing a build on something that is usually not exploitable.
-    //
-    // `OWASP_BLADE_XSS` is deliberately NOT demoted. Its `error` severity fires
-    // only for request-derived output — `{!! request('q') !!}` and the
-    // superglobals — which is reflected XSS and is the one Blade finding that
-    // genuinely deserves to fail. Its ordinary `{!! $model->field !!}` hits are
-    // already `warning` and never tripped the gate, so demoting the rule would
-    // have cost reflected-XSS coverage without fixing the noise. If your team
-    // treats every dynamic view name as a finding worth blocking, set this rule
-    // back to 'error' instead of relying on the analyzer's own severity.
-    'severity_overrides' => [
-        'OWASP_BLADE_DYNAMIC_INCLUDE' => 'info',
+        // Per-rule severity remapping, applied after analysis.
+        //
+        // `OWASP_BLADE_DYNAMIC_INCLUDE` is the one Blade rule demoted by default. It
+        // reports every dynamic view name (`@include($view)`, `@extends('a.' . $x)`)
+        // at `error`, because Blade has no data-flow analysis and so cannot tell a
+        // user-steerable template name from a fixed one built at runtime. Across the
+        // 27-project benchmark the Blade findings were dominated by this rule, and
+        // at `error` a default run came out red before the user had seen anything.
+        // Demoting it to `info` keeps the findings visible in the report without
+        // failing a build on something that is usually not exploitable.
+        //
+        // `OWASP_BLADE_XSS` is deliberately NOT demoted. Its `error` severity fires
+        // only for request-derived output — `{!! request('q') !!}` and the
+        // superglobals — which is reflected XSS and is the one Blade finding that
+        // genuinely deserves to fail. Its ordinary `{!! $model->field !!}` hits are
+        // already `warning` and never tripped the gate, so demoting the rule would
+        // have cost reflected-XSS coverage without fixing the noise. If your team
+        // treats every dynamic view name as a finding worth blocking, set this rule
+        // back to 'error' instead of relying on the analyzer's own severity.
+        'severity_overrides' => [
+            'OWASP_BLADE_DYNAMIC_INCLUDE' => 'info',
+        ],
+
+        // Skip PHP files larger than this (multi-MB data dumps exhaust the
+        // parser with no signal). 0 or negative disables the limit.
+        'max_file_kb' => 1024,
+
+        // Paths the custom analyzers never look at. `analyzers.exclude` above
+        // filters checker names, not files, so this is the only way to keep the
+        // analyzers out of a directory. Fixtures are excluded by default: code
+        // under a `fixtures/` directory exists to be vulnerable (test samples,
+        // security demos), and reporting it is noise, not signal. Accepts globs
+        // (`*/fixtures/*`, matched against the whole path) or plain segment
+        // sequences (`tests/fixtures`, matched on `/` boundaries), both
+        // case-insensitive. Matching files are counted in the checker summary, so
+        // nothing is hidden silently. Override freely: `[]` scans everything.
+        'exclude_paths' => ['*/fixtures/*'],
     ],
-
-    // Skip PHP files larger than this (multi-MB data dumps exhaust the
-    // parser with no signal). 0 or negative disables the limit.
-    'max_file_kb' => 1024,
-
-    // Paths the custom analyzers never look at. `analyzers.exclude` above
-    // filters checker names, not files, so this is the only way to keep the
-    // analyzers out of a directory. Fixtures are excluded by default: code
-    // under a `fixtures/` directory exists to be vulnerable (test samples,
-    // security demos), and reporting it is noise, not signal. Accepts globs
-    // (`*/fixtures/*`, matched against the whole path) or plain segment
-    // sequences (`tests/fixtures`, matched on `/` boundaries), both
-    // case-insensitive. Matching files are counted in the checker summary, so
-    // nothing is hidden silently. Override freely: `[]` scans everything.
-    'exclude_paths' => ['*/fixtures/*'],
-],
 
     'fail_on' => 'error',
 
