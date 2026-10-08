@@ -35,6 +35,10 @@ final class BladeStackAnalyzer implements ScanContextAware
 
     private const RULE = 'BLADE_STACK_MISMATCH';
 
+    /**
+     * @param list<string> $files absolute paths
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         // Only inspect once per run — collect all blade files

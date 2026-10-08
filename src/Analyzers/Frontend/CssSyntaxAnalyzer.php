@@ -25,6 +25,10 @@ final class CssSyntaxAnalyzer implements ScanContextAware
 
     private const RULE = 'CSS_SYNTAX_ERROR';
 
+    /**
+     * @param list<string> $files absolute paths
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
