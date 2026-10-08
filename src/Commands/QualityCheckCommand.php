@@ -30,14 +30,14 @@ final class QualityCheckCommand extends Command
         {--ignore= : Skip these rules (comma-separated, e.g. MISSING_MODEL_TEST).}
         {--path=* : Override scan paths (repeatable).}
         {--exclude-path=* : Skip files matching these path patterns, e.g. */fixtures/* (repeatable, merged with analyzers.exclude_paths).}
-        {--fail-on=error : Fail threshold: none|info|warning|error|critical.}
+        {--fail-on=error : Fail threshold: none|info|warning|error|critical (overrides config fail_on and --ci).}
         {--tier= : Quality gate tier: security|quality|all (default: config tier).}
         {--min-confidence= : Minimum confidence to report: low|medium|high.}
         {--output= : Output directory for report files.}
         {--no-cache : Ignore cached analyzer/checker results.}
         {--no-auto-install : Disable auto-installing missing tools (phpcs/phpstan/phpunit/trivy).}
         {--json : Shortcut for --format=json.}
-        {--ci : CI mode: json output, fail-on=error, no progress.}
+        {--ci : CI mode: json output, fail-on=error unless --fail-on is passed, no progress.}
         {--fix : Auto-fix fixable issues (currently phpcbf only).}
         {--baseline-generate : Write current issues to the baseline file.}
         {--baseline-update : Rewrite baseline with all current issues.}
@@ -144,10 +144,7 @@ final class QualityCheckCommand extends Command
             $config['analyzers'] = $analyzers;
         }
 
-        $failOn = (string) $this->option('fail-on');
-        if ($this->option('ci') && $failOn === 'error') {
-            $failOn = 'error';
-        }
+        $failOn = $this->resolveFailOn($config);
 
         $outputDir = (string) $this->option('output');
         if ($outputDir === '') {
@@ -375,6 +372,38 @@ final class QualityCheckCommand extends Command
         }
 
         return $formats;
+    }
+
+    /**
+     * Fail threshold, by precedence: an explicit --fail-on, then --ci (which
+     * pins `error` so a relaxed `fail_on` in the project's config cannot turn
+     * the pipeline gate off), then config `fail_on`, then `error`.
+     *
+     * The option's declared default is also `error`, so reading it directly
+     * cannot tell "the user asked for error" from "nothing was passed" — which
+     * is why the config key was never consulted before and `--ci` was a no-op.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function resolveFailOn(array $config): string
+    {
+        if ($this->input->hasParameterOption(['--fail-on'], true)) {
+            $explicit = $this->option('fail-on');
+            if (is_string($explicit) && trim($explicit) !== '') {
+                return strtolower(trim($explicit));
+            }
+        }
+
+        if ($this->option('ci')) {
+            return 'error';
+        }
+
+        $configured = $config['fail_on'] ?? null;
+        if (is_string($configured) && trim($configured) !== '') {
+            return strtolower(trim($configured));
+        }
+
+        return 'error';
     }
 
     /**

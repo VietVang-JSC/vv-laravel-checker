@@ -229,6 +229,42 @@ final class QualityCheckCommandTest extends TestCase
         ])->assertExitCode(0);
     }
 
+    public function testConfigFailOnIsHonouredWhenNoCliThresholdIsPassed(): void
+    {
+        // The fixture app has critical findings; with the shipped default
+        // (error) this run fails. Relaxing the gate in config alone must be
+        // enough to turn it green — the key used to be read by nobody.
+        $this->app['config']->set('quality-checker.fail_on', 'none');
+
+        $this->artisan('quality:check', [
+            '--only' => 'custom',
+            '--path' => [$this->appDir],
+        ])->assertExitCode(0);
+    }
+
+    public function testCiModePinsErrorThresholdOverRelaxedConfig(): void
+    {
+        $this->app['config']->set('quality-checker.fail_on', 'none');
+
+        $this->artisan('quality:check', [
+            '--only' => 'custom',
+            '--path' => [$this->appDir],
+            '--ci' => true,
+            '--output' => $this->tempDir,
+        ])->assertExitCode(1);
+    }
+
+    public function testExplicitFailOnWinsOverCiMode(): void
+    {
+        $this->artisan('quality:check', [
+            '--only' => 'custom',
+            '--path' => [$this->appDir],
+            '--ci' => true,
+            '--fail-on' => 'none',
+            '--output' => $this->tempDir,
+        ])->assertExitCode(0);
+    }
+
     public function testExcludePathKeepsFixturesOutOfTheScan(): void
     {
         $this->artisan('quality:check', [

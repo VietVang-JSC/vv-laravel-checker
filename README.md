@@ -259,7 +259,7 @@ cache and does not modify the project either way.
 | `--exclude=...` | both | Skip these checkers (comma-separated). | — |
 | `--tier=...` | both | Quality gate tier: `security`, `quality`, `all`. | from config (`quality`) |
 | `--min-confidence=...` | both | Minimum confidence to report: `low`, `medium`, `high`. | from config (`low`) |
-| `--fail-on=severity` | both | Fail threshold: `none`, `info`, `warning`, `error`, `critical`. | `error` |
+| `--fail-on=severity` | both | Fail threshold: `none`, `info`, `warning`, `error`, `critical`. An explicit value always wins; otherwise `--ci` pins `error`, then config `fail_on` applies (Artisan). | `error` |
 | `--output=...` | both | Output directory for report files. | `reports/quality-checker` (from config) |
 | `--no-cache` | both | Ignore cached analyzer/checker results. | off |
 | `--path=*` | both, different meaning | Artisan: replaces the configured `paths`. Standalone: restricts the scan to these sub-directories of the target. Repeatable. | from config / auto-detected |
@@ -273,7 +273,7 @@ cache and does not modify the project either way.
 | `--no-auto-install` | Artisan | Disable auto-installing missing tools (phpcs/phpstan/phpunit/trivy). Standalone never installs anything. | off |
 | `--fix` | Artisan | Auto-fix fixable issues (currently `phpcbf` only). Needs the target's vendor, so it is not offered in standalone. | off |
 | `--json` | Artisan | Shortcut for `--format=json`. In standalone, pass `--format=json`. | off |
-| `--ci` | Artisan | CI mode: JSON output, `fail-on=error`, no progress. In standalone, pass `--format=json --fail-on=error`. | off |
+| `--ci` | Artisan | CI mode: JSON output, no progress, and `fail-on=error` regardless of config `fail_on` — unless `--fail-on` is passed explicitly, which wins. In standalone, pass `--format=json --fail-on=error`. | off |
 | `-q`, `--quiet` | Artisan | Symfony Console's built-in quiet flag — prints the summary line only. Standalone takes `-q` through Symfony Console as well. | off |
 
 > Note: `--json` implies the JSON reporter, while `--ci` adds the JSON reporter
@@ -464,6 +464,8 @@ to focus on security findings only.
 ### Severity
 
 Every issue carries a severity, and `fail_on` decides which ones fail the build.
+Precedence: `--fail-on` on the command line, then `--ci` (pins `error`), then
+`fail_on` in the published config, then the built-in `error`.
 
 `OWASP_BLADE_DYNAMIC_INCLUDE` ships remapped to `info`. It reports every
 dynamic view name — `@include($view)`, `@extends('a.' . $x)` — at `error`,

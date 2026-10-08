@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `phpstan` level 6 was red on `main` since v1.3.0: the three Frontend analyzers
+  (`JsSyntaxAnalyzer`, `CssSyntaxAnalyzer`, `BladeStackAnalyzer`) lacked the
+  `@param list<string>` / `@return list<Issue>` docblock on `analyze()`. CI and
+  Dogfood workflows pass again.
+- `--ci` was a no-op for the fail threshold and config `fail_on` was never read.
+  `QualityCheckCommand` now resolves the threshold as: explicit `--fail-on`, then
+  `--ci` (pins `error` so a relaxed `fail_on` in the project's config cannot
+  switch the pipeline gate off), then config `fail_on`, then `error`. A project
+  that set `'fail_on' => 'none'` in its published config used to fail anyway;
+  it now passes locally and still fails under `--ci`. Three Feature tests pin
+  the precedence.
+
 ## [1.4.0] - 2026-10-05
 
 ### Added (corpus 500)
