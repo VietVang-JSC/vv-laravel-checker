@@ -551,6 +551,41 @@ final class RuleRemediation
                     CODE,
                 'docs' => null,
             ],
+            'PERMS_TOO_OPEN' => [
+                'why' => 'File or directory is world-writable (777/666) — deploy artifact leaks or is mutable by any local user.',
+                'fix' => <<<'CODE'
+                    chmod 755 app/ storage/ bootstrap/cache/
+                    chmod 644 app/**/*.php
+                    # .gitignore vendor/ and never deploy with 777
+                    CODE,
+                'docs' => null,
+            ],
+            'EOL_COMPONENT' => [
+                'why' => 'Framework or PHP version is end-of-life — no security patches.',
+                'fix' => <<<'CODE'
+                    # Check https://endoflife.date/laravel and https://endoflife.date/php
+                    composer update illuminate/* --with-dependencies
+                    # upgrade to supported Laravel/PHP (e.g. Laravel 12, PHP 8.3)
+                    CODE,
+                'docs' => null,
+            ],
+            'ROGUE_PHP' => [
+                'why' => 'Unexpected PHP file in public/ or upload dir — possible webshell or dropper.',
+                'fix' => <<<'CODE'
+                    # Remove it, audit git history, and re-deploy from clean artifact:
+                    git log --all -- public/
+                    rm public/*.php  # only index.php should be there
+                    CODE,
+                'docs' => null,
+            ],
+            'OBFUSCATED_PHP' => [
+                'why' => 'Obfuscated PHP (eval(base64_decode), gzinflate, rot13, long concatenated strings) hides a backdoor.',
+                'fix' => <<<'CODE'
+                    // Delete the file, rotate secrets, and redeploy from git
+                    // Search for: eval(, base64_decode(, gzinflate(, str_rot13(
+                    CODE,
+                'docs' => null,
+            ],
         ];
     }
 

@@ -435,6 +435,20 @@ low-confidence hints. The last two are opt-in.
 | `CSS_SYNTAX_ERROR` | Warning/Info | medium/low | Unbalanced `{}` or missing `;` before `}` in `resources/css` / `public/css` (`.css`, `.scss`, `.sass`, `.less`). |
 | `BLADE_STACK_MISMATCH` | Error/Warning/Info | high/medium/low | `@push('x')` without `@stack('x')` (orphan, Warning), `@stack('x')` without `@push` (empty, Info), or `@push` without `@endpush` (Error) in `resources/views` `*.blade.php`. |
 
+### Ops (`analyzers/ops`, on by default)
+
+| Rule ID | Severity | Confidence | What it detects |
+|---|---|---|---|
+| `PERMS_TOO_OPEN` | Warning | medium | File/dir is world-writable (`777`/`666`) — `.env`, `storage`, `bootstrap/cache`. |
+| `EOL_COMPONENT` | Warning | medium | `laravel/framework` or `php` constraint is EOL — no security patches. |
+
+### Forensics (`analyzers/security`, on by default)
+
+| Rule ID | Severity | Confidence | What it detects |
+|---|---|---|---|
+| `ROGUE_PHP` | Critical | high | Unexpected PHP file in `public/` (only `index.php` should be there). |
+| `OBFUSCATED_PHP` | Critical | medium | Obfuscated `eval(base64_decode`, `gzinflate`, `str_rot13`, `chr().chr()`, `\\x..`. |
+
 ### Wrapped checkers
 
 These are not rule ids — they are the third-party tools this package drives, and

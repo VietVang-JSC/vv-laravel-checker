@@ -7,6 +7,7 @@ namespace Rampart\QualityChecker\Runner;
 use Rampart\QualityChecker\Checkers\CheckerInterface;
 use Rampart\QualityChecker\Checkers\ComposerAuditChecker;
 use Rampart\QualityChecker\Checkers\CustomAnalyzerChecker;
+use Rampart\QualityChecker\Checkers\NpmAuditChecker;
 use Rampart\QualityChecker\Checkers\PhpcsChecker;
 use Rampart\QualityChecker\Checkers\PhpstanChecker;
 use Rampart\QualityChecker\Checkers\PhpunitChecker;
@@ -36,6 +37,7 @@ final class CheckRunner
             new PhpstanChecker(),
             new PhpunitChecker(),
             new ComposerAuditChecker(),
+            new NpmAuditChecker(),
             new TrivyChecker(),
             new CustomAnalyzerChecker(),
         ];

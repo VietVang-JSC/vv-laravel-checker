@@ -44,6 +44,10 @@ return [
         'enabled' => true,
     ],
 
+    'npm_audit' => [
+        'enabled' => true,
+    ],
+
     'trivy' => [
         'enabled' => false,
         'mode' => 'config',
@@ -78,6 +82,8 @@ return [
             'auth_hardening' => true,
             'laravel_taint' => true,
             'disabled_csrf' => true,
+            'rogue_php' => true,
+            'obfuscated' => true,
             'taint_engine' => false,
         ],
 
@@ -135,6 +141,12 @@ return [
             'js_syntax' => true,
             'css_syntax' => true,
             'blade_stack' => true,
+        ],
+
+        // Ops checks (checkpoint parity) — perms, EOL.
+        'ops' => [
+            'perms' => true,
+            'eol' => true,
         ],
 
         // Eloquent model directories for mass-assignment resolution.

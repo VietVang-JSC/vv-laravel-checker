@@ -76,6 +76,12 @@ final class RuleIds
     public const CSS_SYNTAX_ERROR = 'CSS_SYNTAX_ERROR';
     public const BLADE_STACK_MISMATCH = 'BLADE_STACK_MISMATCH';
 
+    // --- Ops checks (checkpoint parity) ---------------------------------
+    public const PERMS_TOO_OPEN = 'PERMS_TOO_OPEN';
+    public const EOL_COMPONENT = 'EOL_COMPONENT';
+    public const ROGUE_PHP = 'ROGUE_PHP';
+    public const OBFUSCATED_PHP = 'OBFUSCATED_PHP';
+
     // --- Convention analyzers (default off) ---------------------------------
     public const DEAD_CODE = 'DEAD_CODE';
     public const NAMING_CONVENTION = 'NAMING_CONVENTION';
@@ -121,6 +127,10 @@ final class RuleIds
             self::JS_SYNTAX_ERROR,
             self::CSS_SYNTAX_ERROR,
             self::BLADE_STACK_MISMATCH,
+            self::PERMS_TOO_OPEN,
+            self::EOL_COMPONENT,
+            self::ROGUE_PHP,
+            self::OBFUSCATED_PHP,
             self::DEAD_CODE,
             self::NAMING_CONVENTION,
             self::TODO_FIXME,

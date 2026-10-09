@@ -28,6 +28,10 @@ final class JsSyntaxAnalyzer implements ScanContextAware
 
     private const RULE = 'JS_SYNTAX_ERROR';
 
+    /**
+     * @param list<string> $files
+     * @return list<Issue>
+     */
     public function analyze(array $files): array
     {
         $issues = [];
