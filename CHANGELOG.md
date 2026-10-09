@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-05
+
+### Added (1 PR to #1 — Laravel 13 + checkpoint 3 + scalpel 2 + SKILL.md)
+
+- `composer.json:19` `illuminate/* ^13.0` (was `^12.0`) — Laravel 13 ready
+- `src/Checkers/NpmAuditChecker.php:14` `npm audit` (`npm_audit` checker, `NPM_AUDIT` `High`/`Critical`), `src/Analyzers/Ops/PermsAnalyzer.php:14` `PERMS_TOO_OPEN` (`777` on `.env`/`storage`), `src/Analyzers/Ops/EolAnalyzer.php:14` `EOL_COMPONENT` (`laravel/framework`/`php` EOL)
+- `src/Analyzers/Security/RoguePhpAnalyzer.php:14` `ROGUE_PHP` (`public/*.php` not `index.php`), `src/Analyzers/Security/ObfuscatedAnalyzer.php:14` `OBFUSCATED_PHP` (`eval(base64_decode`/`gzinflate`/`str_rot13`)
+- `SKILL.md` agent-native (zero-config, standalone, frontend, supply-chain, forensics) — copy difflock MCP style
+- `config/quality-checker.php:140` `frontend` + `ops` enabled, `README.md` Frontend/Ops/Forensics tables, `1363 tests` green
+
 ## [1.4.0] - 2026-10-05
 
 ### Added (corpus 500)
