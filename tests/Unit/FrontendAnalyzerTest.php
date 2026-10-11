@@ -104,4 +104,19 @@ final class FrontendAnalyzerTest extends TestCase
         self::assertCount(0, $orphans);
         self::assertCount(0, $unclosed);
     }
+
+    public function testBladeStackIgnoresDirectivesInComments(): void
+    {
+        // Commented-out @push must not count as unclosed (was Error FP),
+        // and @stack inside a comment must not mask a real orphan push.
+        $commented = $this->file('resources/views/c.blade.php', "{{-- @push('old')\n<script>x</script> --}}");
+        $orphan = $this->file('resources/views/o.blade.php', "@push('gone')\n<script>y</script>\n@endpush");
+        $commentedStack = $this->file('resources/views/s.blade.php', "{{-- @stack('gone') --}}");
+        $issues = (new BladeStackAnalyzer())->analyze([$commented, $orphan, $commentedStack]);
+        $unclosed = array_filter($issues, fn ($i) => $i->metadata['kind'] === 'unclosed_block');
+        $orphans = array_filter($issues, fn ($i) => $i->metadata['kind'] === 'orphan_push');
+        self::assertCount(0, $unclosed);
+        self::assertCount(1, $orphans);
+        self::assertStringContainsString('gone', $orphans[array_key_first($orphans)]->message);
+    }
 }

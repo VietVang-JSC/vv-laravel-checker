@@ -85,6 +85,19 @@ final class OwaspMisconfigurationAnalyzer extends AbstractAnalyzer
             $trimmed = trim($line);
             $lineNo = $index + 1;
 
+            // Comment-only lines are docs, not configuration: `# APP_DEBUG=true`
+            // in .env or `// 'debug' => true` in config must not flag.
+            // Covers `#` (.env), `//` + `#` + `/*` + `*` (PHP).
+            if (
+                $trimmed === ''
+                || str_starts_with($trimmed, '#')
+                || str_starts_with($trimmed, '//')
+                || str_starts_with($trimmed, '/*')
+                || str_starts_with($trimmed, '*')
+            ) {
+                continue;
+            }
+
             if ($this->isDebugEnabled($trimmed)) {
                 $issues[] = $this->makeIssue(
                     self::RULE,

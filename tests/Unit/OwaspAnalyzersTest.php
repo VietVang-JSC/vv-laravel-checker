@@ -360,6 +360,32 @@ final class OwaspAnalyzersTest extends TestCase
         self::assertCount(0, $issues);
     }
 
+    public function testMisconfigSkipsCommentedLines(): void
+    {
+        $env = $this->temp(
+            "# APP_DEBUG=true\n# SESSION_SECURE_COOKIE=false\n# change the changeme default\nAPP_DEBUG=false\n",
+            '.env'
+        );
+        self::assertSame([], (new OwaspMisconfigurationAnalyzer())->analyze([$env]));
+
+        $config = $this->temp(
+            "<?php\nreturn [\n    // 'debug' => true,\n    /* 'allowed_origins' => ['*'], */\n    'debug' => false,\n];\n",
+            'config/app.php'
+        );
+        self::assertSame([], (new OwaspMisconfigurationAnalyzer())->analyze([$config]));
+    }
+
+    public function testMisconfigStillFlagsRealLineBesideComments(): void
+    {
+        $file = $this->temp(
+            "# APP_DEBUG=false\nAPP_DEBUG=true\n",
+            '.env'
+        );
+        $issues = (new OwaspMisconfigurationAnalyzer())->analyze([$file]);
+        self::assertCount(1, $issues);
+        self::assertSame('debug', $issues[0]->metadata['kind'] ?? null);
+    }
+
     public function testCommandInjectionFlagsTaintedSystemCall(): void
     {
         $file = $this->temp(

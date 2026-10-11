@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-10-11
+
+### Fixed (audit rounds D+E: comment FPs + collector size guard)
+
+- `src/Analyzers/Frontend/BladeStackAnalyzer.php`: strip `{{-- --}}` comments before matching — a commented-out `@push` no longer reports unclosed `Error`, and `@stack` in a comment no longer masks a real orphan push.
+- `src/Analyzers/Owasp/OwaspMisconfigurationAnalyzer.php`: skip comment-only lines (`#`, `//`, `/*`, `*`) — `# APP_DEBUG=true` in `.env` or `// 'debug' => true` in config no longer flags.
+- `src/Checkers/CustomAnalyzerChecker.php`: `collectBlade/Js/CssFiles` honor `max_file_kb` (was PHP-only) and report oversized counts into the shared total — huge non-minified bundles are never read into the source cache.
+- Audited no-change: `Deduplicator`, `InlineSuppressor` (paths are CWD-relative by construction, `is_file` holds), `BaselineManager::signature` matches `Issue::signature`, `CheckRunner::shouldFail` tier/confidence gate correct.
+- Tests `1386→1393` (+2 misconfig, +1 blade, +4 collector); `phpstan [OK]`, `phpcs` clean.
+
 ## [1.5.2] - 2026-10-11
 
 ### Fixed (free rounds: contract tests + sink-first perf)

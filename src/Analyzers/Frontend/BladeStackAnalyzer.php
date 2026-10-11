@@ -56,6 +56,10 @@ final class BladeStackAnalyzer implements ScanContextAware
             if ($code === '') {
                 continue;
             }
+            // Blade comments are docs, not directives: a commented-out
+            // `@push('x')` must not count as unclosed, and `@stack` inside
+            // a comment must not mask a real orphan push.
+            $code = preg_replace('/\{\{--.*?--\}\}/s', '', $code) ?? '';
 
             // Find @stack('name') — allow " or ' and spacing
             if (preg_match_all('/@stack\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', $code, $m) > 0) {

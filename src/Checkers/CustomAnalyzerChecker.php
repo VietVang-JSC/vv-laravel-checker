@@ -91,11 +91,15 @@ final class CustomAnalyzerChecker implements CheckerInterface
         }
         Profiler::begin('discovery');
         [$files, $skippedOversized, $skippedExcluded] = $this->collectFiles($ctx);
+        [$bladeFiles, $bladeOversized] = $this->collectBladeFiles($ctx);
+        [$jsFiles, $jsOversized] = $this->collectJsFiles($ctx);
+        [$cssFiles, $cssOversized] = $this->collectCssFiles($ctx);
+        $skippedOversized += $bladeOversized + $jsOversized + $cssOversized;
         $files = array_values(array_unique(array_merge(
             $files,
-            $this->collectBladeFiles($ctx),
-            $this->collectJsFiles($ctx),
-            $this->collectCssFiles($ctx),
+            $bladeFiles,
+            $jsFiles,
+            $cssFiles,
             $this->collectEnvFiles($ctx)
         )));
         Profiler::end('discovery');
@@ -585,18 +589,21 @@ final class CustomAnalyzerChecker implements CheckerInterface
      * Blade views live under `resources/` which is not part of the default scan
      * paths (phpcs/phpstan must not lint templates). Collected separately so
      * only blade-aware analyzers consume them — every other analyzer filters
-     * by `.php` in `supports()`.
+     * by `.php` in `supports()`. Oversized files count into the shared
+     * oversized total (see run()), same as PHP collection.
      *
-     * @return list<string>
+     * @return array{list<string>, int} [files, oversizedSkipped]
      */
     private function collectBladeFiles(CheckContext $ctx): array
     {
         $files = [];
+        $oversized = 0;
         $abs = $ctx->resolvePath('resources');
         if (!is_dir($abs)) {
-            return $files;
+            return [$files, $oversized];
         }
 
+        $maxBytes = $this->maxFileBytes($ctx);
         $excluder = PathExcluder::fromConfig($ctx->config);
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($abs, \FilesystemIterator::SKIP_DOTS)
@@ -607,6 +614,10 @@ final class CustomAnalyzerChecker implements CheckerInterface
                 continue;
             }
             if (!str_ends_with(strtolower($file->getFilename()), '.blade.php')) {
+                continue;
+            }
+            if ($maxBytes > 0 && $file->getSize() > $maxBytes) {
+                $oversized++;
                 continue;
             }
 
@@ -624,18 +635,20 @@ final class CustomAnalyzerChecker implements CheckerInterface
             $files[] = $file->getPathname();
         }
 
-        return array_values(array_unique($files));
+        return [array_values(array_unique($files)), $oversized];
     }
 
     /**
      * JS/TS files — collected separately so only JS-aware analyzers consume them.
      *
-     * @return list<string>
+     * @return array{list<string>, int} [files, oversizedSkipped]
      */
     private function collectJsFiles(CheckContext $ctx): array
     {
         $roots = ['resources', 'public'];
         $files = [];
+        $oversized = 0;
+        $maxBytes = $this->maxFileBytes($ctx);
         $excluder = PathExcluder::fromConfig($ctx->config);
         foreach ($roots as $root) {
             $abs = $ctx->resolvePath($root);
@@ -653,6 +666,10 @@ final class CustomAnalyzerChecker implements CheckerInterface
                 if (!in_array($ext, ['js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs', 'vue'], true)) {
                     continue;
                 }
+                if ($maxBytes > 0 && $file->getSize() > $maxBytes) {
+                    $oversized++;
+                    continue;
+                }
                 $pathname = str_replace('\\', '/', $file->getPathname());
                 // Minified bundles are compiled output: skip at collection so
                 // they are never read into the shared source cache (perf), not
@@ -668,18 +685,20 @@ final class CustomAnalyzerChecker implements CheckerInterface
             }
         }
 
-        return array_values(array_unique($files));
+        return [array_values(array_unique($files)), $oversized];
     }
 
     /**
      * CSS/SCSS files.
      *
-     * @return list<string>
+     * @return array{list<string>, int} [files, oversizedSkipped]
      */
     private function collectCssFiles(CheckContext $ctx): array
     {
         $roots = ['resources', 'public'];
         $files = [];
+        $oversized = 0;
+        $maxBytes = $this->maxFileBytes($ctx);
         $excluder = PathExcluder::fromConfig($ctx->config);
         foreach ($roots as $root) {
             $abs = $ctx->resolvePath($root);
@@ -697,6 +716,10 @@ final class CustomAnalyzerChecker implements CheckerInterface
                 if (!in_array($ext, ['css', 'scss', 'sass', 'less'], true)) {
                     continue;
                 }
+                if ($maxBytes > 0 && $file->getSize() > $maxBytes) {
+                    $oversized++;
+                    continue;
+                }
                 $pathname = str_replace('\\', '/', $file->getPathname());
                 // Same compiled-output skip as JS (perf: never cached/read).
                 $lower = strtolower($pathname);
@@ -710,6 +733,6 @@ final class CustomAnalyzerChecker implements CheckerInterface
             }
         }
 
-        return array_values(array_unique($files));
+        return [array_values(array_unique($files)), $oversized];
     }
 }
