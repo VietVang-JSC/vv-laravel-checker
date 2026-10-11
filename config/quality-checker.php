@@ -156,7 +156,7 @@ return [
         'extra_middleware' => [],
 
 // Additional safe-output function needles for Blade XSS (e.g. 'my_escape(', 'MyLib::').
-    'extra_sanitizers' => [],
+        'extra_sanitizers' => [],
 
     // Per-rule severity remapping, applied after analysis.
     //
@@ -177,13 +177,13 @@ return [
     // have cost reflected-XSS coverage without fixing the noise. If your team
     // treats every dynamic view name as a finding worth blocking, set this rule
     // back to 'error' instead of relying on the analyzer's own severity.
-    'severity_overrides' => [
+        'severity_overrides' => [
         'OWASP_BLADE_DYNAMIC_INCLUDE' => 'info',
-    ],
+        ],
 
     // Skip PHP files larger than this (multi-MB data dumps exhaust the
     // parser with no signal). 0 or negative disables the limit.
-    'max_file_kb' => 1024,
+        'max_file_kb' => 1024,
 
     // Paths the custom analyzers never look at. `analyzers.exclude` above
     // filters checker names, not files, so this is the only way to keep the
@@ -194,8 +194,8 @@ return [
     // sequences (`tests/fixtures`, matched on `/` boundaries), both
     // case-insensitive. Matching files are counted in the checker summary, so
     // nothing is hidden silently. Override freely: `[]` scans everything.
-    'exclude_paths' => ['*/fixtures/*'],
-],
+        'exclude_paths' => ['*/fixtures/*'],
+    ],
 
     'fail_on' => 'error',
 

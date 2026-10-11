@@ -29,7 +29,7 @@
     },
     "scripts": {
         "test": "phpunit",
-        "lint": "phpcs --standard=phpcs.xml.dist src tests tools",
+        "lint": "phpcs --standard=phpcs.xml.dist src tests tools config",
         "analyse": "phpstan analyse --memory-limit=1G --no-progress",
         "check": [
             "@lint",

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.4] - 2026-10-11
+
+### Fixed (final rounds F+G: full-gate dogfood + docs)
+
+- `config/quality-checker.php`: PSR12-clean (6 indent errors) — the shipped default config failed its own `phpcs` gate on every fresh `vendor:publish`; `composer lint` now covers `config/` so it cannot regress.
+- Full 7-checker self-gate green: `phpcs/phpstan/phpunit/composer_audit` passed, `npm_audit`/`trivy` correctly skipped, `custom` 1 honest EOL Warning. Earlier >5min timeout was cumulative slowness (phpunit), not a hang — verified per-checker.
+- `docs/overview.md`: un-staled — 50 rules (+Ops/Forensics breakdown), corpus `340 TP+160 TN`, holdout 98, tests 1393, latest `v1.5.3` (all counts verified by execution).
+- Tests still `1393`; `phpstan [OK]`, `phpcs` clean (incl. `config/`).
+
 ## [1.5.3] - 2026-10-11
 
 ### Fixed (audit rounds D+E: comment FPs + collector size guard)
