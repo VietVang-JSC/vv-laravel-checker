@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-10-11
+
+### Fixed (free rounds: contract tests + sink-first perf)
+
+- `tests/Unit/NpmAuditJsonContractTest.php` (5 tests): pins `npm audit --json` v7/v6 shapes — `NpmAuditChecker::parseOutput()` had 0 tests and needed a live registry; plus `module_name` fix so v6 advisories report the package, not the numeric id.
+- `tests/Unit/RoguePhpAnalyzerTest.php` (4 tests): `ROGUE_PHP` had 0 tests — index.php/non-PHP ignored, nested hits found, silent without `public/`.
+- Perf (profiled self-scan, 189 files): sink-first early exit in `OwaspSstiAnalyzer` (was #1 hotspot: 4003ms/13.8k traversals/0 findings) and `OwaspCommandInjectionAnalyzer` — traversals `24k→5k` (-79%), walked nodes `7.0M→4.1M` (-42%), findings byte-identical.
+- Tests `1377→1386`; `phpstan [OK]`, `phpcs` clean.
+
 ## [1.5.1] - 2026-10-11
 
 ### Fixed (2-round tune-up: EOL accuracy + obfuscated self-FP + collector perf)

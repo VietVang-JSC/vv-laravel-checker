@@ -65,19 +65,12 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
             return [];
         }
 
-        // Variables assigned a plain argument-array literal, scoped per function, so
-        // `new Process($command)` with `$command = [...]` is recognized as shell-free.
         $nodes = [];
         foreach ($ast as $node) {
             if ($node instanceof Node) {
                 $nodes[] = $node;
             }
         }
-        $scopes = $this->arrayVarScopes($nodes);
-        // Variables assigned deploy-time-safe command parts (`$artisan =
-        // base_path('artisan')`), so `passthru(PHP_BINARY." $artisan ...")` is
-        // recognized as non-user input.
-        $safeScopes = $this->safeVarScopes($nodes);
 
         $issues = [];
         $calls = $this->finder()->find($ast, function (Node $node): bool {
@@ -86,6 +79,28 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
                 || $node instanceof Node\Expr\StaticCall
                 || $node instanceof Node\Expr\ShellExec;
         });
+
+        // Sink-first (same rationale as OwaspSstiAnalyzer): the scope
+        // indexes are FP-reduction for sink calls only. Files with no
+        // shell-ish call cannot produce an issue, so skip them.
+        $hasSink = false;
+        foreach ($calls as $call) {
+            if ($this->isSinkCandidate($call)) {
+                $hasSink = true;
+                break;
+            }
+        }
+        if (!$hasSink) {
+            return [];
+        }
+
+        // Variables assigned a plain argument-array literal, scoped per function, so
+        // `new Process($command)` with `$command = [...]` is recognized as shell-free.
+        $scopes = $this->arrayVarScopes($nodes);
+        // Variables assigned deploy-time-safe command parts (`$artisan =
+        // base_path('artisan')`), so `passthru(PHP_BINARY." $artisan ...")` is
+        // recognized as non-user input.
+        $safeScopes = $this->safeVarScopes($nodes);
 
         foreach ($calls as $call) {
             if ($call instanceof Node\Expr\ShellExec) {
@@ -185,6 +200,39 @@ final class OwaspCommandInjectionAnalyzer extends AbstractAnalyzer
         }
 
         return $issues;
+    }
+
+    /**
+     * Structural pre-filter mirroring the sink branches in analyzeFile()
+     * (name checks only, no traversal): ShellExec, FUNC_SINKS calls,
+     * Process::fromShellCommandline(), new Process().
+     */
+    private function isSinkCandidate(Node $node): bool
+    {
+        if ($node instanceof Node\Expr\ShellExec) {
+            return true;
+        }
+        if ($node instanceof Node\Expr\FuncCall && $node->name instanceof Node\Name) {
+            return in_array($node->name->toString(), self::FUNC_SINKS, true);
+        }
+        if (
+            $node instanceof Node\Expr\StaticCall
+            && $node->class instanceof Node\Name
+            && $node->name instanceof Node\Identifier
+            && strtolower($node->name->toString()) === 'fromshellcommandline'
+            && in_array($node->class->toString(), [self::PROCESS_CLASS, '\\' . self::PROCESS_CLASS, 'Process'], true)
+        ) {
+            return true;
+        }
+        if (
+            $node instanceof Node\Expr\New_
+            && $node->class instanceof Node\Name
+            && in_array($node->class->toString(), [self::PROCESS_CLASS, '\\' . self::PROCESS_CLASS, 'Process'], true)
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

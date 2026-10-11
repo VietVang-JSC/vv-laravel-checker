@@ -66,22 +66,32 @@ final class OwaspSstiAnalyzer extends AbstractAnalyzer
                 $nodes[] = $node;
             }
         }
-        $scopes = $this->literalVarScopes($nodes);
-        $allowLists = $this->allowListedVarScopes($nodes);
 
-        $issues = [];
         $calls = $this->finder()->find($nodes, function (Node $node): bool {
             return $node instanceof Node\Expr\StaticCall
                 || $node instanceof Node\Expr\MethodCall
                 || $node instanceof Node\Expr\FuncCall;
         });
 
+        // Sink-first: the literal/allow-list scope indexes cost several full
+        // traversals per file and are pure FP-reduction for sink calls. Files
+        // with no view/Blade sink cannot produce an issue, so skip them.
+        $sinks = [];
         foreach ($calls as $call) {
             $sink = $this->resolveSink($call);
-            if ($sink === null) {
-                continue;
+            if ($sink !== null) {
+                $sinks[] = [$call, $sink];
             }
+        }
+        if ($sinks === []) {
+            return [];
+        }
 
+        $scopes = $this->literalVarScopes($nodes);
+        $allowLists = $this->allowListedVarScopes($nodes);
+
+        $issues = [];
+        foreach ($sinks as [$call, $sink]) {
             $arg = $this->templateArg($call);
             if ($arg === null || $this->isLiteralString($arg)) {
                 continue;

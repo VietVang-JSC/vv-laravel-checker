@@ -97,6 +97,8 @@ final class NpmAuditChecker extends AbstractProcessChecker
                 continue;
             }
             // npm v7+ shape: vulnerabilities: { pkg: { via: [...], severity, range } }
+            // npm v6 shape: advisories: { id: { module_name, severity, title } }
+            $pkg = is_string($data['module_name'] ?? null) ? $data['module_name'] : (string) $pkg;
             $severity = (string) ($data['severity'] ?? 'moderate');
             $title = is_string($data['title'] ?? null) ? $data['title'] : sprintf('Vulnerability in %s', $pkg);
             $issues[] = new Issue(
