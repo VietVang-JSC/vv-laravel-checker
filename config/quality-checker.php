@@ -31,7 +31,7 @@ return [
     ],
 
     'phpstan' => [
-        'level' => 5,
+        'level' => 6,
         'memoryLimit' => '1G',
     ],
 

@@ -654,7 +654,11 @@ final class CustomAnalyzerChecker implements CheckerInterface
                     continue;
                 }
                 $pathname = str_replace('\\', '/', $file->getPathname());
-                if (str_contains($pathname, '/vendor/') || str_contains($pathname, '/node_modules/')) {
+                // Minified bundles are compiled output: skip at collection so
+                // they are never read into the shared source cache (perf), not
+                // just filtered later in supports(). Same rule as the analyzer.
+                $lower = strtolower($pathname);
+                if (str_contains($lower, '.min.') || str_contains($lower, '/vendor/') || str_contains($lower, '/node_modules/')) {
                     continue;
                 }
                 if ($excluder->excludes($pathname)) {
@@ -694,7 +698,9 @@ final class CustomAnalyzerChecker implements CheckerInterface
                     continue;
                 }
                 $pathname = str_replace('\\', '/', $file->getPathname());
-                if (str_contains($pathname, '/vendor/') || str_contains($pathname, '/node_modules/')) {
+                // Same compiled-output skip as JS (perf: never cached/read).
+                $lower = strtolower($pathname);
+                if (str_contains($lower, '.min.') || str_contains($lower, '/vendor/') || str_contains($lower, '/node_modules/')) {
                     continue;
                 }
                 if ($excluder->excludes($pathname)) {

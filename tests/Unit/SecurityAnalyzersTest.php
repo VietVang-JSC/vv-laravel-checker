@@ -11,6 +11,7 @@ use Rampart\QualityChecker\Analyzers\Security\InsecureCookieAnalyzer;
 use Rampart\QualityChecker\Analyzers\Security\InsecureHashAnalyzer;
 use Rampart\QualityChecker\Analyzers\Security\LaravelTaintAnalyzer;
 use Rampart\QualityChecker\Analyzers\Security\MassAssignmentAnalyzer;
+use Rampart\QualityChecker\Analyzers\Security\ObfuscatedAnalyzer;
 use Rampart\QualityChecker\Analyzers\Security\SqlInjectionAnalyzer;
 use Rampart\QualityChecker\Analyzers\Security\UnsafeDeserializationAnalyzer;
 use Rampart\QualityChecker\Analyzers\Security\UnsafeEvalAnalyzer;
@@ -46,6 +47,45 @@ final class SecurityAnalyzersTest extends TestCase
     private function ruleMatches(Issue $issue, string $rule, Severity $severity): bool
     {
         return $issue->rule === $rule && $issue->severity === $severity;
+    }
+
+    /** ObfuscatedAnalyzer */
+
+    public function testObfuscatedFlagsRealEvalBase64(): void
+    {
+        $file = $this->tempPhp("<?php\neval(base64_decode(\$payload));\n");
+        $issues = (new ObfuscatedAnalyzer())->analyze([$file]);
+        self::assertCount(1, $issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'OBFUSCATED_PHP', Severity::Critical));
+    }
+
+    public function testObfuscatedSilentOnPatternNamesInStrings(): void
+    {
+        // Docs/remediation text mentioning eval(base64_decode(...)) or
+        // str_rot13( must not flag: self-scan false positive (P0 noise).
+        $file = $this->tempPhp("<?php\n\$label = 'eval(base64_decode(...))';\n// Search for: eval(, base64_decode(, str_rot13(\n");
+        self::assertSame([], (new ObfuscatedAnalyzer())->analyze([$file]));
+    }
+
+    public function testObfuscatedSilentOnOwnSource(): void
+    {
+        $issues = (new ObfuscatedAnalyzer())->analyze([__DIR__ . '/../../src/Analyzers/Security/ObfuscatedAnalyzer.php']);
+        self::assertSame([], $issues);
+    }
+
+    public function testObfuscatedHexNeedsDensity(): void
+    {
+        // Payload built dynamically so this test file itself carries no
+        // `\xNN` runs for the self-scan to flag (dogfood-clean).
+        $bs = chr(92);
+        $single = $this->tempPhp("<?php\n\$a = \"caf" . $bs . "x41\";\n");
+        self::assertSame([], (new ObfuscatedAnalyzer())->analyze([$single]));
+        $bomLike = $this->tempPhp("<?php\n\$a = \"" . $bs . 'xEF' . $bs . 'xBB' . $bs . "xBF\";\n");
+        self::assertSame([], (new ObfuscatedAnalyzer())->analyze([$bomLike]));
+        $dense = $this->tempPhp("<?php\n\$a = \"" . $bs . 'x65' . $bs . 'x76' . $bs . 'x61' . $bs . "x6c\";\n");
+        $issues = (new ObfuscatedAnalyzer())->analyze([$dense]);
+        self::assertCount(1, $issues);
+        self::assertTrue($this->ruleMatches($issues[0], 'OBFUSCATED_PHP', Severity::Critical));
     }
 
     /** SqlInjectionAnalyzer */

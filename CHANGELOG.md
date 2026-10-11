@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-10-11
+
+### Fixed (2-round tune-up: EOL accuracy + obfuscated self-FP + collector perf)
+
+- `src/Analyzers/Ops/EolAnalyzer.php`: per-major EOL table (Laravel 9–13, PHP 8.0–8.5, endoflife.date) with any-supported-wins — `^11.0|^12.0` and `>=8.1` stay silent, only pins on EOL lines fire (old hardcoded date flagged every Laravel project).
+- `src/Analyzers/Security/ObfuscatedAnalyzer.php`: strip string literals/comments via `token_get_all` before matching — self-scan no longer flags its own labels/docs (`3→1` issue, only honest `php ^8.1` EOL left); hex check moved to density threshold (≥4, BOM stays silent).
+- `src/Checkers/CustomAnalyzerChecker.php`: `collectJsFiles/collectCssFiles` skip `.min.` at collection (never read/cached), mirroring `supports()`.
+- `config/quality-checker.php`: phpstan default `5→6` (matches internal dogfood).
+- Tests `1363→1377` (+14): new `tests/Unit/OpsAnalyzerTest.php` (10), +4 obfuscated cases in `SecurityAnalyzersTest.php`; `phpstan [OK]`, `phpcs` clean.
+
 ## [1.5.0] - 2026-10-05
 
 ### Added (1 PR to #1 — Laravel 13 + checkpoint 3 + scalpel 2 + SKILL.md)

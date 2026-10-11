@@ -52,7 +52,7 @@ php bin/quality-check /path --only=custom --tier=security # includes ROGUE_PHP, 
 - First run may need `php artisan vendor:publish --tag=quality-checker-config`.
 - Memory: use `php -d memory_limit=1G` for large projects.
 
-## New in v1.4.0+ (checkpoint/scalpel parity)
+## New in v1.5.0+ (checkpoint/scalpel parity)
 - `npm audit` (supply-chain), `PERMS_TOO_OPEN` (777), `EOL_COMPONENT` (Laravel/PHP EOL)
 - `ROGUE_PHP` (public/*.php), `OBFUSCATED_PHP` (eval/base64)
 - `JS/CSS` syntax + `BLADE_STACK` (`@push`/`@stack`)
