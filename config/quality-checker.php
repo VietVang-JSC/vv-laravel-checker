@@ -25,6 +25,11 @@ return [
     // Minimum confidence to report. Heuristics below this are hidden.
     'min_confidence' => 'low',
 
+    // Minimum severity to report. Below this is hidden from reports (but the
+    // gate still uses --fail-on independently): use 'error' to stop light
+    // warnings and info findings from alarming readers.
+    'min_severity' => 'info',
+
     'phpcs' => [
         'standard' => 'PSR12',
         'severity' => 0,

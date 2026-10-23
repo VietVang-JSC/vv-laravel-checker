@@ -32,6 +32,8 @@ final class CheckContext
 
     public string $minConfidence;
 
+    public string $minSeverity;
+
     public int $exitCode = 0;
 
     /** @var list<string> checker names to run; empty means all */
@@ -71,6 +73,7 @@ final class CheckContext
         string $tier = 'quality',
         string $minConfidence = 'low',
         bool $noAutoInstall = false,
+        string $minSeverity = 'info',
     ) {
         $this->basePath = rtrim($basePath, '/\\');
         $this->paths = array_values(array_filter($paths, static fn ($p): bool => is_string($p) && $p !== ''));
@@ -86,6 +89,7 @@ final class CheckContext
         $this->exclude = $exclude;
         $this->tier = $tier;
         $this->minConfidence = $minConfidence;
+        $this->minSeverity = $minSeverity;
     }
 
     /**

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.6] - 2026-10-23
+
+### Added
+
+- `UPGRADE.md` backfilled for `1.2.x → 1.5.x` (was stale since `0.9.0`):
+  default-on frontend/Ops checks, coverage gate failure, phpstan `5 → 6`
+  default, EOL rewrite — each with the re-baseline action.
+- `--min-severity=info|warning|error|critical` (both entry points, config
+  `min_severity`, default `info`): hides lighter findings from reports so
+  info/low warnings stop alarming readers. The gate still uses `--fail-on`
+  independently; unknown values fall back to `info` (show everything).
+- README Options Reference: `--ignore` corrected to both entry points,
+  `--only` checker count fixed (seven), new `--min-severity` row.
+- Tests `1394→1395` (+2 severity filter, −1 obsolete artisan-only dataset); `phpstan [OK]`, `phpcs` clean.
+
 ## [1.5.5] - 2026-10-23
 
 ### Added

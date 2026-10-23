@@ -208,6 +208,34 @@ php bin/quality-check /path/to/project --format=all --tier=security --fail-on=no
 Defaults to `--only=custom` (static analyzers only). Reports land in
 `<target>/reports/quality-checker` unless `--output=` overrides it.
 
+### How to read a report
+
+Every finding has a severity. Read it like this:
+
+| Severity | Meaning | What to do |
+|---|---|---|
+| `critical` | Exploitable now (injection, wildcard CSRF, open auth redirect). | Fix before release. |
+| `error` | Real bug or security hole, needs a human to confirm. | Fix this sprint. |
+| `warning` | Suspicious pattern, often safe (e.g. `{!! $var !!}` with clean data). | Backlog. Do not panic. |
+| `info` | FYI only. Never fails the build. | Read if curious. |
+
+The headline count mixes all four levels. A first scan with "300 findings"
+where 290 are warnings is normal — it is not 300 vulnerabilities.
+
+Copy-paste recipes:
+
+```bash
+# Calm report: errors and criticals only
+php bin/quality-check /path/to/project --min-severity=error --fail-on=none --format=html
+
+# Also hide whole noisy rules for now (temporary)
+php bin/quality-check /path/to/project --min-severity=error --fail-on=none --format=html \
+  --ignore=OWASP_BLADE_XSS,MISSING_MODEL_TEST
+
+# Strict CI gate: fail on any new error, warnings stay visible
+php artisan quality:check --ci --baseline-file=baseline.json
+```
+
 ### Recommended rollout for an existing project
 
 Do not block the team on every legacy finding on the first day:
@@ -255,10 +283,11 @@ cache and does not modify the project either way.
 | Option | Applies to | Description | Default |
 |---|---|---|---|
 | `--format=...` | both | Comma-separated report formats: `console`, `json`, `html`, `md`, `sarif`, or `all` (runs all five). | `console` |
-| `--only=...` | both | Only run these checkers (comma-separated): `phpcs`, `phpstan`, `phpunit`, `composer_audit`, `trivy`, `custom`. | Artisan: all six. Standalone: `custom` |
+| `--only=...` | both | Only run these checkers (comma-separated): `phpcs`, `phpstan`, `phpunit`, `composer_audit`, `npm_audit`, `trivy`, `custom`. | Artisan: all seven. Standalone: `custom` |
 | `--exclude=...` | both | Skip these checkers (comma-separated). | — |
 | `--tier=...` | both | Quality gate tier: `security`, `quality`, `all`. | from config (`quality`) |
 | `--min-confidence=...` | both | Minimum confidence to report: `low`, `medium`, `high`. | from config (`low`) |
+| `--min-severity=...` | both | Minimum severity to report: `info`, `warning`, `error`, `critical`. Below this is hidden from reports (the gate still uses `--fail-on`). Use `error` when light warnings/info cause alarm fatigue. | from config (`info`) |
 | `--fail-on=severity` | both | Fail threshold: `none`, `info`, `warning`, `error`, `critical`. | `error` |
 | `--output=...` | both | Output directory for report files. | `reports/quality-checker` (from config) |
 | `--no-cache` | both | Ignore cached analyzer/checker results. | off |
@@ -269,7 +298,7 @@ cache and does not modify the project either way.
 | `--baseline-file=...` | both | Baseline file path. | `baseline.json` at the project / target root |
 | `--profile` | both | Write `profile.json` (timers, parse amplification) next to the reports. Findings unchanged. | off |
 | `--help` | both | Print usage. Standalone prints its own list; Artisan uses Symfony Console's. | — |
-| `--ignore=...` | Artisan | Skip these rules (comma-separated, e.g. `MISSING_MODEL_TEST`), merged with `quality_gate.ignore`. Not in standalone: there is no config file to merge with, so use `analyzers.exclude_paths` or a baseline. | — |
+| `--ignore=...` | both | Skip these rules (comma-separated, e.g. `MISSING_MODEL_TEST`), merged with `quality_gate.ignore`. Dropped from reports, not just the gate. | — |
 | `--no-auto-install` | Artisan | Disable auto-installing missing tools (phpcs/phpstan/phpunit/trivy). Standalone never installs anything. | off |
 | `--fix` | Artisan | Auto-fix fixable issues (currently `phpcbf` only). Needs the target's vendor, so it is not offered in standalone. | off |
 | `--json` | Artisan | Shortcut for `--format=json`. In standalone, pass `--format=json`. | off |
@@ -479,13 +508,14 @@ to focus on security findings only.
 
 Every issue carries a severity, and `fail_on` decides which ones fail the build.
 
-`OWASP_BLADE_DYNAMIC_INCLUDE` ships remapped to `info`. It reports every
-dynamic view name — `@include($view)`, `@extends('a.' . $x)` — at `error`,
-because Blade has no data-flow analysis and so cannot tell a user-steerable
-template name from one built at runtime. Across a 27-project benchmark the Blade
-findings were dominated by this rule, and at `error` a default run came out red
-before the user had seen anything. At `info` it stays in the report without
-failing a build. To treat every dynamic view name as blocking:
+`OWASP_BLADE_DYNAMIC_INCLUDE` ships remapped to `info`:
+
+- It flags every dynamic view name (`@include($view)`). The tool cannot tell
+  a user-steerable template from a fixed one, so at `error` this rule alone
+  turned builds red — pure noise.
+- At `info` it stays visible without failing anything.
+
+To treat every dynamic view name as blocking:
 
 ```php
 // config/quality-checker.php
@@ -496,12 +526,13 @@ failing a build. To treat every dynamic view name as blocking:
 ],
 ```
 
-**`OWASP_BLADE_XSS` is not demoted**, and reflected XSS still fails the gate.
-Its `error` severity fires only for request-derived output — `{!! request('q') !!}`
-and the superglobals — which is reflected XSS and worth blocking. Its ordinary
-`{!! $model->field !!}` hits are already `warning` and never turned a build red,
-so demoting the whole rule would have cost that coverage without fixing the
-noise.
+**`OWASP_BLADE_XSS` is not demoted**, and reflected XSS still fails the gate:
+
+- `error` fires only for request-derived output (`{!! request('q') !!}`).
+  That is reflected XSS — worth blocking.
+- Ordinary `{!! $model->field !!}` hits are `warning`. Usually safe data.
+  Still want them gone from a report? Use `--ignore=OWASP_BLADE_XSS`
+  (temporary) instead of demoting the rule.
 
 Other rules can be remapped the same way. An unparseable severity is ignored
 rather than guessed, so a typo cannot silently promote a rule to `error`.
@@ -519,7 +550,7 @@ planned, not shipped. Checkers that carry no quality-gate signal (dependency
 audit, trivy, the heuristic analyzers) report the same in every tier — exclude
 them with `exclude` in config or `--only` to keep them out of a gate run.
 
-`--min-confidence` filters what is reported; `--tier` filters what the exit code fails on.
+`--min-confidence` filters what is reported; `--tier` filters what the exit code fails on; `--min-severity` hides light findings from reports.
 
 ---
 

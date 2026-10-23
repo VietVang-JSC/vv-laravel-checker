@@ -103,7 +103,50 @@ final class CheckRunner
             $results[] = $result;
         }
 
-        return $this->withoutIgnoredRules($results);
+        return $this->withoutLowSeverity($this->withoutIgnoredRules($results));
+    }
+
+    /**
+     * Drop issues below the min-severity floor (context flag, else config
+     * `min_severity`, else `info`). Applied after caching so the cache stays
+     * valid, and after the ignore filter. The gate (`shouldFail`) keeps using
+     * `--fail-on` independently: hiding warnings never un-fails a build, and
+     * showing info never fails one.
+     *
+     * Unknown values fall back to `info` (show everything) rather than
+     * hiding findings on a typo.
+     *
+     * @param CheckResult[] $results
+     * @return CheckResult[]
+     */
+    private function withoutLowSeverity(array $results): array
+    {
+        $raw = $this->ctx->minSeverity !== '' ? $this->ctx->minSeverity : (string) ($this->ctx->config['min_severity'] ?? 'info');
+        $floor = Severity::tryFrom(strtolower($raw))?->intValue() ?? Severity::Info->intValue();
+        if ($floor <= Severity::Info->intValue()) {
+            return $results;
+        }
+
+        foreach ($results as $result) {
+            if (!$result instanceof CheckResult) {
+                continue;
+            }
+            $kept = [];
+            foreach ($result->issues as $issue) {
+                if ($issue instanceof Issue && $issue->severity->intValue() < $floor) {
+                    continue;
+                }
+                $kept[] = $issue;
+            }
+            if (count($kept) !== count($result->issues)) {
+                $result->issues = $kept;
+                if ($result->issues === []) {
+                    $result->status = 'passed';
+                }
+            }
+        }
+
+        return $results;
     }
 
     /**

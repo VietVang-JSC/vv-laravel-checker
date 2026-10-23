@@ -200,6 +200,107 @@ final class CheckRunnerTest extends TestCase
         self::assertSame('OWASP_SSRF', $results[0]->issues[0]->rule);
     }
 
+    public function testMinSeverityHidesLighterFindings(): void
+    {
+        // Unique output dir: the result cache is keyed by checker+paths, so
+        // sharing sys_get_temp_dir()/reports with other tests would serve
+        // their cached stub result here.
+        $out = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'reports-sev-' . uniqid('', true);
+        $ctx = new CheckContext(
+            sys_get_temp_dir(),
+            ['app'],
+            [],
+            $out,
+            failOn: 'none',
+            minSeverity: 'error',
+        );
+        $checker = new class implements CheckerInterface {
+            public function name(): string
+            {
+                return 'stub';
+            }
+
+            public function description(): string
+            {
+                return 'Stub checker';
+            }
+
+            public function isAvailable(CheckContext $ctx): bool
+            {
+                return true;
+            }
+
+            public function run(CheckContext $ctx): CheckResult
+            {
+                return new CheckResult('stub', 'failed', 0.01, [
+                    new Issue('R_INFO', 'message', 'file.php', 1, Severity::Info, 'custom'),
+                    new Issue('R_WARN', 'message', 'file.php', 2, Severity::Warning, 'custom'),
+                    new Issue('R_ERR', 'message', 'file.php', 3, Severity::Error, 'custom'),
+                    new Issue('R_CRIT', 'message', 'file.php', 4, Severity::Critical, 'custom'),
+                ], null, null);
+            }
+
+            /** @return array<string, mixed> */
+            public function config(): array
+            {
+                return [];
+            }
+        };
+
+        $results = (new CheckRunner($ctx))->run([$checker]);
+
+        self::assertCount(1, $results);
+        self::assertCount(2, $results[0]->issues);
+        self::assertSame('R_ERR', $results[0]->issues[0]->rule);
+        self::assertSame('R_CRIT', $results[0]->issues[1]->rule);
+    }
+
+    public function testMinSeverityUnknownValueShowsEverything(): void
+    {
+        $out = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'reports-sev-' . uniqid('', true);
+        $ctx = new CheckContext(
+            sys_get_temp_dir(),
+            ['app'],
+            [],
+            $out,
+            failOn: 'none',
+            minSeverity: 'bogus',
+        );
+        $checker = new class implements CheckerInterface {
+            public function name(): string
+            {
+                return 'stub';
+            }
+
+            public function description(): string
+            {
+                return 'Stub checker';
+            }
+
+            public function isAvailable(CheckContext $ctx): bool
+            {
+                return true;
+            }
+
+            public function run(CheckContext $ctx): CheckResult
+            {
+                return new CheckResult('stub', 'failed', 0.01, [
+                    new Issue('R_INFO', 'message', 'file.php', 1, Severity::Info, 'custom'),
+                ], null, null);
+            }
+
+            /** @return array<string, mixed> */
+            public function config(): array
+            {
+                return [];
+            }
+        };
+
+        $results = (new CheckRunner($ctx))->run([$checker]);
+
+        self::assertCount(1, $results[0]->issues);
+    }
+
     public function testEmptyIgnoreListKeepsEverything(): void
     {
         $runner = new CheckRunner($this->context('error'));

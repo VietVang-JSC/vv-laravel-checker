@@ -33,6 +33,7 @@ final class QualityCheckCommand extends Command
         {--fail-on=error : Fail threshold: none|info|warning|error|critical.}
         {--tier= : Quality gate tier: security|quality|all (default: config tier).}
         {--min-confidence= : Minimum confidence to report: low|medium|high.}
+        {--min-severity= : Minimum severity to report: info|warning|error|critical.}
         {--output= : Output directory for report files.}
         {--no-cache : Ignore cached analyzer/checker results.}
         {--no-auto-install : Disable auto-installing missing tools (phpcs/phpstan/phpunit/trivy).}
@@ -191,6 +192,7 @@ final class QualityCheckCommand extends Command
             exclude: $exclude,
             tier: (string) ($this->option('tier') ?: $config['tier'] ?? 'quality'),
             minConfidence: (string) ($this->option('min-confidence') ?: $config['min_confidence'] ?? 'low'),
+            minSeverity: (string) ($this->option('min-severity') ?: $config['min_severity'] ?? 'info'),
             noAutoInstall: (bool) $this->option('no-auto-install'),
         );
 

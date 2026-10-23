@@ -96,6 +96,7 @@ final class StandaloneRunner
             failOn: $this->options['fail-on'] ?? 'error',
             tier: $this->options['tier'] ?? ($config['tier'] ?? 'quality'),
             minConfidence: $this->options['min-confidence'] ?? ($config['min_confidence'] ?? 'low'),
+            minSeverity: $this->options['min-severity'] ?? ($config['min_severity'] ?? 'info'),
             packageVersion: PackageVersion::detect($toolRoot),
         );
         $ctx->only = $this->split($this->options['only'] ?? 'custom');
@@ -361,6 +362,7 @@ final class StandaloneRunner
         $output->writeln('  --format=console|json|html|md|sarif|all (default: console)');
         $output->writeln('  --tier=security|quality|all  --only=custom,...  --exclude=...');
         $output->writeln('  --fail-on=none|info|warning|error|critical  --min-confidence=low|medium|high');
+        $output->writeln('  --min-severity=info|warning|error|critical  hide lighter findings from reports');
         $output->writeln('  --output=<dir>  --path=<sub> (repeatable)  --no-cache  --profile');
         $output->writeln('  --exclude-path=<glob> (repeatable, e.g. */fixtures/*)  merges with analyzers.exclude_paths');
         $output->writeln('  --baseline-file=<file>  --baseline-generate  --baseline-update  --help');

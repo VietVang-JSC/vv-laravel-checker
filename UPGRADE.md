@@ -10,6 +10,66 @@ stale baseline is how upgrades silently pass.
 
 ---
 
+## Upgrading to 1.5.x from 1.4.x
+
+### New default-on checks (Ops + supply chain)
+
+**New findings may fail a previously green gate.** `1.5.0` enables by default:
+`PERMS_TOO_OPEN` (world-writable `.env`/`storage`), `EOL_COMPONENT`
+(end-of-life Laravel/PHP lines), `ROGUE_PHP` (`public/*.php`), `OBFUSCATED_PHP`
+(`eval(base64_decode…)`), plus the `npm_audit` checker when a `package.json`
+exists. `1.5.1` rewrote `EOL_COMPONENT` from a single hardcoded date (which
+flagged every Laravel project) to per-major EOL tables — findings change shape.
+
+If you upgrade and the gate goes red on these, either fix them or re-baseline
+(see below). To silence one rule without baselining:
+`--ignore=PERMS_TOO_OPEN` (standalone) or `quality_gate.ignore` (config).
+
+### Bundled phpstan default is now level 6
+
+`config/quality-checker.php` ships `phpstan.level => 6` (was `5`) to match
+the package's own dogfood level. If you published the config earlier, your
+copy still says `5` — nothing changes for you until you update it. After
+updating, expect new phpstan findings on the first run.
+
+## Upgrading to 1.4.x from 1.3.x
+
+### Corpus 400 → 500 (fewer false positives, some findings move)
+
+The labelled corpus grew (`AnalyzerMetricsTest`: 340 TP + 160 TN, holdout 98)
+and several analyzers were re-tuned for precision. Net effect is fewer false
+positives, but a small number of findings change rule or disappear. Re-baseline
+after upgrading so the delta is intentional, not drift.
+
+## Upgrading to 1.3.x from 1.2.x
+
+### Frontend checks on by default
+
+`JS_SYNTAX_ERROR`, `CSS_SYNTAX_ERROR` and `BLADE_STACK_MISMATCH` now run on
+every scan (`resources/`, `public/`; `.min.`/`vendor` skipped). Minified-build
+heaviness is bounded by `max_file_kb`. If your frontend is generated and noisy,
+disable per rule in `config analyzers.frontend` or `--ignore` the rule.
+
+### Coverage gate fails the build
+
+`PHPUNIT_LOW_COVERAGE` is now severity `error`: suites under the
+`coverageThreshold` (default 60%) fail `--fail-on=error` runs. Raise coverage
+or lower the threshold — do not just ignore the rule.
+
+### `OWASP_BLADE_DYNAMIC_INCLUDE` demoted to info
+
+Dynamic view names (`@include($view)`) report at `info` by default via
+`severity_overrides` — visible in reports, never fails the gate. Reflected-XSS
+findings (`OWASP_BLADE_XSS` on request data) still fail at `error`. Set the
+override back to `error` if your team blocks on dynamic includes.
+
+## Upgrading to 1.2.x from 1.1.x
+
+### Corpus 300 → 400 (precision re-tune)
+
+Same advice as 1.4.x: re-baseline after upgrading; expect fewer false
+positives and a handful of moved findings.
+
 ## Upgrading to 0.9.0 from 0.8.x
 
 ### Auto-installed phpcs is now version-constrained

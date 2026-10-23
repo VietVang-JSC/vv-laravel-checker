@@ -94,12 +94,12 @@ final class DocsEntryPointsTest extends TestCase
      */
     public static function artisanOnlyOptions(): array
     {
-        return [['--ignore'], ['--fix'], ['--json'], ['--ci'], ['--no-auto-install']];
+        return [['--fix'], ['--json'], ['--ci'], ['--no-auto-install']];
     }
 
     public function testSharedOptionsAreMarkedAsBoth(): void
     {
-        foreach (['--format', '--only', '--tier', '--fail-on', '--exclude-path', '--profile'] as $option) {
+        foreach (['--format', '--only', '--tier', '--fail-on', '--exclude-path', '--profile', '--ignore', '--min-severity'] as $option) {
             $row = $this->optionsTable()[$option] ?? '';
 
             self::assertStringContainsString(
