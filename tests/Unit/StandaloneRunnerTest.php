@@ -169,6 +169,39 @@ final class StandaloneRunnerTest extends TestCase
         );
     }
 
+    public function testIgnoreFlagDropsRuleFromReport(): void
+    {
+        $this->makeVulnerableApp();
+
+        $output = new BufferedOutput();
+        $code = (new StandaloneRunner([
+            $this->dir,
+            '--format=json',
+            '--tier=security',
+            '--fail-on=none',
+            '--ignore=OWASP_BROKEN_ACCESS_CONTROL',
+            '--output=' . $this->out,
+        ]))->run($output, dirname(__DIR__, 2));
+
+        self::assertSame(0, $code);
+        $payload = json_decode(
+            (string) file_get_contents($this->out . DIRECTORY_SEPARATOR . 'quality-report.json'),
+            true
+        );
+
+        $rules = [];
+        foreach ($payload['checkers'] as $checker) {
+            foreach ($checker['issues'] ?? [] as $issue) {
+                $rules[] = $issue['rule'];
+            }
+        }
+        self::assertNotContains(
+            'OWASP_BROKEN_ACCESS_CONTROL',
+            $rules,
+            '--ignore did not drop the rule from the standalone report.'
+        );
+    }
+
     public function testInternalErrorIsExitThreeNotUnhandled(): void
     {
         $this->makeVulnerableApp();

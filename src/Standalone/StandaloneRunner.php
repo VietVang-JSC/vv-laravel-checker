@@ -85,6 +85,7 @@ final class StandaloneRunner
     {
         $config = $this->loadConfig($toolRoot);
         $config = $this->mergeExcludePaths($config);
+        $config = $this->mergeGateIgnore($config);
         $target = $this->target;
         $ctx = new CheckContext(
             $target,
@@ -163,6 +164,33 @@ final class StandaloneRunner
         }
 
         return array_values(array_filter($value, 'is_string'));
+    }
+
+    /**
+     * Merge --ignore=RULE,... into quality_gate.ignore (mirrors the Artisan
+     * entry point) so noisy rules can be skipped per run. Dropped from
+     * reports, not just the gate (see CheckRunner::withoutIgnoredRules).
+     *
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function mergeGateIgnore(array $config): array
+    {
+        $gate = $config['quality_gate'] ?? [];
+        if (!is_array($gate)) {
+            $gate = [];
+        }
+        $ignore = $gate['ignore'] ?? [];
+        if (!is_array($ignore)) {
+            $ignore = [];
+        }
+        $gate['ignore'] = array_values(array_unique(array_merge(
+            array_map('strval', $ignore),
+            $this->split($this->options['ignore'] ?? '')
+        )));
+        $config['quality_gate'] = $gate;
+
+        return $config;
     }
 
     /**
@@ -336,6 +364,7 @@ final class StandaloneRunner
         $output->writeln('  --output=<dir>  --path=<sub> (repeatable)  --no-cache  --profile');
         $output->writeln('  --exclude-path=<glob> (repeatable, e.g. */fixtures/*)  merges with analyzers.exclude_paths');
         $output->writeln('  --baseline-file=<file>  --baseline-generate  --baseline-update  --help');
+        $output->writeln('  --ignore=RULE,...  skip rules (e.g. OWASP_BLADE_XSS,MISSING_MODEL_TEST)');
         $output->writeln('Default --only=custom: static analyzers only, no target vendor needed.');
     }
 }

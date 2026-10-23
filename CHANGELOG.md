@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-10-23
+
+### Added
+
+- Standalone `bin/quality-check` accepts `--ignore=RULE,...` (mirrors the
+  Artisan entry point): listed rules are dropped from reports, not just the
+  gate — e.g. `--ignore=OWASP_BLADE_XSS,MISSING_MODEL_TEST` for noise-free
+  client reports. Battle-tested on two real projects (507→118, 172→63).
+- Tests `1393→1394` (`testIgnoreFlagDropsRuleFromReport`); `phpstan [OK]`,
+  `phpcs` clean.
+
 ## [1.5.4] - 2026-10-11
 
 ### Fixed (final rounds F+G: full-gate dogfood + docs)
