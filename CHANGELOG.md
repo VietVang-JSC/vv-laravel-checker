@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.7] - 2026-10-23
+
+### Changed
+
+- Test-coverage checks are now opt-in: `test_coverage.unified` defaults to
+  `false` (was `true`). Missing-test findings (`MISSING_*`,
+  `TEST_WITHOUT_ASSERT`) no longer appear unless enabled — they are backlog
+  noise on most codebases. To keep the old behavior, set
+  `'test_coverage' => ['unified' => true]` in your published config (see
+  UPGRADE.md).
+- Tests `1395→1396`; `phpstan [OK]`, `phpcs` clean.
+
 ## [1.5.6] - 2026-10-23
 
 ### Added

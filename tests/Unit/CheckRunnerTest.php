@@ -301,6 +301,19 @@ final class CheckRunnerTest extends TestCase
         self::assertCount(1, $results[0]->issues);
     }
 
+    public function testShippedConfigKeepsTestCoverageOptIn(): void
+    {
+        $config = require dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'quality-checker.php';
+        self::assertIsArray($config);
+
+        $coverage = $config['analyzers']['test_coverage'] ?? null;
+        self::assertIsArray($coverage);
+
+        foreach ($coverage as $key => $enabled) {
+            self::assertFalse((bool) $enabled, "test_coverage.$key must default off (opt-in).");
+        }
+    }
+
     public function testEmptyIgnoreListKeepsEverything(): void
     {
         $runner = new CheckRunner($this->context('error'));

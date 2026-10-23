@@ -10,6 +10,24 @@ stale baseline is how upgrades silently pass.
 
 ---
 
+## Upgrading to 1.5.7 from 1.5.6 and earlier
+
+### Test-coverage checks are now opt-in
+
+`test_coverage.unified` defaults to `false` (was `true`), so missing-test
+findings disappear from default scans. If your workflow reviews test gaps in
+these reports, opt back in:
+
+```php
+// config/quality-checker.php
+'analyzers' => [
+    'test_coverage' => ['unified' => true],
+],
+```
+
+or per run via a temporary config overlay. No re-baseline needed — this change
+only removes findings, and baselines ignore already-absent signatures safely.
+
 ## Upgrading to 1.5.x from 1.4.x
 
 ### New default-on checks (Ops + supply chain)

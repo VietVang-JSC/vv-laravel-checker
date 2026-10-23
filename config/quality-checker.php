@@ -119,11 +119,12 @@ return [
             'route_validation' => true,
         ],
 
-        // Test-coverage heuristics.
+        // Test-coverage heuristics — ALL opt-in (off by default). Missing-test
+        // findings are backlog noise on most codebases, so they never run
+        // unless asked: set 'unified' => true (or a single rule) to opt in.
         'test_coverage' => [
             // Unified missing-test detector (controller/service/repository/model, unit+feature).
-            'unified' => true,
-            // Other heuristic rules stay opt-in (off) to avoid noise.
+            'unified' => false,
             'missing_controller_test' => false,
             'missing_service_test' => false,
             'missing_model_test' => false,
