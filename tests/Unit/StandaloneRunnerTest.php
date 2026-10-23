@@ -202,6 +202,48 @@ final class StandaloneRunnerTest extends TestCase
         );
     }
 
+    public function testCoverageFlagOptsBackIntoMissingTestRules(): void
+    {
+        $this->makeVulnerableApp();
+        @mkdir($this->dir . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'Feature', 0777, true);
+        file_put_contents(
+            $this->dir . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'Feature' . DIRECTORY_SEPARATOR . 'OtherTest.php',
+            "<?php\nclass OtherTest extends TestCase {\n    public function test_x() {\n        \$this->assertTrue(true);\n    }\n}\n"
+        );
+
+        $run = function (array $extra): array {
+            $out = $this->out . '-cov-' . uniqid('', true);
+            @mkdir($out, 0777, true);
+            $output = new BufferedOutput();
+            $code = (new StandaloneRunner(array_merge([
+                $this->dir,
+                '--format=json',
+                '--tier=security',
+                '--fail-on=none',
+                '--output=' . $out,
+            ], $extra)))->run($output, dirname(__DIR__, 2));
+            self::assertSame(0, $code);
+            $payload = json_decode((string) file_get_contents($out . DIRECTORY_SEPARATOR . 'quality-report.json'), true);
+            $rules = [];
+            foreach ($payload['checkers'] as $checker) {
+                foreach ($checker['issues'] ?? [] as $issue) {
+                    $rules[] = $issue['rule'];
+                }
+            }
+
+            return $rules;
+        };
+
+        foreach ($run([]) as $rule) {
+            self::assertStringStartsNotWith('MISSING_', $rule, 'Default scan must not report missing-test findings.');
+        }
+        $missing = array_values(array_filter(
+            $run(['--coverage']),
+            static fn (string $rule): bool => str_starts_with($rule, 'MISSING_')
+        ));
+        self::assertNotSame([], $missing, '--coverage did not bring back missing-test findings.');
+    }
+
     public function testInternalErrorIsExitThreeNotUnhandled(): void
     {
         $this->makeVulnerableApp();

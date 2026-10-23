@@ -33,6 +33,7 @@ final class QualityCheckCommand extends Command
         {--fail-on=error : Fail threshold: none|info|warning|error|critical.}
         {--tier= : Quality gate tier: security|quality|all (default: config tier).}
         {--min-confidence= : Minimum confidence to report: low|medium|high.}
+        {--coverage : Opt into test-coverage checks for this run (off by default).}
         {--min-severity= : Minimum severity to report: info|warning|error|critical.}
         {--output= : Output directory for report files.}
         {--no-cache : Ignore cached analyzer/checker results.}
@@ -175,6 +176,18 @@ final class QualityCheckCommand extends Command
             $this->splitOption('ignore')
         )));
         $config['quality_gate'] = $gate;
+
+        // Test-coverage opt-in for one run (standalone targets have no config
+        // file, so a flag is the only way back in).
+        if ((bool) $this->option('coverage')) {
+            $analyzers = $config['analyzers'] ?? [];
+            $analyzers = is_array($analyzers) ? $analyzers : [];
+            $coverage = $analyzers['test_coverage'] ?? [];
+            $coverage = is_array($coverage) ? $coverage : [];
+            $coverage['unified'] = true;
+            $analyzers['test_coverage'] = $coverage;
+            $config['analyzers'] = $analyzers;
+        }
 
         $packageVersion = PackageVersion::detect();
 

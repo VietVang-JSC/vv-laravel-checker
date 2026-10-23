@@ -99,7 +99,7 @@ final class DocsEntryPointsTest extends TestCase
 
     public function testSharedOptionsAreMarkedAsBoth(): void
     {
-        foreach (['--format', '--only', '--tier', '--fail-on', '--exclude-path', '--profile', '--ignore', '--min-severity'] as $option) {
+        foreach (['--format', '--only', '--tier', '--fail-on', '--exclude-path', '--profile', '--ignore', '--min-severity', '--coverage'] as $option) {
             $row = $this->optionsTable()[$option] ?? '';
 
             self::assertStringContainsString(

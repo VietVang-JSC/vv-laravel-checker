@@ -25,8 +25,9 @@ these reports, opt back in:
 ],
 ```
 
-or per run via a temporary config overlay. No re-baseline needed — this change
-only removes findings, and baselines ignore already-absent signatures safely.
+or per run with `--coverage` (both entry points, no config edit needed).
+No re-baseline needed — this change only removes findings, and baselines
+ignore already-absent signatures safely.
 
 ## Upgrading to 1.5.x from 1.4.x
 

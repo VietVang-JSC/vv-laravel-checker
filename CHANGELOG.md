@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.8] - 2026-10-23
+
+### Added
+
+- `--coverage` flag (both entry points): opts into test-coverage checks for
+  one run without editing config — the way back in now that they default off.
+  Standalone targets have no config file, so this was the only missing path.
+- Tests `1396→1397`; `phpstan [OK]`, `phpcs` clean.
+
 ## [1.5.7] - 2026-10-23
 
 ### Changed
