@@ -203,6 +203,12 @@ return [
         'exclude_paths' => ['*/fixtures/*'],
     ],
 
+    // Report mode: true shows per-rule fix guidance in human reports
+    // (console/HTML/Markdown), false shows findings only. Use false for
+    // client-facing reports; developers keep true. JSON/SARIF always carry
+    // full data for machines. Same as --no-remediation for one run.
+    'remediation' => true,
+
     'fail_on' => 'error',
 
     // Quality gate: rules listed here never fail the gate and are hidden

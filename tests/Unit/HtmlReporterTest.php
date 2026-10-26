@@ -129,6 +129,63 @@ final class HtmlReporterTest extends TestCase
         return (string) file_get_contents($file);
     }
 
+    public function testHowToReadFixNowAndAppendixSectionsExist(): void
+    {
+        $html = $this->renderHtml();
+
+        self::assertStringContainsString('id="how-to-read"', $html);
+        self::assertStringContainsString('Fix now', $html);
+        self::assertStringContainsString('id="fix-now"', $html);
+        self::assertStringContainsString('id="appendix"', $html);
+        self::assertStringContainsString('Glossary', $html);
+    }
+
+    public function testFixNowListsOnlyP0(): void
+    {
+        $html = $this->renderHtml();
+        $start = strpos($html, 'id="fix-now"');
+        self::assertIsInt($start);
+        $end = strpos($html, 'id="quality-score"', $start);
+        self::assertIsInt($end);
+        $section = substr($html, $start, $end - $start);
+
+        self::assertStringContainsString('SQL_INJECTION', $section);
+        self::assertStringContainsString('OWASP_SSRF', $section);
+        self::assertStringNotContainsString('TODO_FIXME', $section);
+    }
+
+    public function testRemediationHiddenWhenDisabled(): void
+    {
+        $html = $this->renderHtml(['remediation' => false]);
+
+        self::assertStringNotContainsString('class="fixbox"', $html);
+        self::assertStringContainsString('Findings-only mode', $html);
+    }
+
+    public function testRemediationShownByDefault(): void
+    {
+        $html = $this->renderHtml();
+
+        self::assertStringContainsString('class="fixbox"', $html);
+    }
+
+    public function testSummaryStaysSlim(): void
+    {
+        $html = $this->renderHtml();
+        $start = strpos($html, 'id="summary"');
+        self::assertIsInt($start);
+        $end = strpos($html, 'id="action-plan"', $start);
+        self::assertIsInt($end);
+        $section = substr($html, $start, $end - $start);
+
+        foreach (['Total Issues', 'Critical', 'Error', 'Warning', 'Info', 'Severity distribution'] as $kept) {
+            self::assertStringContainsString($kept, $section);
+        }
+        foreach (['>Checkers<', '>Passed<', '>Failed<', '>P0<', '>P1<', '<h3>Top rules</h3>'] as $dropped) {
+            self::assertStringNotContainsString($dropped, $section);
+        }
+    }
+
     public function testReportContainsSidebarToc(): void
     {
         $html = $this->renderHtml();
@@ -293,10 +350,25 @@ final class HtmlReporterTest extends TestCase
 
         self::assertStringContainsString('class="stacked"', $html);
         self::assertStringContainsString('Severity distribution', $html);
-        self::assertStringContainsString('class="bars"', $html);
+        self::assertStringNotContainsString(
+            'class="bars"',
+            $html,
+            'Top-rules bars were merged into the Top Rules table to de-duplicate the Summary.'
+        );
         self::assertStringContainsString('id="theme-toggle"', $html);
         self::assertStringContainsString("localStorage.getItem('qc-theme')", $html);
         self::assertStringContainsString('@media print', $html);
+    }
+
+    public function testOwaspRulesCarrySeverityBreakdownForChips(): void
+    {
+        $html = $this->renderHtml();
+
+        // Fixture: OWASP_SSRF is a single Error — chips must be able to hide
+        // this block when only Critical is active, and recount its pill.
+        self::assertStringContainsString('data-crit="0"', $html);
+        self::assertStringContainsString('data-err="1"', $html);
+        self::assertStringContainsString('owasp-count', $html);
     }
 
     public function testOwaspSectionIsCollapsibleDrillDown(): void

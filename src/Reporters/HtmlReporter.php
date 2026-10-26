@@ -462,6 +462,18 @@ final class HtmlReporter implements ReporterInterface
                     note.hidden = anyVisible;
                 }
             });
+            /* OWASP drill-down blocks carry per-severity totals: hide rules
+               with nothing visible and recount the pill (same chips). */
+            document.querySelectorAll('details.owasp-rule').forEach(function (block) {
+                var n = 0;
+                if (activeSevs.critical) { n += parseInt(block.getAttribute('data-crit') || '0', 10); }
+                if (activeSevs.error) { n += parseInt(block.getAttribute('data-err') || '0', 10); }
+                if (activeSevs.warning) { n += parseInt(block.getAttribute('data-warn') || '0', 10); }
+                if (activeSevs.info) { n += parseInt(block.getAttribute('data-info') || '0', 10); }
+                block.hidden = n === 0;
+                var pill = block.querySelector('.owasp-count');
+                if (pill) { pill.textContent = String(n); }
+            });
             if (matchCount) {
                 matchCount.textContent = visible + ' / ' + rows.length + ' issues';
             }
@@ -777,16 +789,19 @@ final class HtmlReporter implements ReporterInterface
             . $this->buildSidebar($checkers, $summary, $rules, $hotFiles)
             . '<div class="main"><div class="container">' . "\n"
             . $this->buildHeader($ctx, $this->overallStatus($results, $ctx->failOn))
+            . $this->buildHowToRead($summary, $ctx)
             . $this->buildToolbar()
             . $this->buildSummaryGrid($summary, $rules)
+            . $this->buildPriorityCard($summary)
+            . $this->buildFixNow($results, $ctx)
             . $this->buildQualityScore(QualityScore::score($results))
             . $this->buildRiskCard(QualityScore::riskOverview($results))
             . $this->buildDeltaCard($ctx)
-            . $this->buildPriorityCard($summary)
             . $this->buildRulesTable($rules)
-            . $this->buildOwaspSection($owasp, $owaspIssues, $ctx)
-            . $this->buildCheckerTable($checkers)
             . $this->buildIssueSections($checkers, $ctx)
+            . $this->buildOwaspSection($owasp, $owaspIssues, $this->owaspSeverity($results), $ctx)
+            . $this->buildCheckerTable($checkers)
+            . $this->buildAppendix($ctx)
             . $this->buildFooter($ctx)
             . '</div></div>' . "\n"
             . '</div>' . "\n"
@@ -854,6 +869,8 @@ final class HtmlReporter implements ReporterInterface
             . '<h3>Contents</h3>' . "\n"
             . '<nav aria-label="Report sections"><ul>' . "\n"
             . '<li><a href="#summary">Summary</a></li>' . "\n"
+            . '<li><a href="#how-to-read">How to read</a></li>' . "\n"
+            . '<li><a href="#fix-now">Fix now</a></li>' . "\n"
             . '<li><a href="#quality-score">Quality Score</a></li>' . "\n"
             . '<li><a href="#risk-overview">Risk Overview</a></li>' . "\n"
             . '<li><a href="#action-plan">Action Plan</a></li>' . "\n"
@@ -861,6 +878,7 @@ final class HtmlReporter implements ReporterInterface
             . '<li><a href="#top-rules">Top Rules</a></li>' . "\n"
             . '<li><a href="#owasp">OWASP</a></li>' . "\n"
             . '<li><a href="#checkers">Per-Checker</a></li>' . "\n"
+            . '<li><a href="#appendix">Appendix</a></li>' . "\n"
             . '</ul></nav>' . "\n";
 
         $html .= '<h3>Severity</h3>' . "\n"
@@ -1007,24 +1025,19 @@ final class HtmlReporter implements ReporterInterface
      */
     private function buildSummaryGrid(array $summary, array $rules): string
     {
+        // Deliberately slim: checker passed/failed/skipped lives in
+        // Per-Checker, P0–P3 live in How-to-read/Action Plan, and the Top
+        // Rules table below owns rule counts. Only severity survives here.
         return '<div class="card" id="summary">' . "\n"
             . '<h2>Summary</h2>' . "\n"
             . '<div class="summary-grid">' . "\n"
-            . $this->stat('Checkers', (int) ($summary['checkers'] ?? 0))
-            . $this->stat('Passed', (int) ($summary['passed'] ?? 0))
-            . $this->stat('Failed', (int) ($summary['failed'] ?? 0))
-            . $this->stat('Skipped', (int) ($summary['skipped'] ?? 0))
             . $this->stat('Total Issues', (int) ($summary['total_issues'] ?? 0))
             . $this->stat('Critical', (int) ($summary['critical'] ?? 0))
             . $this->stat('Error', (int) ($summary['error'] ?? 0))
             . $this->stat('Warning', (int) ($summary['warning'] ?? 0))
             . $this->stat('Info', (int) ($summary['info'] ?? 0))
-            . $this->stat('P0', (int) ($summary['p0'] ?? 0))
-            . $this->stat('P1', (int) ($summary['p1'] ?? 0))
-            . $this->stat('P2', (int) ($summary['p2'] ?? 0))
-            . $this->stat('P3', (int) ($summary['p3'] ?? 0))
             . '</div>' . "\n"
-            . $this->charts($summary, $rules)
+            . $this->charts($summary)
             . '</div>' . "\n";
     }
 
@@ -1055,6 +1068,129 @@ final class HtmlReporter implements ReporterInterface
             . '<thead><tr><th data-sortable data-type="str">Category</th><th data-sortable data-type="num">Findings</th>'
             . '<th data-sortable data-type="str">Highest</th><th data-sortable data-type="str">Action</th></tr></thead>' . "\n"
             . '<tbody>' . "\n" . $body . '</tbody>' . "\n"
+            . '</table>' . "\n"
+            . '</div>' . "\n";
+    }
+
+    /**
+     * Plain-language reading guide first: three numbers that answer "can we
+     * release and what do we do Monday". A headline count mixing severities
+     * alarms readers, so this box translates it up front.
+     *
+     * @param array<string, int> $summary
+     */
+    private function buildHowToRead(array $summary, CheckContext $ctx): string
+    {
+        $fixNow = (int) ($summary['p0'] ?? 0);
+        $fixSprint = (int) ($summary['p1'] ?? 0);
+        $backlog = (int) ($summary['p2'] ?? 0) + (int) ($summary['p3'] ?? 0);
+        $mode = $ctx->showRemediation()
+            ? 'This report shows findings plus how to fix each rule.'
+            : 'Findings-only mode: fix guidance is hidden in this report.';
+
+        return '<div class="card" id="how-to-read">' . "\n"
+            . '<h2>How to read this report</h2>' . "\n"
+            . '<div class="summary-grid">' . "\n"
+            . $this->stat('Fix now', $fixNow)
+            . $this->stat('Fix this sprint', $fixSprint)
+            . $this->stat('Backlog', $backlog)
+            . '</div>' . "\n"
+            . '<p class="empty">Critical means exploitable now; error means a real bug to confirm; '
+            . 'warning is usually safe backlog; info never fails the build. ' . $this->escape($mode) . '</p>' . "\n"
+            . '</div>' . "\n";
+    }
+
+    /**
+     * The single most useful view: top P0 issues with file links, capped so
+     * a large report still opens with an answerable list.
+     *
+     * @param CheckResult[] $results
+     */
+    private function buildFixNow(array $results, CheckContext $ctx): string
+    {
+        $rows = [];
+        foreach ($results as $result) {
+            if (!$result instanceof CheckResult) {
+                continue;
+            }
+            foreach ($result->issues as $issue) {
+                if (!$issue instanceof \Rampart\QualityChecker\Result\Issue) {
+                    continue;
+                }
+                $priority = QualityScore::priorityFor(
+                    $issue->rule,
+                    $result->name,
+                    $issue->severity->value,
+                    $issue->confidence->value
+                );
+                if ($priority !== 'P0') {
+                    continue;
+                }
+                $rows[] = ['rule' => $issue->rule, 'file' => $issue->file, 'line' => $issue->line, 'message' => $issue->message];
+            }
+        }
+        if ($rows === []) {
+            return '<div class="card" id="fix-now">' . "\n"
+                . '<h2>Fix now</h2>' . "\n"
+                . '<p class="empty">No P0 findings — nothing blocks the release.</p>' . "\n"
+                . '</div>' . "\n";
+        }
+        $shown = array_slice($rows, 0, 20);
+        $body = '';
+        foreach ($shown as $row) {
+            $file = (string) ($row['file'] ?? '');
+            $line = is_int($row['line']) ? $row['line'] : null;
+            $body .= '<tr><td class="rule">' . $this->escape((string) $row['rule']) . '</td>'
+                . '<td><a class="file-link" href="' . $this->escape($this->fileLink($file, $line, $ctx)) . '">'
+                . $this->escape($file) . ($line !== null ? ':' . $line : '') . '</a></td>'
+                . '<td>' . $this->escape((string) $row['message']) . '</td></tr>' . "\n";
+        }
+        $more = count($rows) > 20 ? '<p class="empty">Showing 20 of ' . count($rows) . ' — filter the issue list below for the rest.</p>' . "\n" : '';
+
+        // Collapsed by default (no open attribute): the P0 count in the
+        // summary line already answers "how bad", details expand on demand.
+        return '<div class="card" id="fix-now">' . "\n"
+            . '<h2>Fix now (P0)</h2>' . "\n"
+            . '<details>' . "\n"
+            . '<summary><span class="chev">&#9656;</span>'
+            . '<span class="rule-name">Show ' . count($rows) . ' blocking findings</span></summary>' . "\n"
+            . '<table>' . "\n"
+            . '<thead><tr><th data-sortable data-type="str">Rule</th>'
+            . '<th data-sortable data-type="str">File</th>'
+            . '<th data-sortable data-type="str">Finding</th></tr></thead>' . "\n"
+            . '<tbody>' . "\n" . $body . '</tbody>' . "\n"
+            . '</table>' . "\n" . $more
+            . '</details>' . "\n"
+            . '</div>' . "\n";
+    }
+
+    /**
+     * Methodology appendix: the score formula in plain words plus the
+     * glossary, so numbers in the report are auditable without reading code.
+     */
+    private function buildAppendix(CheckContext $ctx): string
+    {
+        $mode = $ctx->showRemediation()
+            ? 'Fix guidance is shown per rule group.'
+            : 'Findings-only mode: fix guidance hidden (JSON/SARIF still carry full data).';
+
+        return '<div class="card" id="appendix">' . "\n"
+            . '<h2>Appendix: how this report works</h2>' . "\n"
+            . '<h3>Quality score</h3>' . "\n"
+            . '<p class="empty">Each finding deducts severity-weight × confidence-weight '
+            . '(critical 10, error 5, warning 2, info 0.5; high 1, medium 0.5, low 0.25) '
+            . 'from 100 per dimension, averaged across dimensions. The gate is BLOCKED '
+            . 'whenever at least one must-fix finding exists. ' . $this->escape($mode) . '</p>' . "\n"
+            . '<h3>Glossary</h3>' . "\n"
+            . '<table>' . "\n"
+            . '<thead><tr><th data-sortable data-type="str">Term</th><th data-sortable data-type="str">Meaning</th></tr></thead>' . "\n"
+            . '<tbody>' . "\n"
+            . '<tr><td class="rule">severity</td><td>How bad: critical, error, warning, info.</td></tr>' . "\n"
+            . '<tr><td class="rule">priority (P0–P3)</td><td>Scheduling urgency: P0 blocks release, P3 is backlog. Derived from severity, rule group and confidence.</td></tr>' . "\n"
+            . '<tr><td class="rule">confidence</td><td>How sure the heuristic is: high, medium, low. Only high-confidence findings fail the security-tier gate.</td></tr>' . "\n"
+            . '<tr><td class="rule">gate</td><td>BLOCKED means a must-fix finding exists under the active tier and --fail-on threshold — not that every finding matters.</td></tr>' . "\n"
+            . '<tr><td class="rule">baseline</td><td>Accepted findings recorded earlier; only new findings fail once a baseline is set.</td></tr>' . "\n"
+            . '</tbody>' . "\n"
             . '</table>' . "\n"
             . '</div>' . "\n";
     }
@@ -1134,10 +1270,12 @@ final class HtmlReporter implements ReporterInterface
     }
 
     /**
+     * Severity distribution only. Rule counts live in the Top Rules table;
+     * checker pass/fail lives in Per-Checker — no duplicates.
+     *
      * @param array<string, int> $summary
-     * @param list<array{rule: string, source: string, count: int, critical: int, error: int, warning: int, info: int}> $rules
      */
-    private function charts(array $summary, array $rules): string
+    private function charts(array $summary): string
     {
         $total = max(1, (int) ($summary['total_issues'] ?? 0));
 
@@ -1152,26 +1290,10 @@ final class HtmlReporter implements ReporterInterface
                 . ' ' . (string) $count . '</span>';
         }
 
-        $bars = '';
-        $top = array_slice($rules, 0, 10);
-        $max = $top !== [] ? max(array_column($top, 'count')) : 1;
-        foreach ($top as $r) {
-            $pct = $max > 0 ? ($r['count'] / $max) * 100 : 0.0;
-            $bars .= '<div class="bar-row">'
-                . '<span class="bar-label" title="' . $this->escape($r['rule']) . '">' . $this->escape($r['rule']) . '</span>'
-                . '<span class="bar-track"><span class="bar-fill" style="width:' . $this->escape(number_format($pct, 1)) . '%"></span></span>'
-                . '<span class="bar-val">' . (string) $r['count'] . '</span>'
-                . '</div>';
-        }
-        if ($bars === '') {
-            $bars = '<p class="empty">No issues to chart.</p>';
-        }
-
         return '<div class="charts">' . "\n"
             . '<div class="chart-block"><h3>Severity distribution</h3>'
             . '<div class="stacked" aria-hidden="true">' . $segs . '</div>'
             . '<div class="legend">' . $legend . '</div></div>' . "\n"
-            . '<div class="chart-block"><h3>Top rules</h3><div class="bars">' . $bars . '</div></div>' . "\n"
             . '</div>' . "\n";
     }
 
@@ -1219,13 +1341,45 @@ final class HtmlReporter implements ReporterInterface
     }
 
     /**
+     * Per-rule severity breakdown for the OWASP drill-down, so the severity
+     * chips can hide rules with nothing visible (and recount the pill).
+     *
+     * @param CheckResult[] $results
+     * @return array<string, array{critical: int, error: int, warning: int, info: int}>
+     */
+    private function owaspSeverity(array $results): array
+    {
+        $out = [];
+        foreach ($results as $result) {
+            if (!$result instanceof CheckResult) {
+                continue;
+            }
+            foreach ($result->issues as $issue) {
+                if (!str_starts_with($issue->rule, 'OWASP_')) {
+                    continue;
+                }
+                if (!isset($out[$issue->rule])) {
+                    $out[$issue->rule] = ['critical' => 0, 'error' => 0, 'warning' => 0, 'info' => 0];
+                }
+                $sev = strtolower($issue->severity->value);
+                if (isset($out[$issue->rule][$sev])) {
+                    ++$out[$issue->rule][$sev];
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * OWASP drill-down: one collapsible block per rule listing concrete
      * findings (capped) with clickable file links + a filter shortcut.
      *
      * @param array<string, int> $counts rule => count
      * @param array<string, list<array{file: string, line: int|null, message: string}>> $issuesByRule
+     * @param array<string, array{critical: int, error: int, warning: int, info: int}> $severity
      */
-    private function buildOwaspSection(array $counts, array $issuesByRule, CheckContext $ctx): string
+    private function buildOwaspSection(array $counts, array $issuesByRule, array $severity, CheckContext $ctx): string
     {
         $html = '<div class="card" id="owasp">' . "\n"
             . '<h2>OWASP</h2>' . "\n";
@@ -1238,10 +1392,15 @@ final class HtmlReporter implements ReporterInterface
         }
 
         foreach ($counts as $rule => $count) {
-            $html .= '<details class="owasp-rule">' . "\n"
+            $sev = $severity[$rule] ?? ['critical' => 0, 'error' => 0, 'warning' => 0, 'info' => 0];
+            $html .= '<details class="owasp-rule"'
+                . ' data-crit="' . (int) $sev['critical'] . '"'
+                . ' data-err="' . (int) $sev['error'] . '"'
+                . ' data-warn="' . (int) $sev['warning'] . '"'
+                . ' data-info="' . (int) $sev['info'] . '">' . "\n"
                 . '<summary><span class="chev">&#9656;</span>'
                 . '<span class="rule">' . $this->escape($rule) . '</span>'
-                . '<span class="pill">' . (string) $count . '</span>'
+                . '<span class="pill owasp-count">' . (string) $count . '</span>'
                 . '<button type="button" class="linkish js-filter" data-q="'
                 . $this->escape(strtolower($rule)) . '">filter</button>'
                 . '</summary>' . "\n";
@@ -1399,7 +1558,7 @@ final class HtmlReporter implements ReporterInterface
             . '<span class="rule-name">' . $this->escape($rule) . '</span>'
             . '<span class="pill">' . (string) count($issues) . '</span>' . $pills
             . '</summary>' . "\n"
-            . $this->fixBoxHtml($rule)
+            . ($ctx->showRemediation() ? $this->fixBoxHtml($rule) : '')
             . '<table>' . "\n"
             . '<thead>' . "\n"
             . '<tr><th data-sortable data-type="str">File</th>'

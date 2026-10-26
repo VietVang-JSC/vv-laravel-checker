@@ -45,7 +45,9 @@ final class MarkdownReporter implements ReporterInterface
         $lines[] = '- [Action Plan](#action-plan)';
         $lines[] = '- [Top Rules](#top-rules)';
         $lines[] = '- [OWASP](#owasp)';
-        $lines[] = '- [Remediation](#remediation)';
+        if ($ctx->showRemediation()) {
+            $lines[] = '- [Remediation](#remediation)';
+        }
         $lines[] = '- [Per-Checker](#per-checker)';
         $lines[] = '- [Issues](#issues)';
         foreach ($results as $result) {
@@ -131,8 +133,10 @@ final class MarkdownReporter implements ReporterInterface
             $lines[] = '';
         }
 
-        foreach ($this->remediationBlocks($results) as $block) {
-            $lines[] = $block;
+        if ($ctx->showRemediation()) {
+            foreach ($this->remediationBlocks($results) as $block) {
+                $lines[] = $block;
+            }
         }
 
         $lines[] = '## Per-Checker';

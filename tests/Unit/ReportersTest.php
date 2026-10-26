@@ -78,6 +78,45 @@ final class ReportersTest extends TestCase
         );
     }
 
+    /** Remediation modes */
+
+    public function testConsoleHidesRemediationWhenDisabled(): void
+    {
+        $ctx = $this->context();
+        $ctx->config = ['remediation' => false];
+        $output = new BufferedOutput();
+        (new ConsoleReporter($output))->render($this->sampleResults(), $ctx);
+
+        self::assertStringNotContainsString('Remediation', $output->fetch());
+    }
+
+    public function testConsoleShowsRemediationByDefault(): void
+    {
+        $output = new BufferedOutput();
+        (new ConsoleReporter($output))->render($this->sampleResults(), $this->context());
+
+        self::assertStringContainsString('Remediation', $output->fetch());
+    }
+
+    public function testMarkdownHidesRemediationSectionWhenDisabled(): void
+    {
+        $ctx = $this->context();
+        $ctx->config = ['remediation' => false];
+        (new MarkdownReporter())->render($this->sampleResults(), $ctx);
+        $md = (string) file_get_contents($this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.md');
+
+        self::assertStringNotContainsString('## Remediation', $md);
+        self::assertStringNotContainsString('- [Remediation](#remediation)', $md);
+    }
+
+    public function testMarkdownShowsRemediationByDefault(): void
+    {
+        (new MarkdownReporter())->render($this->sampleResults(), $this->context());
+        $md = (string) file_get_contents($this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.md');
+
+        self::assertStringContainsString('## Remediation', $md);
+    }
+
     /** JsonReporter */
 
     public function testFailOnNoneReportsCompletedInsteadOfFailed(): void

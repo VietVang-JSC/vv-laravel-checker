@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.9] - 2026-10-24
+
+### Added
+
+- HTML report restructured: How-to-read box (fix now / fix sprint / backlog)
+  first, slim Summary (severity only), P0 fix-now table (capped at 20,
+  collapsed by default), Action Plan moved up, OWASP and methodology appendix
+  (score formula + glossary) at the end.
+- `--no-remediation` flag (both entry points, config `remediation`, default
+  on): findings-only mode for human reports (console/HTML/Markdown hide fix
+  guidance); JSON/SARIF keep full data.
+- OWASP drill-down obeys the severity chips (blocks hide when nothing visible,
+  pills recount) — previously the chips ignored that whole section.
+- Tests `1397→1405`; `phpstan [OK]`, `phpcs` clean.
+
 ## [1.5.8] - 2026-10-23
 
 ### Added

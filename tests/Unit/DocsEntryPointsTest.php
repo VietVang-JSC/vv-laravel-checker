@@ -15,7 +15,7 @@ use Rampart\QualityChecker\Standalone\StandaloneRunner;
  * Laravel app, and `php bin/quality-check <target>` against any directory. The
  * documentation originally presented the second as a footnote under Quick Start
  * and listed every option in one undifferentiated table, so a reader could not
- * tell that `--fix`, `--ignore`, `--ci` and `--json` do not exist in standalone
+ * tell that `--fix`, `--ci` and `--json` do not exist in standalone
  * mode, nor that `--path` means something different in each.
  *
  * Both facts are now asserted from the code rather than from prose: the Artisan
@@ -99,7 +99,7 @@ final class DocsEntryPointsTest extends TestCase
 
     public function testSharedOptionsAreMarkedAsBoth(): void
     {
-        foreach (['--format', '--only', '--tier', '--fail-on', '--exclude-path', '--profile', '--ignore', '--min-severity', '--coverage'] as $option) {
+        foreach (['--format', '--only', '--tier', '--fail-on', '--exclude-path', '--profile', '--ignore', '--min-severity', '--coverage', '--no-remediation'] as $option) {
             $row = $this->optionsTable()[$option] ?? '';
 
             self::assertStringContainsString(

@@ -53,6 +53,19 @@ final class CheckContext
     public array $metadata = [];
 
     /**
+     * Two report modes: findings-only (false) vs findings plus how-to-fix
+     * guidance (true, default). Reads the `remediation` config key so both
+     * entry points and tests share one switch without another ctor argument.
+     * Machine reports (JSON/SARIF) always carry full data.
+     */
+    public function showRemediation(): bool
+    {
+        $value = $this->config['remediation'] ?? true;
+
+        return (bool) $value;
+    }
+
+    /**
      * @param list<string> $paths
      * @param array<string, mixed> $config
      * @param list<string> $only

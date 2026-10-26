@@ -35,6 +35,7 @@ final class QualityCheckCommand extends Command
         {--min-confidence= : Minimum confidence to report: low|medium|high.}
         {--coverage : Opt into test-coverage checks for this run (off by default).}
         {--min-severity= : Minimum severity to report: info|warning|error|critical.}
+        {--no-remediation : Findings only in human reports (no fix guidance).}
         {--output= : Output directory for report files.}
         {--no-cache : Ignore cached analyzer/checker results.}
         {--no-auto-install : Disable auto-installing missing tools (phpcs/phpstan/phpunit/trivy).}
@@ -176,6 +177,11 @@ final class QualityCheckCommand extends Command
             $this->splitOption('ignore')
         )));
         $config['quality_gate'] = $gate;
+
+        // Findings-only report mode for one run.
+        if ((bool) $this->option('no-remediation')) {
+            $config['remediation'] = false;
+        }
 
         // Test-coverage opt-in for one run (standalone targets have no config
         // file, so a flag is the only way back in).

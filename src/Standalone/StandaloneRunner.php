@@ -87,6 +87,9 @@ final class StandaloneRunner
         $config = $this->mergeExcludePaths($config);
         $config = $this->mergeGateIgnore($config);
         $config = $this->mergeCoverageOptIn($config);
+        if (isset($this->options['no-remediation'])) {
+            $config['remediation'] = false;
+        }
         $target = $this->target;
         $ctx = new CheckContext(
             $target,
@@ -392,6 +395,7 @@ final class StandaloneRunner
         $output->writeln('  --baseline-file=<file>  --baseline-generate  --baseline-update  --help');
         $output->writeln('  --ignore=RULE,...  skip rules (e.g. OWASP_BLADE_XSS,MISSING_MODEL_TEST)');
         $output->writeln('  --coverage  opt into test-coverage checks for this run (off by default)');
+        $output->writeln('  --no-remediation  findings only in human reports (no fix guidance)');
         $output->writeln('Default --only=custom: static analyzers only, no target vendor needed.');
     }
 }

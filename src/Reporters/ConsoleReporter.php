@@ -104,7 +104,9 @@ final class ConsoleReporter implements ReporterInterface
         $this->printOwaspFindings($results);
         $this->printTopRules($results);
         $this->printIssues($results);
-        $this->printRemediation($results);
+        if ($ctx->showRemediation()) {
+            $this->printRemediation($results);
+        }
     }
 
     private function renderSummaryLine(array $results): void

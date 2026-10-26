@@ -236,6 +236,20 @@ php bin/quality-check /path/to/project --min-severity=error --fail-on=none --for
 php artisan quality:check --ci --baseline-file=baseline.json
 ```
 
+Two report modes: findings-only (where the problems are) vs findings plus
+how-to-fix guidance (current default). Clients get the first, developers
+the second:
+
+```bash
+# Findings only — no fix boxes, no remediation section
+php bin/quality-check /path/to/project --no-remediation --fail-on=none --format=html
+
+# Findings + fix (default) — or set remediation: false in config/quality-checker.php
+php bin/quality-check /path/to/project --fail-on=none --format=html
+```
+
+Machine reports (JSON/SARIF) always carry full data either way.
+
 ### Recommended rollout for an existing project
 
 Do not block the team on every legacy finding on the first day:
@@ -299,6 +313,7 @@ cache and does not modify the project either way.
 | `--profile` | both | Write `profile.json` (timers, parse amplification) next to the reports. Findings unchanged. | off |
 | `--help` | both | Print usage. Standalone prints its own list; Artisan uses Symfony Console's. | — |
 | `--ignore=...` | both | Skip these rules (comma-separated, e.g. `MISSING_MODEL_TEST`), merged with `quality_gate.ignore`. Dropped from reports, not just the gate. | — |
+| `--no-remediation` | both | Findings-only mode for human reports (console/HTML/Markdown hide fix guidance). JSON/SARIF keep full data. From config (`remediation`). | off |
 | `--coverage` | both | Opt into test-coverage checks for this run (missing-test findings are off by default). | off |
 | `--no-auto-install` | Artisan | Disable auto-installing missing tools (phpcs/phpstan/phpunit/trivy). Standalone never installs anything. | off |
 | `--fix` | Artisan | Auto-fix fixable issues (currently `phpcbf` only). Needs the target's vendor, so it is not offered in standalone. | off |

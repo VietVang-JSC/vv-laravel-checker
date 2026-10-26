@@ -14,3 +14,5 @@
 # committed — consumers resolve their own dependency graph via composer.json.
 # To track exact dev-time versions, comment out the line below.
 /composer.lock
+
+docs/PRO_SPEC.md
