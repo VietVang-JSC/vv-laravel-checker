@@ -2,8 +2,16 @@
 
 # Rampart Quality Checker
 
+[![Packagist Version](https://img.shields.io/packagist/v/rampart/quality-checker)](https://packagist.org/packages/rampart/quality-checker)
+[![Packagist Downloads](https://img.shields.io/packagist/dt/rampart/quality-checker)](https://packagist.org/packages/rampart/quality-checker)
+[![CI](https://github.com/VietVang-JSC/vv-laravel-checker/actions/workflows/ci.yml/badge.svg)](https://github.com/VietVang-JSC/vv-laravel-checker/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PHP ^8.1](https://img.shields.io/badge/PHP-%5E8.1-777BB4.svg)](composer.json)
+
 **A comprehensive quality gate for Laravel** —
 _A comprehensive Laravel quality gate._
+
+![HTML report: How-to-read, Fix now, severity filters](docs/shot-report.png)
 
 Wraps `phpcs`, `phpstan`, `phpunit`, `composer audit` and `trivy` into a single
 Artisan command, and adds custom PHP-Parser analyzers for **security**, **missing
