@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.10] - 2026-10-27
+
+### Fixed
+
+- Deduplicated the duplicate Release Blockers / Must Fix stat (kept Must Fix).
+- Tests `1405→1408`; `phpstan [OK]`, `phpcs` clean.
+
 ## [1.5.9] - 2026-10-24
 
 ### Added

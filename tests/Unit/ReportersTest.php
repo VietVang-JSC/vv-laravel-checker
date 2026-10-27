@@ -381,7 +381,8 @@ final class ReportersTest extends TestCase
         self::assertStringContainsString('id="risk-overview"', $html);
         self::assertStringContainsString('>Security<', $html);
         self::assertStringContainsString('/100', $html);
-        self::assertStringContainsString('Release Blockers', $html);
+        self::assertStringContainsString('Must Fix (P0)', $html);
+        self::assertStringNotContainsString('Release Blockers', $html);
         self::assertStringContainsString('Release Gate: BLOCKED', $html);
     }
 
