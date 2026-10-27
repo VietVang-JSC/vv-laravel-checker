@@ -186,6 +186,18 @@ final class HtmlReporterTest extends TestCase
         }
     }
 
+    public function testRiskTableShowsPrioritySplitBehindAction(): void
+    {
+        $html = $this->renderHtml();
+        $start = strpos($html, 'id="risk-overview"');
+        self::assertIsInt($start);
+        $section = substr($html, $start, 2500);
+
+        foreach (['<th', 'P0', 'P1', 'P2', 'P3', 'Action'] as $needle) {
+            self::assertStringContainsString($needle, $section);
+        }
+    }
+
     public function testReportContainsSidebarToc(): void
     {
         $html = $this->renderHtml();

@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   guidance); JSON/SARIF keep full data.
 - OWASP drill-down obeys the severity chips (blocks hide when nothing visible,
   pills recount) — previously the chips ignored that whole section.
+- Report explicitness: slim severity-only Summary, P0/P1/P2/P3 labels on
+  quality buckets (`Must Fix (P0)`…), P-split columns in Risk Overview so
+  `Immediate`/`Backlog` never need decoding, `N findings` annotations.
 - Tests `1397→1405`; `phpstan [OK]`, `phpcs` clean.
 
 ## [1.5.8] - 2026-10-23

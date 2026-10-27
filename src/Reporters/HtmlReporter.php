@@ -1043,8 +1043,10 @@ final class HtmlReporter implements ReporterInterface
 
     /**
      * PM-facing risk split: Security vs Testability vs Database vs the
-     * rest, each with findings, highest severity and a scheduling
-     * action — so "115 issues" never reads as "115 vulnerabilities".
+     * rest, each with findings, highest severity, the P0–P3 split behind
+     * the Action word, and a scheduling action — so "115 issues" never
+     * reads as "115 vulnerabilities", and Immediate/Backlog never need
+     * decoding: the P columns show exactly what feeds them.
      *
      * @param list<array{category: string, findings: int, highest: string, p0: int, p1: int, p2: int, p3: int, action: string}> $rows
      */
@@ -1056,17 +1058,24 @@ final class HtmlReporter implements ReporterInterface
                 . '<td data-sort-value="' . (int) $row['findings'] . '">' . (int) $row['findings'] . '</td>'
                 . '<td class="severity ' . $this->escape(strtolower((string) $row['highest'])) . '">'
                 . $this->escape((string) $row['highest']) . '</td>'
+                . '<td>' . (int) $row['p0'] . '</td>'
+                . '<td>' . (int) $row['p1'] . '</td>'
+                . '<td>' . (int) $row['p2'] . '</td>'
+                . '<td>' . (int) $row['p3'] . '</td>'
                 . '<td>' . $this->escape($row['action']) . '</td></tr>' . "\n";
         }
         if ($body === '') {
-            $body = '<tr><td colspan="4" class="empty">No issues found.</td></tr>' . "\n";
+            $body = '<tr><td colspan="8" class="empty">No issues found.</td></tr>' . "\n";
         }
 
         return '<div class="card" id="risk-overview">' . "\n"
             . '<h2>Risk Overview</h2>' . "\n"
             . '<table>' . "\n"
             . '<thead><tr><th data-sortable data-type="str">Category</th><th data-sortable data-type="num">Findings</th>'
-            . '<th data-sortable data-type="str">Highest</th><th data-sortable data-type="str">Action</th></tr></thead>' . "\n"
+            . '<th data-sortable data-type="str">Highest</th>'
+            . '<th data-sortable data-type="num">P0</th><th data-sortable data-type="num">P1</th>'
+            . '<th data-sortable data-type="num">P2</th><th data-sortable data-type="num">P3</th>'
+            . '<th data-sortable data-type="str">Action</th></tr></thead>' . "\n"
             . '<tbody>' . "\n" . $body . '</tbody>' . "\n"
             . '</table>' . "\n"
             . '</div>' . "\n";
@@ -1240,10 +1249,9 @@ final class HtmlReporter implements ReporterInterface
             . '</span></h2>' . "\n"
             . '<div class="summary-grid">' . "\n"
             . $this->stat('Overall', (int) $score['overall'])
-            . $this->stat('Release Blockers', (int) $score['must_fix'])
-            . $this->stat('Must Fix', (int) $score['must_fix'])
-            . $this->stat('Review', (int) $score['review'])
-            . $this->stat('Tech Debt', (int) $score['tech_debt'])
+            . $this->stat('Must Fix (P0)', (int) $score['must_fix'])
+            . $this->stat('Review (P1)', (int) $score['review'])
+            . $this->stat('Tech Debt (P2+P3)', (int) $score['tech_debt'])
             . '</div>' . "\n";
 
         foreach ($score['dimensions'] as $name => $dim) {
@@ -1254,7 +1262,7 @@ final class HtmlReporter implements ReporterInterface
                 . '<span class="bar-track"><span class="bar-fill score-fill" style="width:'
                 . (string) $pct . '%"></span></span>'
                 . '<span class="bar-val">' . (string) $pct . ' <small>('
-                . (int) $dim['findings'] . ')</small></span>'
+                . (int) $dim['findings'] . ' findings)</small></span>'
                 . '</div>' . "\n";
         }
 
@@ -1263,7 +1271,7 @@ final class HtmlReporter implements ReporterInterface
             foreach ($score['top_must_fix'] as $entry) {
                 $items .= '<li>' . $this->escape($entry['rule']) . ' × ' . (int) $entry['count'] . '</li>';
             }
-            $html .= '<h3>Must Fix</h3>' . "\n" . '<ul class="must-fix">' . $items . '</ul>' . "\n";
+            $html .= '<h3>Must Fix rules (P0)</h3>' . "\n" . '<ul class="must-fix">' . $items . '</ul>' . "\n";
         }
 
         return $html . '</div>' . "\n";
