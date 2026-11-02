@@ -66,6 +66,15 @@ final class CheckContext
     }
 
     /**
+     * Client-facing HTML: findings only, trimmed chrome, relative paths.
+     * Same data and counts as the dev report; presentation only.
+     */
+    public function isClientReport(): bool
+    {
+        return (bool) ($this->config['report_client'] ?? false);
+    }
+
+    /**
      * @param list<string> $paths
      * @param array<string, mixed> $config
      * @param list<string> $only

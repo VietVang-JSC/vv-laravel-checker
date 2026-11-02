@@ -36,6 +36,8 @@ final class QualityCheckCommand extends Command
         {--coverage : Opt into test-coverage checks for this run (off by default).}
         {--min-severity= : Minimum severity to report: info|warning|error|critical.}
         {--no-remediation : Findings only in human reports (no fix guidance).}
+        {--client : Client-facing HTML (findings only, trimmed chrome, relative paths).}
+        {--all-variants : With HTML, write dev + findings-only + client reports in one run.}
         {--output= : Output directory for report files.}
         {--no-cache : Ignore cached analyzer/checker results.}
         {--no-auto-install : Disable auto-installing missing tools (phpcs/phpstan/phpunit/trivy).}
@@ -182,6 +184,10 @@ final class QualityCheckCommand extends Command
         if ((bool) $this->option('no-remediation')) {
             $config['remediation'] = false;
         }
+        if ((bool) $this->option('client')) {
+            $config['report_client'] = true;
+            $config['remediation'] = false;
+        }
 
         // Test-coverage opt-in for one run (standalone targets have no config
         // file, so a flag is the only way back in).
@@ -226,6 +232,9 @@ final class QualityCheckCommand extends Command
         }
 
         $ctx->metadata = ['format' => $format];
+        if ((bool) $this->option('all-variants')) {
+            $ctx->metadata['html_all_variants'] = true;
+        }
 
         return $ctx;
     }

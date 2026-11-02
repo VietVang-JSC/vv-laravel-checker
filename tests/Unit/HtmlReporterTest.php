@@ -48,8 +48,9 @@ final class HtmlReporterTest extends TestCase
 
     /**
      * @param array<string, mixed> $configOverrides
+     * @param array<string, mixed> $metadata
      */
-    private function renderHtml(array $configOverrides = []): string
+    private function renderHtml(array $configOverrides = [], array $metadata = []): string
     {
         $this->tempDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qc-html-' . uniqid('', true);
         @mkdir($this->tempDir, 0777, true);
@@ -121,9 +122,12 @@ final class HtmlReporterTest extends TestCase
             packageVersion: '1.0.0'
         );
 
+        $ctx->metadata = $metadata;
+
         (new HtmlReporter())->render($results, $ctx);
 
-        $file = $this->tempDir . DIRECTORY_SEPARATOR . 'quality-report.html';
+        $filename = !empty($config['report_client']) ? 'quality-report-client.html' : 'quality-report.html';
+        $file = $this->tempDir . DIRECTORY_SEPARATOR . $filename;
         self::assertFileExists($file);
 
         return (string) file_get_contents($file);
@@ -439,5 +443,46 @@ final class HtmlReporterTest extends TestCase
 
         self::assertStringContainsString('id="delta"', $html);
         self::assertStringContainsString('href="#delta"', $html);
+    }
+
+    public function testClientReportTrimsChromeAndUsesRelativePaths(): void
+    {
+        $html = $this->renderHtml(['report_client' => true, 'remediation' => false]);
+
+        self::assertStringContainsString('RAMPART', $html);
+        self::assertStringContainsString('Project:', $html);
+        self::assertStringNotContainsString('Package:', $html);
+        self::assertStringNotContainsString('<span>Exit code:', $html);
+        self::assertStringNotContainsString('id="checkers"', $html);
+        self::assertStringNotContainsString('href="#checkers"', $html);
+        self::assertStringNotContainsString('class="fixbox"', $html);
+        self::assertStringNotContainsString('vscode://file/', $html);
+        self::assertStringNotContainsString(str_replace('\\', '/', $this->baseDir), $html);
+        self::assertStringContainsString('app/Http/Controllers/UserController.php', $html);
+        // Same report body, just trimmed chrome.
+        self::assertStringContainsString('id="quality-score"', $html);
+        self::assertStringContainsString('id="action-plan"', $html);
+        self::assertStringContainsString('id="owasp"', $html);
+        self::assertStringContainsString('id="appendix"', $html);
+    }
+
+    public function testAllVariantsWritesDevFindingsAndClient(): void
+    {
+        $dev = $this->renderHtml([], ['html_all_variants' => true]);
+
+        $findingsFile = $this->tempDir . DIRECTORY_SEPARATOR . 'quality-report-findings.html';
+        $clientFile = $this->tempDir . DIRECTORY_SEPARATOR . 'quality-report-client.html';
+        self::assertFileExists($findingsFile);
+        self::assertFileExists($clientFile);
+
+        $findings = (string) file_get_contents($findingsFile);
+        $client = (string) file_get_contents($clientFile);
+
+        self::assertStringContainsString('class="fixbox"', $dev);
+        self::assertStringNotContainsString('class="fixbox"', $findings);
+        self::assertStringContainsString('id="checkers"', $findings);
+        self::assertStringNotContainsString('id="checkers"', $client);
+        self::assertStringNotContainsString('class="fixbox"', $client);
+        self::assertStringContainsString('RAMPART', $client);
     }
 }

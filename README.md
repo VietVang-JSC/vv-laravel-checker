@@ -203,6 +203,19 @@ report is fully self-contained (no network needed) and works from `file://`.
 File links use `vscode://` deep links (require VS Code); set
 `html.repo_url` in the published config to get GitHub blob links instead.
 
+Three HTML audiences:
+
+```bash
+php bin/quality-check . --format=html                          # full dev report
+php bin/quality-check . --format=html --no-remediation         # dev report, no fix guidance
+php bin/quality-check . --format=html --client                 # client report: findings only, trimmed chrome
+php bin/quality-check . --format=html --all-variants           # all three files in one run
+```
+
+`--all-variants` writes `quality-report.html`, `quality-report-findings.html`
+and `quality-report-client.html` side by side; machine formats (JSON/SARIF) are
+unchanged.
+
 ### Standalone scan (no install in the target project)
 
 When the target cannot install the package (version conflicts, legacy
@@ -322,6 +335,8 @@ cache and does not modify the project either way.
 | `--help` | both | Print usage. Standalone prints its own list; Artisan uses Symfony Console's. | — |
 | `--ignore=...` | both | Skip these rules (comma-separated, e.g. `MISSING_MODEL_TEST`), merged with `quality_gate.ignore`. Dropped from reports, not just the gate. | — |
 | `--no-remediation` | both | Findings-only mode for human reports (console/HTML/Markdown hide fix guidance). JSON/SARIF keep full data. From config (`remediation`). | off |
+| `--client` | both | Client-facing HTML: findings only, trimmed chrome, relative paths; writes `quality-report-client.html`. | off |
+| `--all-variants` | both | With HTML: write `quality-report.html` (dev), `quality-report-findings.html` (no fix) and `quality-report-client.html` in one run. Other formats are unaffected. | off |
 | `--coverage` | both | Opt into test-coverage checks for this run (missing-test findings are off by default). | off |
 | `--no-auto-install` | Artisan | Disable auto-installing missing tools (phpcs/phpstan/phpunit/trivy). Standalone never installs anything. | off |
 | `--fix` | Artisan | Auto-fix fixable issues (currently `phpcbf` only). Needs the target's vendor, so it is not offered in standalone. | off |

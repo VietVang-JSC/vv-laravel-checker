@@ -90,6 +90,10 @@ final class StandaloneRunner
         if (isset($this->options['no-remediation'])) {
             $config['remediation'] = false;
         }
+        if (isset($this->options['client'])) {
+            $config['report_client'] = true;
+            $config['remediation'] = false;
+        }
         $target = $this->target;
         $ctx = new CheckContext(
             $target,
@@ -117,6 +121,9 @@ final class StandaloneRunner
         $ctx->exitCode = 0;
         $ctx->baselineFile = $this->options['baseline-file'] ?? ($target . DIRECTORY_SEPARATOR . 'baseline.json');
         $ctx->metadata = ['format' => $this->formats()];
+        if (isset($this->options['all-variants'])) {
+            $ctx->metadata['html_all_variants'] = true;
+        }
 
         $runner = new CheckRunner($ctx);
         $results = $runner->run($runner->buildCheckers());
@@ -396,6 +403,8 @@ final class StandaloneRunner
         $output->writeln('  --ignore=RULE,...  skip rules (e.g. OWASP_BLADE_XSS,MISSING_MODEL_TEST)');
         $output->writeln('  --coverage  opt into test-coverage checks for this run (off by default)');
         $output->writeln('  --no-remediation  findings only in human reports (no fix guidance)');
+        $output->writeln('  --client  client-facing HTML (findings only, trimmed chrome, relative paths)');
+        $output->writeln('  --all-variants  HTML: write dev + findings-only + client reports in one run');
         $output->writeln('Default --only=custom: static analyzers only, no target vendor needed.');
     }
 }
