@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-03
+
 ### Added
 
 - `--client` (both entry points): client-facing HTML report — findings only,
@@ -15,6 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--all-variants` (both entry points): with HTML, write `quality-report.html`
   (dev), `quality-report-findings.html` (no fix guidance) and
   `quality-report-client.html` in one run. JSON/SARIF unchanged.
+- Client branding config: `html.client_brand` and `html.client_project`.
+
+### Changed
+
+- Client report keeps the decision sections (Summary, How to read, Fix now,
+  Quality Score, Action Plan, findings, OWASP when present) and drops Risk
+  Overview, Delta, Top Rules, Per-Checker and Appendix.
+- `--no-remediation` now also writes `quality-report-findings.html` alongside
+  the legacy `quality-report.html` filename.
+
+### Tests
+
+- `1414` tests; PHPStan `[OK]`, PHPCS clean. Added CLI integration coverage for
+  all three HTML audiences.
 
 ## [1.5.10] - 2026-10-27
 

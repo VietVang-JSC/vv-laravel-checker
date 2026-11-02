@@ -227,5 +227,9 @@ return [
         'branch' => 'main',
         // Context lines rendered around each finding (0 = disable snippets).
         'code_context' => 3,
+        // Client report (--client) branding; defaults keep "RAMPART" and the
+        // scanned directory name.
+        'client_brand' => 'RAMPART',
+        'client_project' => null,
     ],
 ];

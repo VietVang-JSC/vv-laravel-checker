@@ -214,7 +214,20 @@ php bin/quality-check . --format=html --all-variants           # all three files
 
 `--all-variants` writes `quality-report.html`, `quality-report-findings.html`
 and `quality-report-client.html` side by side; machine formats (JSON/SARIF) are
-unchanged.
+unchanged. A single `--no-remediation` run writes both `quality-report.html`
+(legacy filename) and `quality-report-findings.html`.
+
+`--client` keeps the decision sections (Summary, How to read, Fix now, Quality
+Score, Action Plan, findings, OWASP when present) and drops the engineering
+detail (Risk Overview, Delta, Top Rules, Per-Checker, Appendix). Branding comes
+from the published config:
+
+```php
+'html' => [
+    'client_brand' => 'RAMPART',   // your company/product name
+    'client_project' => null,      // defaults to the scanned directory name
+],
+```
 
 ### Standalone scan (no install in the target project)
 

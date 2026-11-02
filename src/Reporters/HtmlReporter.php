@@ -769,7 +769,13 @@ final class HtmlReporter implements ReporterInterface
         }
 
         $filename = $ctx->isClientReport() ? 'quality-report-client.html' : 'quality-report.html';
-        $this->writeReport($ctx, $filename, $this->buildDocument($results, $ctx));
+        $html = $this->buildDocument($results, $ctx);
+        $this->writeReport($ctx, $filename, $html);
+        if (!$ctx->isClientReport() && !$ctx->showRemediation()) {
+            // Explicit audience name, alongside the legacy filename scripts
+            // already read.
+            $this->writeReport($ctx, 'quality-report-findings.html', $html);
+        }
     }
 
     private function writeReport(CheckContext $ctx, string $filename, string $html): void
@@ -819,13 +825,13 @@ final class HtmlReporter implements ReporterInterface
             . $this->buildPriorityCard($summary)
             . $this->buildFixNow($results, $ctx)
             . $this->buildQualityScore(QualityScore::score($results))
-            . $this->buildRiskCard(QualityScore::riskOverview($results))
-            . $this->buildDeltaCard($ctx)
-            . $this->buildRulesTable($rules)
+            . ($client ? '' : $this->buildRiskCard(QualityScore::riskOverview($results)))
+            . ($client ? '' : $this->buildDeltaCard($ctx))
+            . ($client ? '' : $this->buildRulesTable($rules))
             . $this->buildIssueSections($checkers, $ctx)
             . ($client && $owasp === [] ? '' : $this->buildOwaspSection($owasp, $owaspIssues, $this->owaspSeverity($results), $ctx))
             . ($client ? '' : $this->buildCheckerTable($checkers))
-            . $this->buildAppendix($ctx)
+            . ($client ? '' : $this->buildAppendix($ctx))
             . $this->buildFooter($ctx)
             . '</div></div>' . "\n"
             . '</div>' . "\n"
@@ -856,12 +862,18 @@ final class HtmlReporter implements ReporterInterface
     private function buildHeader(CheckContext $ctx, string $status): string
     {
         if ($ctx->isClientReport()) {
+            $cfg = $ctx->configFor('html');
+            $brand = trim((string) ($cfg['client_brand'] ?? 'RAMPART'));
+            $brand = $brand !== '' ? $brand : 'RAMPART';
+            $project = trim((string) ($cfg['client_project'] ?? ''));
+            $project = $project !== '' ? $project : basename($ctx->basePath);
+
             return '<header>' . "\n"
                 . '<div>' . "\n"
-                . '<h1><span style="font-size:.62em;letter-spacing:2px;color:var(--muted);font-weight:600;">RAMPART &middot; </span>Laravel Quality Report</h1>' . "\n"
+                . '<h1><span style="font-size:.62em;letter-spacing:2px;color:var(--muted);font-weight:600;">' . $this->escape($brand) . ' &middot; </span>Laravel Quality Report</h1>' . "\n"
                 . '<div class="meta">' . "\n"
                 . '<span>Generated: ' . $this->escape((new \DateTimeImmutable())->format('Y-m-d\TH:i:sP')) . '</span>' . "\n"
-                . '<span>Project: ' . $this->escape(basename($ctx->basePath)) . '</span>' . "\n"
+                . '<span>Project: ' . $this->escape($project) . '</span>' . "\n"
                 . '</div>' . "\n"
                 . '</div>' . "\n"
                 . '<span class="badge ' . $this->escape($status) . '">' . $this->escape($status) . '</span>' . "\n"
@@ -914,18 +926,22 @@ final class HtmlReporter implements ReporterInterface
             'how-to-read' => 'How to read',
             'fix-now' => 'Fix now',
             'quality-score' => 'Quality Score',
-            'risk-overview' => 'Risk Overview',
-            'action-plan' => 'Action Plan',
-            'delta' => 'Delta',
-            'top-rules' => 'Top Rules',
         ];
+        if (!$client) {
+            $links['risk-overview'] = 'Risk Overview';
+        }
+        $links['action-plan'] = 'Action Plan';
+        if (!$client) {
+            $links['delta'] = 'Delta';
+            $links['top-rules'] = 'Top Rules';
+        }
         if (!$client || $hasOwasp) {
             $links['owasp'] = 'OWASP';
         }
         if (!$client) {
             $links['checkers'] = 'Per-Checker';
+            $links['appendix'] = 'Appendix';
         }
-        $links['appendix'] = 'Appendix';
 
         $html = '<aside class="sidebar" id="sidebar">' . "\n"
             . '<h3>Contents</h3>' . "\n"

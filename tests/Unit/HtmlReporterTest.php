@@ -164,6 +164,7 @@ final class HtmlReporterTest extends TestCase
 
         self::assertStringNotContainsString('class="fixbox"', $html);
         self::assertStringContainsString('Findings-only mode', $html);
+        self::assertFileExists($this->tempDir . DIRECTORY_SEPARATOR . 'quality-report-findings.html');
     }
 
     public function testRemediationShownByDefault(): void
@@ -459,11 +460,29 @@ final class HtmlReporterTest extends TestCase
         self::assertStringNotContainsString('vscode://file/', $html);
         self::assertStringNotContainsString(str_replace('\\', '/', $this->baseDir), $html);
         self::assertStringContainsString('app/Http/Controllers/UserController.php', $html);
-        // Same report body, just trimmed chrome.
+        // Client audience keeps the decision sections, drops engineering detail.
         self::assertStringContainsString('id="quality-score"', $html);
         self::assertStringContainsString('id="action-plan"', $html);
         self::assertStringContainsString('id="owasp"', $html);
-        self::assertStringContainsString('id="appendix"', $html);
+        self::assertStringNotContainsString('id="risk-overview"', $html);
+        self::assertStringNotContainsString('id="delta"', $html);
+        self::assertStringNotContainsString('id="top-rules"', $html);
+        self::assertStringNotContainsString('id="appendix"', $html);
+        self::assertStringNotContainsString('href="#risk-overview"', $html);
+        self::assertStringNotContainsString('href="#appendix"', $html);
+    }
+
+    public function testClientReportBrandingIsConfigurable(): void
+    {
+        $html = $this->renderHtml([
+            'report_client' => true,
+            'remediation' => false,
+            'html' => ['client_brand' => 'Acme Security', 'client_project' => 'Portal'],
+        ]);
+
+        self::assertStringContainsString('Acme Security', $html);
+        self::assertStringContainsString('Project: Portal', $html);
+        self::assertStringNotContainsString('RAMPART', $html);
     }
 
     public function testAllVariantsWritesDevFindingsAndClient(): void
